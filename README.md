@@ -1,0 +1,2 @@
+# ajansai
+AjansAI
