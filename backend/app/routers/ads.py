@@ -1,14 +1,21 @@
-from datetime import timedelta
+import json
+import logging
+import re
+import uuid
+from datetime import date, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, select
 
 from app import config
-from app.db import get_engine, meta_connections, utcnow
+from app.db import get_engine, meta_ads, meta_connections, utcnow
 from app.security import create_token, decode_token, get_current_user
 from app.services.plans import CREDIT_COSTS
-from app.services.usage_service import consume
+from app.services.usage_service import QuotaExceededError, consume, refund
+from app.services import meta_ads_service as meta
+from app.services import storage
 from app.services.meta_ads_service import (
     MetaError,
     create_campaign_draft,
@@ -19,6 +26,7 @@ from app.services.meta_ads_service import (
 from app.services.usage_service import AdsNotAvailableError, check_ads_access
 
 router = APIRouter()
+logger = logging.getLogger("ajansai.ads")
 
 
 def _require_ads(user: dict) -> None:
@@ -120,3 +128,231 @@ def meta_campaign_draft(payload: CampaignDraftRequest, user: dict = Depends(get_
     # Kredi düşmez; kullanım geçmişinde görünsün diye 0 kredilik kayıt.
     consume(user["id"], "ads_draft", CREDIT_COSTS["ads_draft"], payload.campaign_name)
     return result
+
+
+def _meta_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except MetaError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/meta/pages")
+def meta_pages(user: dict = Depends(get_current_user)):
+    _require_ads(user)
+    return {"pages": _meta_call(meta.list_pages, _get_token(user["id"]))}
+
+
+@router.get("/meta/instagram-accounts")
+def meta_instagram_accounts(ad_account_id: str, user: dict = Depends(get_current_user)):
+    _require_ads(user)
+    return {"accounts": _meta_call(meta.list_instagram_accounts, ad_account_id, _get_token(user["id"]))}
+
+
+@router.get("/meta/locations")
+def meta_locations(q: str, user: dict = Depends(get_current_user)):
+    _require_ads(user)
+    if len(q.strip()) < 2:
+        return {"locations": []}
+    return {"locations": _meta_call(meta.search_locations, q.strip()[:60], _get_token(user["id"]))}
+
+
+class Location(BaseModel):
+    key: str = Field(..., max_length=40)
+    name: str = Field("", max_length=120)
+    type: Literal["country", "region", "city"]
+    country_code: str | None = None
+
+
+class AdMedia(BaseModel):
+    url: str = Field(..., max_length=2000)
+    kind: Literal["image", "video"]
+
+
+CTA_TYPES = ("LEARN_MORE", "SHOP_NOW", "ORDER_NOW", "BOOK_NOW", "CONTACT_US", "SIGN_UP", "GET_OFFER")
+
+
+class CreateAdRequest(BaseModel):
+    ad_account_id: str = Field(..., max_length=50)
+    page_id: str = Field(..., max_length=50)
+    instagram_user_id: str = Field(..., max_length=50)
+    name: str = Field(..., min_length=2, max_length=150)
+    objective: Literal["traffic", "whatsapp", "awareness"]
+    daily_budget: float = Field(..., gt=0, le=1_000_000)
+    currency: str = Field("TRY", max_length=3)
+    start_date: date | None = None
+    end_date: date | None = None
+    locations: list[Location] = Field(default_factory=list, max_length=25)
+    age_min: int = Field(18, ge=18, le=65)
+    age_max: int = Field(65, ge=18, le=65)
+    gender: Literal["all", "male", "female"] = "all"
+    media: AdMedia
+    primary_text: str = Field(..., min_length=1, max_length=2000)
+    headline: str = Field("", max_length=120)
+    link: str | None = Field(None, max_length=1000)
+    call_to_action: str = "LEARN_MORE"
+
+    @field_validator("link")
+    @classmethod
+    def _https(cls, v):
+        if v and not re.match(r"^https?://", v):
+            return "https://" + v
+        return v
+
+
+@router.post("/meta/ads")
+def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_user)):
+    """Instagram'a özel reklamı (kampanya + reklam seti + kreatif + reklam) duraklatılmış oluşturur."""
+    _require_ads(user)
+    if payload.age_min > payload.age_max:
+        raise HTTPException(status_code=400, detail="Minimum yaş, maksimum yaştan büyük olamaz.")
+    if payload.objective != "whatsapp" and not payload.link:
+        raise HTTPException(status_code=400, detail="Bu reklam amacı için bir web sitesi bağlantısı gerekli.")
+    if payload.call_to_action not in CTA_TYPES:
+        raise HTTPException(status_code=400, detail="Geçersiz buton türü.")
+    if not storage.is_own_blob_url(payload.media.url):
+        raise HTTPException(status_code=400, detail="Reklam görseli/videosu ajansAI'a yüklenmiş olmalı.")
+    if payload.end_date and payload.start_date and payload.end_date <= payload.start_date:
+        raise HTTPException(status_code=400, detail="Bitiş tarihi başlangıçtan sonra olmalı.")
+
+    start = f"{payload.start_date.isoformat()}T00:00:00+0300" if payload.start_date else None
+    end = f"{payload.end_date.isoformat()}T23:59:00+0300" if payload.end_date else None
+    ids = _meta_call(
+        meta.create_instagram_ad,
+        token=_get_token(user["id"]),
+        ad_account_id=payload.ad_account_id,
+        page_id=payload.page_id,
+        instagram_user_id=payload.instagram_user_id,
+        name=payload.name,
+        objective=payload.objective,
+        daily_budget=payload.daily_budget,
+        start_time=start,
+        end_time=end,
+        locations=[loc.model_dump() for loc in payload.locations],
+        age_min=payload.age_min,
+        age_max=payload.age_max,
+        gender=payload.gender,
+        media=payload.media.model_dump(),
+        primary_text=payload.primary_text,
+        headline=payload.headline,
+        link=payload.link,
+        call_to_action=payload.call_to_action,
+        fetch_bytes=storage.fetch,
+    )
+    record_id = str(uuid.uuid4())
+    with get_engine().begin() as conn:
+        conn.execute(
+            meta_ads.insert().values(
+                id=record_id,
+                user_id=user["id"],
+                ad_account_id=payload.ad_account_id.removeprefix("act_"),
+                campaign_id=ids["campaign_id"],
+                adset_id=ids["adset_id"],
+                ad_id=ids["ad_id"],
+                name=payload.name,
+                objective=payload.objective,
+                daily_budget=payload.daily_budget,
+                currency=payload.currency[:3].upper(),
+                media_url=payload.media.url,
+                created_at=utcnow(),
+            )
+        )
+    consume(user["id"], "ads_draft", CREDIT_COSTS["ads_draft"], payload.name)
+    return {"id": record_id, **ids, "status": "PAUSED"}
+
+
+def _own_ad(user_id: str, record_id: str):
+    with get_engine().connect() as conn:
+        row = conn.execute(
+            select(meta_ads).where(meta_ads.c.id == record_id, meta_ads.c.user_id == user_id)
+        ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Reklam bulunamadı.")
+    return row
+
+
+@router.get("/meta/ads")
+def meta_list_ads(user: dict = Depends(get_current_user)):
+    """Kullanıcının ajansAI'dan oluşturduğu reklamlar; durum ve metrikler Meta'dan canlı."""
+    _require_ads(user)
+    token = _get_token(user["id"])
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            select(meta_ads).where(meta_ads.c.user_id == user["id"]).order_by(meta_ads.c.created_at.desc()).limit(30)
+        ).all()
+    ads = []
+    for r in rows:
+        item = {
+            "id": r.id,
+            "name": r.name,
+            "objective": r.objective,
+            "daily_budget": float(r.daily_budget),
+            "currency": r.currency,
+            "media_url": r.media_url,
+            "campaign_id": r.campaign_id,
+            "ad_account_id": r.ad_account_id,
+            "created_at": r.created_at.isoformat() + "Z",
+        }
+        try:
+            item["status"] = meta.object_status(token, r.campaign_id)
+            item["insights"] = meta.campaign_insights(token, r.campaign_id)
+        except MetaError as e:
+            item["status"] = "UNKNOWN"
+            item["insights"] = None
+            item["error"] = str(e)
+        ads.append(item)
+    return {"ads": ads}
+
+
+@router.post("/meta/ads/{record_id}/publish")
+def meta_publish_ad(record_id: str, user: dict = Depends(get_current_user)):
+    """Reklamı yayına alır (bütçe harcanmaya başlar)."""
+    _require_ads(user)
+    row = _own_ad(user["id"], record_id)
+    _meta_call(meta.set_status, _get_token(user["id"]), [row.ad_id, row.adset_id, row.campaign_id], "ACTIVE")
+    return {"status": "ACTIVE"}
+
+
+@router.post("/meta/ads/{record_id}/pause")
+def meta_pause_ad(record_id: str, user: dict = Depends(get_current_user)):
+    _require_ads(user)
+    row = _own_ad(user["id"], record_id)
+    _meta_call(meta.set_status, _get_token(user["id"]), [row.campaign_id], "PAUSED")
+    return {"status": "PAUSED"}
+
+
+class AdCopyRequest(BaseModel):
+    brief: str = Field(..., min_length=3, max_length=1500)
+    objective: Literal["traffic", "whatsapp", "awareness"] = "traffic"
+
+
+@router.post("/meta/ad-copy")
+def meta_ad_copy(payload: AdCopyRequest, user: dict = Depends(get_current_user)):
+    """Yapay zeka ile Instagram reklam metni (ana metin + başlık) yazar. 1 kredi."""
+    from app.services.llm_service import LLMError, chat_completion
+
+    _require_ads(user)
+    try:
+        event_id = consume(user["id"], "describe", CREDIT_COSTS["describe"], f"Reklam metni: {payload.brief[:150]}")
+    except QuotaExceededError as e:
+        raise HTTPException(status_code=402, detail=str(e))
+    goal = {"traffic": "web sitesine tıklama", "whatsapp": "WhatsApp'tan mesaj atma", "awareness": "markayı tanıma"}[
+        payload.objective
+    ]
+    prompt = (
+        "Türkçe bir Instagram reklamı için metin yaz. Amaç: " + goal + ".\n"
+        "Ürün/işletme bilgisi: " + payload.brief + "\n"
+        'Sadece şu JSON\'u döndür: {"primary_text": "en fazla 300 karakter, emoji kullanabilir, harekete geçiren", '
+        '"headline": "en fazla 40 karakter"}'
+    )
+    try:
+        text = chat_completion(config.CHAT_MODEL, [{"role": "user", "content": prompt}], max_tokens=500)
+        match = re.search(r"\{.*\}", text, re.S)
+        data = json.loads(match.group(0)) if match else {}
+        if not data.get("primary_text"):
+            raise ValueError("boş")
+    except (LLMError, ValueError) as e:
+        logger.error("Reklam metni yazılamadı: %s", e)
+        refund(event_id)
+        raise HTTPException(status_code=503, detail="Reklam metni yazılamadı, kredin iade edildi. Tekrar dene.")
+    return {"primary_text": data["primary_text"][:2000], "headline": (data.get("headline") or "")[:120]}

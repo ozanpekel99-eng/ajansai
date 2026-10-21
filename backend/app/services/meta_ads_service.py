@@ -1,4 +1,7 @@
+import base64
+import json
 import logging
+import time as _time
 from urllib.parse import urlencode
 
 import requests
@@ -127,3 +130,275 @@ def create_campaign_draft(
         message = (data.get("error") or {}).get("message", "Kampanya oluşturulamadı.")
         raise MetaError(message)
     return data
+
+
+# ---------------- Uçtan uca reklam oluşturma ----------------
+# Akış: kampanya → reklam seti (yalnızca Instagram yerleşimleri) → medya
+# yükleme → kreatif → reklam. Hepsi DURAKLATILMIŞ oluşturulur; kullanıcı
+# "Yayına al" deyince aktifleşir. Herhangi bir adım hata verirse oluşturulan
+# kampanya silinir, hesapta yarım kayıt kalmaz.
+
+
+INSTAGRAM_POSITIONS = ["stream", "story", "reels", "explore"]
+
+OBJECTIVES = {
+    # amaç: (kampanya objective, reklam seti optimization_goal, destination_type)
+    "traffic": ("OUTCOME_TRAFFIC", "LINK_CLICKS", "WEBSITE"),
+    "whatsapp": ("OUTCOME_ENGAGEMENT", "CONVERSATIONS", "WHATSAPP"),
+    "awareness": ("OUTCOME_AWARENESS", "REACH", None),
+}
+
+
+def _graph(method: str, path: str, token: str, **data) -> dict:
+    params = {"access_token": token, "locale": "tr_TR"}
+    try:
+        if method == "GET":
+            response = requests.get(f"{META_BASE_URL}/{path}", params={**params, **data}, timeout=60)
+        elif method == "DELETE":
+            response = requests.delete(f"{META_BASE_URL}/{path}", params=params, timeout=60)
+        else:
+            body = {k: (json.dumps(v) if isinstance(v, (dict, list)) else v) for k, v in data.items()}
+            response = requests.post(f"{META_BASE_URL}/{path}", params=params, data=body, timeout=120)
+    except requests.RequestException as e:
+        raise MetaError("Meta'ya ulaşılamadı, tekrar dene.") from e
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if response.status_code != 200 or "error" in payload:
+        err = payload.get("error") or {}
+        logger.error("Meta %s %s: %s", method, path.split("?")[0], _meta_error(response))
+        message = err.get("error_user_msg") or err.get("message") or "Meta isteği başarısız oldu."
+        raise MetaError(message)
+    return payload
+
+
+def list_pages(token: str) -> list[dict]:
+    data = _graph("GET", "me/accounts", token, fields="id,name", limit=100)
+    return [{"id": p["id"], "name": p["name"]} for p in data.get("data", [])]
+
+
+def list_instagram_accounts(ad_account_id: str, token: str) -> list[dict]:
+    act = ad_account_id.removeprefix("act_")
+    data = _graph("GET", f"act_{act}/instagram_accounts", token, fields="id,username", limit=100)
+    return [{"id": a["id"], "username": a.get("username", "")} for a in data.get("data", [])]
+
+
+def search_locations(query: str, token: str) -> list[dict]:
+    data = _graph(
+        "GET",
+        "search",
+        token,
+        type="adgeolocation",
+        q=query,
+        location_types=json.dumps(["country", "region", "city"]),
+        limit=10,
+    )
+    return [
+        {
+            "key": loc["key"],
+            "name": loc["name"],
+            "type": loc["type"],
+            "country_code": loc.get("country_code"),
+            "region": loc.get("region"),
+        }
+        for loc in data.get("data", [])
+    ]
+
+
+def _targeting(locations: list[dict], age_min: int, age_max: int, gender: str) -> dict:
+    geo: dict = {}
+    for loc in locations or [{"type": "country", "key": "TR"}]:
+        if loc["type"] == "country":
+            geo.setdefault("countries", []).append(loc.get("country_code") or loc["key"])
+        elif loc["type"] == "region":
+            geo.setdefault("regions", []).append({"key": loc["key"]})
+        else:
+            geo.setdefault("cities", []).append({"key": loc["key"], "radius": 10, "distance_unit": "kilometer"})
+    targeting = {
+        "geo_locations": geo,
+        "age_min": age_min,
+        "age_max": age_max,
+        # Yerleşim yalnızca Instagram: Facebook, Messenger, Audience Network ve Threads yok.
+        "publisher_platforms": ["instagram"],
+        "instagram_positions": INSTAGRAM_POSITIONS,
+        "targeting_automation": {"advantage_audience": 0},
+    }
+    if gender in ("male", "female"):
+        targeting["genders"] = [1 if gender == "male" else 2]
+    return targeting
+
+
+def _upload_media(act: str, token: str, media: dict, fetch_bytes) -> dict:
+    """Görseli image_hash'e, videoyu video_id + kapak görseline çevirir."""
+    if media["kind"] == "image":
+        data = base64.b64encode(fetch_bytes(media["url"])).decode()
+        res = _graph("POST", f"act_{act}/adimages", token, bytes=data)
+        images = res.get("images") or {}
+        first = next(iter(images.values()), {})
+        if not first.get("hash"):
+            raise MetaError("Görsel Meta'ya yüklenemedi.")
+        return {"image_hash": first["hash"]}
+
+    res = _graph("POST", f"act_{act}/advideos", token, file_url=media["url"], name="ajansAI video")
+    video_id = res.get("id")
+    if not video_id:
+        raise MetaError("Video Meta'ya yüklenemedi.")
+    # Meta videoyu işlerken kapak görseli hazır olana kadar bekle (en fazla ~2 dk).
+    for _ in range(24):
+        info = _graph("GET", video_id, token, fields="status,picture")
+        status = (info.get("status") or {}).get("video_status")
+        if status == "error":
+            raise MetaError("Meta videoyu işleyemedi; farklı bir video dene.")
+        if status == "ready" and info.get("picture"):
+            return {"video_id": video_id, "thumbnail": info["picture"]}
+        _time.sleep(5)
+    raise MetaError("Meta videoyu zamanında işleyemedi; birkaç dakika sonra tekrar dene.")
+
+
+def create_instagram_ad(
+    *,
+    token: str,
+    ad_account_id: str,
+    page_id: str,
+    instagram_user_id: str,
+    name: str,
+    objective: str,
+    daily_budget: float,
+    start_time: str | None,
+    end_time: str | None,
+    locations: list[dict],
+    age_min: int,
+    age_max: int,
+    gender: str,
+    media: dict,
+    primary_text: str,
+    headline: str,
+    link: str | None,
+    call_to_action: str,
+    fetch_bytes,
+) -> dict:
+    """Instagram'a özel, duraklatılmış bir reklam oluşturur. Oluşan kimlikleri döndürür."""
+    act = ad_account_id.removeprefix("act_")
+    camp_objective, optimization_goal, destination = OBJECTIVES[objective]
+
+    campaign = _graph(
+        "POST",
+        f"act_{act}/campaigns",
+        token,
+        name=name,
+        objective=camp_objective,
+        status="PAUSED",
+        special_ad_categories=[],
+        is_adset_budget_sharing_enabled="false",
+    )
+    campaign_id = campaign["id"]
+    try:
+        adset_body = {
+            "name": f"{name} - Instagram",
+            "campaign_id": campaign_id,
+            "daily_budget": int(round(daily_budget * 100)),  # TRY ve USD'de en küçük birim 1/100
+            "billing_event": "IMPRESSIONS",
+            "optimization_goal": optimization_goal,
+            "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
+            "targeting": _targeting(locations, age_min, age_max, gender),
+            "status": "PAUSED",
+        }
+        if destination:
+            adset_body["destination_type"] = destination
+        if objective == "whatsapp":
+            adset_body["promoted_object"] = {"page_id": page_id}
+        if start_time:
+            adset_body["start_time"] = start_time
+        if end_time:
+            adset_body["end_time"] = end_time
+        adset = _graph("POST", f"act_{act}/adsets", token, **adset_body)
+
+        uploaded = _upload_media(act, token, media, fetch_bytes)
+
+        if objective == "whatsapp":
+            cta = {"type": "WHATSAPP_MESSAGE", "value": {"app_destination": "WHATSAPP"}}
+            target_link = "https://api.whatsapp.com/send"
+        else:
+            target_link = link
+            cta = {"type": call_to_action, "value": {"link": target_link}}
+
+        if "image_hash" in uploaded:
+            story = {
+                "page_id": page_id,
+                "instagram_user_id": instagram_user_id,
+                "link_data": {
+                    "image_hash": uploaded["image_hash"],
+                    "link": target_link,
+                    "message": primary_text,
+                    "name": headline,
+                    "call_to_action": cta,
+                },
+            }
+        else:
+            story = {
+                "page_id": page_id,
+                "instagram_user_id": instagram_user_id,
+                "video_data": {
+                    "video_id": uploaded["video_id"],
+                    "image_url": uploaded["thumbnail"],
+                    "message": primary_text,
+                    "title": headline,
+                    "call_to_action": cta,
+                },
+            }
+        creative = _graph("POST", f"act_{act}/adcreatives", token, name=f"{name} - kreatif", object_story_spec=story)
+        ad = _graph(
+            "POST",
+            f"act_{act}/ads",
+            token,
+            name=name,
+            adset_id=adset["id"],
+            creative={"creative_id": creative["id"]},
+            status="PAUSED",
+        )
+    except MetaError:
+        try:
+            _graph("DELETE", campaign_id, token)
+        except MetaError:
+            logger.warning("Yarım kalan kampanya silinemedi: %s", campaign_id)
+        raise
+    return {"campaign_id": campaign_id, "adset_id": adset["id"], "ad_id": ad["id"]}
+
+
+def set_status(token: str, ids: list[str], status: str) -> None:
+    """Kampanya, reklam seti ve reklamı birlikte aktifleştirir veya duraklatır."""
+    for object_id in ids:
+        _graph("POST", object_id, token, status=status)
+
+
+def campaign_insights(token: str, campaign_id: str) -> dict:
+    data = _graph(
+        "GET",
+        f"{campaign_id}/insights",
+        token,
+        fields="spend,impressions,reach,clicks,ctr,cpc,actions",
+        date_preset="maximum",
+    )
+    rows = data.get("data") or []
+    if not rows:
+        return {"spend": 0, "impressions": 0, "reach": 0, "clicks": 0, "ctr": 0, "cpc": 0, "conversations": 0}
+    r = rows[0]
+    conversations = sum(
+        int(float(a.get("value", 0)))
+        for a in r.get("actions") or []
+        if "messaging_conversation_started" in a.get("action_type", "")
+    )
+    return {
+        "spend": float(r.get("spend", 0)),
+        "impressions": int(r.get("impressions", 0)),
+        "reach": int(r.get("reach", 0)),
+        "clicks": int(r.get("clicks", 0)),
+        "ctr": float(r.get("ctr", 0)),
+        "cpc": float(r.get("cpc", 0)) if r.get("cpc") else 0,
+        "conversations": conversations,
+    }
+
+
+def object_status(token: str, campaign_id: str) -> str:
+    return _graph("GET", campaign_id, token, fields="effective_status").get("effective_status", "UNKNOWN")

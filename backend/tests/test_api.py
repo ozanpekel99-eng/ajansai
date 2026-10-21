@@ -685,3 +685,122 @@ def test_meta_oauth_url_uses_business_login_config(monkeypatch):
 
     monkeypatch.setattr(config, "META_CONFIG_ID", None)
     assert "scope=ads_management" in meta_ads_service.get_oauth_url("https://x/cb", "s")
+
+
+def _meta_ready(client, monkeypatch, plan="pro"):
+    from app.db import meta_connections
+
+    _enable_media(monkeypatch)
+    monkeypatch.setattr(config, "META_APP_ID", "app")
+    monkeypatch.setattr(config, "META_APP_SECRET", "secret")
+    token = register(client)
+    uid = _user_id(client, token)
+    _set_plan(uid, plan)
+    with get_engine().begin() as conn:
+        conn.execute(meta_connections.insert().values(user_id=uid, access_token="meta-token", updated_at=utcnow()))
+    return token
+
+
+AD_BODY = {
+    "ad_account_id": "act_123",
+    "page_id": "page1",
+    "instagram_user_id": "ig1",
+    "name": "Kasım buzdolabı",
+    "objective": "traffic",
+    "daily_budget": 250,
+    "currency": "TRY",
+    "locations": [{"key": "2520", "name": "Çorlu", "type": "city"}],
+    "age_min": 25,
+    "age_max": 45,
+    "gender": "all",
+    "media": {"url": BLOB_URL + "urun.jpg", "kind": "image"},
+    "primary_text": "Peşin fiyatına 6 taksit!",
+    "headline": "No-Frost fırsatı",
+    "link": "basakarcelik.com",
+    "call_to_action": "SHOP_NOW",
+}
+
+
+def test_create_instagram_only_ad(client, monkeypatch):
+    from app.services import meta_ads_service as meta
+
+    token = _meta_ready(client, monkeypatch)
+    calls = []
+
+    def fake_graph(method, path, tok, **data):
+        calls.append((method, path, data))
+        if path.endswith("/campaigns"):
+            return {"id": "c1"}
+        if path.endswith("/adsets"):
+            return {"id": "s1"}
+        if path.endswith("/adimages"):
+            return {"images": {"x": {"hash": "h1"}}}
+        if path.endswith("/adcreatives"):
+            return {"id": "cr1"}
+        if path.endswith("/ads"):
+            return {"id": "a1"}
+        if path == "c1":
+            return {"effective_status": "PAUSED"}
+        return {"data": []}
+
+    monkeypatch.setattr(meta, "_graph", fake_graph)
+    from app.routers import ads as ads_router
+
+    monkeypatch.setattr(ads_router.storage, "fetch", lambda url, max_bytes=0: b"jpg")
+    r = client.post("/api/ads/meta/ads", json=AD_BODY, headers=auth(token))
+    assert r.status_code == 200, r.text
+    assert r.json()["campaign_id"] == "c1" and r.json()["status"] == "PAUSED"
+
+    adset = next(d for m, p, d in calls if p.endswith("/adsets"))
+    t = adset["targeting"]
+    assert t["publisher_platforms"] == ["instagram"]
+    assert set(t["instagram_positions"]) == {"stream", "story", "reels", "explore"}
+    assert t["geo_locations"] == {"cities": [{"key": "2520", "radius": 10, "distance_unit": "kilometer"}]}
+    assert adset["daily_budget"] == 25000 and adset["status"] == "PAUSED" and adset["optimization_goal"] == "LINK_CLICKS"
+    creative = next(d for m, p, d in calls if p.endswith("/adcreatives"))
+    link_data = creative["object_story_spec"]["link_data"]
+    assert link_data["link"] == "https://basakarcelik.com" and link_data["call_to_action"]["type"] == "SHOP_NOW"
+    assert creative["object_story_spec"]["instagram_user_id"] == "ig1"
+
+    # Yayına alma: reklam, reklam seti ve kampanya aktifleşir
+    ad_id = client.get("/api/ads/meta/ads", headers=auth(token)).json()["ads"][0]["id"]
+    calls.clear()
+    assert client.post(f"/api/ads/meta/ads/{ad_id}/publish", headers=auth(token)).json() == {"status": "ACTIVE"}
+    assert [(p, d["status"]) for m, p, d in calls] == [("a1", "ACTIVE"), ("s1", "ACTIVE"), ("c1", "ACTIVE")]
+
+    # Başka kullanıcı bu reklamı yönetemez
+    other = register(client, "baska@example.com")
+    _set_plan(_user_id(client, other), "pro")
+    from app.db import meta_connections
+
+    with get_engine().begin() as conn:
+        conn.execute(meta_connections.insert().values(user_id=_user_id(client, other), access_token="t2", updated_at=utcnow()))
+    assert client.post(f"/api/ads/meta/ads/{ad_id}/publish", headers=auth(other)).status_code == 404
+
+
+def test_failed_ad_creation_deletes_campaign(client, monkeypatch):
+    from app.services import meta_ads_service as meta
+
+    token = _meta_ready(client, monkeypatch)
+    calls = []
+
+    def fake_graph(method, path, tok, **data):
+        calls.append((method, path))
+        if path.endswith("/campaigns"):
+            return {"id": "c9"}
+        if path.endswith("/adsets"):
+            raise meta.MetaError("Bütçe çok düşük.")
+        return {}
+
+    monkeypatch.setattr(meta, "_graph", fake_graph)
+    r = client.post("/api/ads/meta/ads", json=AD_BODY, headers=auth(token))
+    assert r.status_code == 502 and r.json()["detail"] == "Bütçe çok düşük."
+    assert ("DELETE", "c9") in calls
+
+
+def test_ad_requires_link_and_own_media(client, monkeypatch):
+    token = _meta_ready(client, monkeypatch)
+    r = client.post("/api/ads/meta/ads", json={**AD_BODY, "link": None}, headers=auth(token))
+    assert r.status_code == 400
+    r = client.post("/api/ads/meta/ads", json={**AD_BODY, "media": {"url": "https://baska.site/a.jpg", "kind": "image"}}, headers=auth(token))
+    assert r.status_code == 400

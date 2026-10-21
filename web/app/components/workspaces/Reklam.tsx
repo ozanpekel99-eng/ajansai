@@ -1,141 +1,715 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { api } from "../../lib/api";
+import { ApiError, api } from "../../lib/api";
+import { readHistory } from "../../lib/history";
+import { money } from "../../lib/plans";
 import { useSession } from "../../lib/session";
+import { UploadProgress, useUploader } from "../Attachments";
+import { ChipSelect } from "../Controls";
+import Icon from "../Icon";
 import { EmptyResult, LockedNotice, WorkspaceProps } from "./common";
 
-type AdAccount = { account_id: string; name: string; currency: string };
+type AdAccount = { account_id: string; name: string; currency: string; account_status: number };
+type Page = { id: string; name: string };
+type IgAccount = { id: string; username: string };
+type Loc = { key: string; name: string; type: "country" | "region" | "city"; country_code?: string | null; region?: string | null };
+type Media = { url: string; kind: "image" | "video" };
+type Objective = "traffic" | "whatsapp" | "awareness";
+type Insights = { spend: number; impressions: number; reach: number; clicks: number; ctr: number; cpc: number; conversations: number };
+type AdRow = {
+  id: string;
+  name: string;
+  objective: Objective;
+  daily_budget: number;
+  currency: string;
+  media_url: string | null;
+  status: string;
+  insights: Insights | null;
+  error?: string;
+  campaign_id: string;
+  ad_account_id: string;
+  created_at: string;
+};
+
+const OBJECTIVES: { value: Objective; label: string; note: string }[] = [
+  { value: "traffic", label: "Web sitesi trafiği", note: "Sitene tıklama getirir" },
+  { value: "whatsapp", label: "WhatsApp mesajı", note: "Sana WhatsApp'tan yazarlar" },
+  { value: "awareness", label: "Bilinirlik", note: "Olabildiğince çok kişiye gösterir" },
+];
+
+const CTAS = [
+  { value: "LEARN_MORE", label: "Daha fazla bilgi" },
+  { value: "SHOP_NOW", label: "Alışverişe başla" },
+  { value: "ORDER_NOW", label: "Sipariş ver" },
+  { value: "BOOK_NOW", label: "Rezervasyon yap" },
+  { value: "CONTACT_US", label: "Bize ulaşın" },
+  { value: "GET_OFFER", label: "Teklifi al" },
+  { value: "SIGN_UP", label: "Kaydol" },
+];
+
+const STATUS: Record<string, { label: string; cls: string }> = {
+  ACTIVE: { label: "Yayında", cls: "success" },
+  PAUSED: { label: "Duraklatıldı", cls: "pending" },
+  CAMPAIGN_PAUSED: { label: "Duraklatıldı", cls: "pending" },
+  IN_PROCESS: { label: "İnceleniyor", cls: "pending" },
+  PENDING_REVIEW: { label: "Meta incelemesinde", cls: "pending" },
+  WITH_ISSUES: { label: "Sorunlu", cls: "failure" },
+  DISAPPROVED: { label: "Reddedildi", cls: "failure" },
+  DELETED: { label: "Silindi", cls: "failure" },
+  ARCHIVED: { label: "Arşivlendi", cls: "pending" },
+};
+
+const AGES = Array.from({ length: 48 }, (_, i) => i + 18);
+const today = () => new Date().toISOString().slice(0, 10);
 
 export default function ReklamWorkspace(_: WorkspaceProps) {
   const { usage, metaConnected, refresh } = useSession();
-  const [accounts, setAccounts] = useState<AdAccount[]>([]);
-  const [accountId, setAccountId] = useState("");
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<"new" | "list">("new");
   const [error, setError] = useState("");
-  const [created, setCreated] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!metaConnected) return;
-    api<{ ad_accounts: AdAccount[] }>("/api/ads/meta/ad-accounts")
-      .then((d) => {
-        setAccounts(d.ad_accounts);
-        if (d.ad_accounts[0]) setAccountId(d.ad_accounts[0].account_id);
-      })
-      .catch((e) => setError(e.message));
-  }, [metaConnected]);
 
   const connect = async () => {
     setError("");
     try {
       const d = await api<{ oauth_url: string }>("/api/ads/meta/connect");
       window.location.href = d.oauth_url;
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError((e as ApiError).message);
     }
   };
 
   const disconnect = async () => {
     await api("/api/ads/meta/connection", { method: "DELETE" });
-    setAccounts([]);
     refresh();
-  };
-
-  const createDraft = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      await api("/api/ads/meta/campaign-draft", {
-        method: "POST",
-        body: JSON.stringify({ ad_account_id: accountId, campaign_name: name }),
-      });
-      setCreated((c) => [name, ...c]);
-      setName("");
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
   };
 
   if (usage && !usage.ads_enabled) {
     return <LockedNotice text="Meta reklam entegrasyonu Pro ve Ajans paketlerinde açılır." plan="pro" />;
   }
 
+  if (!metaConnected) {
+    return (
+      <div className="panel ws-panel" style={{ maxWidth: 560 }}>
+        <h2>Meta hesabını bağla</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Kendi Meta Business hesabını bağlarsın. Reklam bütçesi senin reklam hesabından harcanır; reklamlar yalnızca Instagram'da
+          gösterilir ve sen "Yayına al" demeden yayına girmez.
+        </p>
+        {error && <div className="notice error">{error}</div>}
+        <button className="btn btn-primary btn-block" onClick={connect}>
+          Meta ile bağlan
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="workspace">
-      {metaConnected ? (
-        <form className="panel ws-panel" onSubmit={createDraft}>
-          <h2>
-            Yeni kampanya taslağı
-            <button type="button" className="btn btn-ghost btn-sm" onClick={disconnect}>
-              Bağlantıyı kaldır
-            </button>
-          </h2>
+    <>
+      <div className="ws-title" style={{ marginBottom: 16 }}>
+        <div className="segmented small" role="tablist" aria-label="Reklam görünümü">
+          <button type="button" role="tab" aria-selected={view === "new"} className={view === "new" ? "active" : ""} onClick={() => setView("new")}>
+            Yeni reklam
+          </button>
+          <button type="button" role="tab" aria-selected={view === "list"} className={view === "list" ? "active" : ""} onClick={() => setView("list")}>
+            Reklamlarım
+          </button>
+        </div>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={disconnect}>
+          Meta bağlantısını kaldır
+        </button>
+      </div>
+      {view === "new" ? <NewAd onCreated={() => setView("list")} /> : <AdList />}
+    </>
+  );
+}
+
+/* ---------------- Yeni reklam ---------------- */
+
+function NewAd({ onCreated }: { onCreated: () => void }) {
+  const { refresh } = useSession();
+  const [accounts, setAccounts] = useState<AdAccount[]>([]);
+  const [pages, setPages] = useState<Page[]>([]);
+  const [igAccounts, setIgAccounts] = useState<IgAccount[]>([]);
+  const [accountId, setAccountId] = useState("");
+  const [pageId, setPageId] = useState("");
+  const [igId, setIgId] = useState("");
+  const [objective, setObjective] = useState<Objective>("traffic");
+  const [name, setName] = useState("");
+  const [budget, setBudget] = useState("250");
+  const [startDate, setStartDate] = useState(today());
+  const [endDate, setEndDate] = useState("");
+  const [locations, setLocations] = useState<Loc[]>([{ key: "TR", name: "Türkiye", type: "country", country_code: "TR" }]);
+  const [ageMin, setAgeMin] = useState(18);
+  const [ageMax, setAgeMax] = useState(65);
+  const [gender, setGender] = useState<"all" | "male" | "female">("all");
+  const [media, setMedia] = useState<Media | null>(null);
+  const [primaryText, setPrimaryText] = useState("");
+  const [headline, setHeadline] = useState("");
+  const [link, setLink] = useState("");
+  const [cta, setCta] = useState("LEARN_MORE");
+  const [brief, setBrief] = useState("");
+  const [writing, setWriting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+
+  const account = accounts.find((a) => a.account_id === accountId);
+  const currency = account?.currency || "TRY";
+
+  useEffect(() => {
+    Promise.all([
+      api<{ ad_accounts: AdAccount[] }>("/api/ads/meta/ad-accounts"),
+      api<{ pages: Page[] }>("/api/ads/meta/pages"),
+    ])
+      .then(([a, p]) => {
+        const sorted = [...a.ad_accounts].sort((x, y) => (x.account_status === 1 ? -1 : 0) - (y.account_status === 1 ? -1 : 0));
+        setAccounts(sorted);
+        const firstActive = sorted.find((x) => x.account_status === 1);
+        if (firstActive) setAccountId(firstActive.account_id);
+        setPages(p.pages);
+        if (p.pages[0]) setPageId(p.pages[0].id);
+      })
+      .catch((e) => setLoadError((e as ApiError).message));
+  }, []);
+
+  useEffect(() => {
+    if (!accountId) return;
+    setIgAccounts([]);
+    setIgId("");
+    api<{ accounts: IgAccount[] }>(`/api/ads/meta/instagram-accounts?ad_account_id=${accountId}`)
+      .then((d) => {
+        setIgAccounts(d.accounts);
+        if (d.accounts[0]) setIgId(d.accounts[0].id);
+      })
+      .catch(() => setIgAccounts([]));
+  }, [accountId]);
+
+  const writeCopy = async () => {
+    if (!brief.trim()) {
+      setError("Önce ürün veya kampanyayı kısaca anlat, metni ona göre yazayım.");
+      return;
+    }
+    setWriting(true);
+    setError("");
+    try {
+      const d = await api<{ primary_text: string; headline: string }>("/api/ads/meta/ad-copy", {
+        method: "POST",
+        body: JSON.stringify({ brief, objective }),
+      });
+      setPrimaryText(d.primary_text);
+      setHeadline(d.headline);
+    } catch (e) {
+      setError((e as ApiError).message);
+    } finally {
+      setWriting(false);
+      refresh();
+    }
+  };
+
+  const days = useMemo(() => {
+    if (!endDate) return null;
+    const d = Math.round((new Date(endDate).getTime() - new Date(startDate || today()).getTime()) / 86400000) + 1;
+    return d > 0 ? d : null;
+  }, [startDate, endDate]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!media) {
+      setError("Reklam için bir görsel veya video seç.");
+      return;
+    }
+    if (!igId) {
+      setError("Bu reklam hesabına bağlı bir Instagram hesabı bulunamadı. Meta İşletme ayarlarından Instagram hesabını reklam hesabına bağla.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await api("/api/ads/meta/ads", {
+        method: "POST",
+        body: JSON.stringify({
+          ad_account_id: accountId,
+          page_id: pageId,
+          instagram_user_id: igId,
+          name,
+          objective,
+          daily_budget: Number(budget),
+          currency,
+          start_date: startDate || null,
+          end_date: endDate || null,
+          locations,
+          age_min: ageMin,
+          age_max: ageMax,
+          gender,
+          media,
+          primary_text: primaryText,
+          headline,
+          link: objective === "whatsapp" ? null : link,
+          call_to_action: cta,
+        }),
+      });
+      refresh();
+      onCreated();
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loadError) return <div className="notice error">{loadError}</div>;
+
+  const igName = igAccounts.find((a) => a.id === igId)?.username || "hesabin";
+
+  return (
+    <form className="ad-builder" onSubmit={submit}>
+      <div className="ad-steps">
+        <section className="panel ws-panel">
+          <h2>1. Hesaplar</h2>
           <div className="field">
-            <label htmlFor="r-account">Reklam hesabı</label>
-            <select id="r-account" value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
+            <label htmlFor="ad-account">Reklam hesabı</label>
+            <select id="ad-account" value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
+              <option value="" disabled>
+                {accounts.length ? "Seç" : "Yükleniyor…"}
+              </option>
               {accounts.map((a) => (
-                <option key={a.account_id} value={a.account_id}>
-                  {a.name} ({a.currency})
+                <option key={a.account_id} value={a.account_id} disabled={a.account_status !== 1}>
+                  {a.name} ({a.currency}){a.account_status !== 1 ? " · aktif değil" : ""}
                 </option>
               ))}
             </select>
           </div>
-          <div className="field">
-            <label htmlFor="r-name">Kampanya adı</label>
-            <input id="r-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Kasım buzdolabı kampanyası" />
-          </div>
-          <div className="generate">
-            <button className="btn btn-primary btn-block" type="submit" disabled={busy || !accountId}>
-              {busy ? "Taslak oluşturuluyor…" : "Taslak oluştur"}
-            </button>
-            <div className="cost">
-              <span>Taslak duraklatılmış oluşturulur, harcama yapılmaz</span>
+          <div className="field-row">
+            <div className="field">
+              <label htmlFor="ad-page">Facebook sayfası</label>
+              <select id="ad-page" value={pageId} onChange={(e) => setPageId(e.target.value)} required>
+                {pages.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="ad-ig">Instagram hesabı</label>
+              <select id="ad-ig" value={igId} onChange={(e) => setIgId(e.target.value)} required>
+                {!igAccounts.length && <option value="">Bu hesaba bağlı yok</option>}
+                {igAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    @{a.username}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-        </form>
-      ) : (
-        <div className="panel ws-panel">
-          <h2>Meta hesabını bağla</h2>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Kendi Meta Business hesabını bağlarsın. Reklam bütçesi senin hesabından harcanır; ajansAI kampanyayı sen onaylamadan
-            yayına almaz.
-          </p>
-          <button className="btn btn-primary btn-block" onClick={connect}>
-            Meta ile bağlan
-          </button>
-        </div>
-      )}
+          <span className="hint">Reklam yalnızca Instagram'da gösterilir: akış, hikâye, Reels ve keşfet.</span>
+        </section>
 
-      <section className="panel ws-panel result-area" aria-live="polite">
-        <h2>Oluşturulan taslaklar</h2>
-        {error && <div className="notice error">{error}</div>}
-        {created.length ? (
-          <div className="history">
-            {created.map((c, i) => (
-              <div className="history-item" key={i}>
-                <span className="status-pill pending">Duraklatıldı</span>
-                <span>{c}</span>
-                <a className="when" href="https://adsmanager.facebook.com" target="_blank" rel="noreferrer">
-                  Reklam Yöneticisi'nde aç
-                </a>
-              </div>
+        <section className="panel ws-panel">
+          <h2>2. Amaç</h2>
+          <div className="objective-cards">
+            {OBJECTIVES.map((o) => (
+              <button
+                type="button"
+                key={o.value}
+                className={objective === o.value ? "active" : ""}
+                aria-pressed={objective === o.value}
+                onClick={() => setObjective(o.value)}
+              >
+                <strong>{o.label}</strong>
+                <small>{o.note}</small>
+              </button>
             ))}
           </div>
-        ) : (
-          <EmptyResult
-            text={
-              metaConnected
-                ? "Bu oturumda oluşturduğun taslaklar burada listelenir."
-                : "Hesabını bağladıktan sonra kampanya taslakların burada görünür."
-            }
-          />
+          <div className="field">
+            <label htmlFor="ad-name">Kampanya adı</label>
+            <input id="ad-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Kasım buzdolabı kampanyası" />
+          </div>
+        </section>
+
+        <section className="panel ws-panel">
+          <h2>3. Kitle</h2>
+          <LocationPicker value={locations} onChange={setLocations} />
+          <div className="field-row">
+            <div className="field">
+              <label htmlFor="age-min">Yaş</label>
+              <div className="age-row">
+                <select id="age-min" value={ageMin} onChange={(e) => setAgeMin(Number(e.target.value))}>
+                  {AGES.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+                <span>–</span>
+                <select aria-label="Maksimum yaş" value={ageMax} onChange={(e) => setAgeMax(Number(e.target.value))}>
+                  {AGES.map((a) => (
+                    <option key={a} value={a}>
+                      {a === 65 ? "65+" : a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="field">
+              <label>Cinsiyet</label>
+              <div className="segmented">
+                {[
+                  ["all", "Tümü"],
+                  ["female", "Kadın"],
+                  ["male", "Erkek"],
+                ].map(([v, l]) => (
+                  <button type="button" key={v} className={gender === v ? "active" : ""} aria-pressed={gender === v} onClick={() => setGender(v as typeof gender)}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel ws-panel">
+          <h2>4. Bütçe ve süre</h2>
+          <div className="field-row">
+            <div className="field">
+              <label htmlFor="ad-budget">Günlük bütçe ({currency})</label>
+              <input id="ad-budget" type="number" min={1} step="1" required value={budget} onChange={(e) => setBudget(e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="ad-start">Başlangıç</label>
+              <input id="ad-start" type="date" min={today()} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="ad-end">Bitiş (isteğe bağlı)</label>
+              <input id="ad-end" type="date" min={startDate || today()} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          </div>
+          <span className="hint">
+            {days
+              ? `Toplam en fazla ${money(Number(budget || 0) * days, currency)} (${days} gün). `
+              : "Bitiş tarihi vermezsen sen durdurana kadar günlük bütçe kadar harcar. "}
+            Bütçe kendi Meta reklam hesabından harcanır; ajansAI kredisi harcamaz.
+          </span>
+        </section>
+
+        <section className="panel ws-panel">
+          <h2>5. Görsel veya video</h2>
+          <MediaPicker value={media} onChange={setMedia} />
+        </section>
+
+        <section className="panel ws-panel">
+          <h2>6. Reklam metni</h2>
+          <div className="field">
+            <label htmlFor="ad-brief">Yapay zekaya anlat (isteğe bağlı)</label>
+            <div className="inline-row">
+              <input
+                id="ad-brief"
+                value={brief}
+                onChange={(e) => setBrief(e.target.value)}
+                placeholder="Çorlu'da No-Frost buzdolabında peşin fiyatına 6 taksit"
+              />
+              <button type="button" className="btn btn-light btn-sm" onClick={writeCopy} disabled={writing}>
+                <Icon name="sparkle" size={14} /> {writing ? "Yazılıyor…" : "Metni yaz · 1 kredi"}
+              </button>
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="ad-text">Ana metin</label>
+            <textarea id="ad-text" required rows={4} value={primaryText} onChange={(e) => setPrimaryText(e.target.value)} maxLength={2000} />
+          </div>
+          <div className="field-row">
+            <div className="field">
+              <label htmlFor="ad-headline">Başlık</label>
+              <input id="ad-headline" value={headline} onChange={(e) => setHeadline(e.target.value)} maxLength={120} />
+            </div>
+            {objective !== "whatsapp" && (
+              <div className="field">
+                <label>Buton</label>
+                <ChipSelect icon="arrowUp" label="Buton" value={cta} onChange={setCta} options={CTAS} />
+              </div>
+            )}
+          </div>
+          {objective !== "whatsapp" ? (
+            <div className="field">
+              <label htmlFor="ad-link">Web sitesi bağlantısı</label>
+              <input id="ad-link" required inputMode="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://www.siten.com/kampanya" />
+            </div>
+          ) : (
+            <span className="hint">Buton "WhatsApp'tan mesaj gönder" olur; Facebook sayfana bağlı WhatsApp numarası kullanılır.</span>
+          )}
+        </section>
+      </div>
+
+      <aside className="ad-preview-col">
+        <div className="panel ws-panel ad-preview-panel">
+          <h2>Önizleme</h2>
+          <div className="ig-card">
+            <div className="ig-head">
+              <span className="ig-avatar" aria-hidden="true" />
+              <div>
+                <strong>{igName}</strong>
+                <small>Sponsorlu</small>
+              </div>
+            </div>
+            <div className="ig-media">
+              {media ? (
+                media.kind === "image" ? (
+                  <img src={media.url} alt="" />
+                ) : (
+                  <video src={media.url} muted playsInline autoPlay loop />
+                )
+              ) : (
+                <span>Görsel veya video seç</span>
+              )}
+            </div>
+            <div className="ig-cta">
+              <span>{objective === "whatsapp" ? "WhatsApp'tan mesaj gönder" : CTAS.find((c) => c.value === cta)?.label}</span>
+              <Icon name="arrowLeft" size={14} />
+            </div>
+            <p className="ig-text">
+              <strong>{igName}</strong> {primaryText || "Ana metin burada görünür."}
+            </p>
+          </div>
+          {error && <div className="notice error">{error}</div>}
+          <button className="btn btn-primary btn-block" type="submit" disabled={saving || !accountId}>
+            {saving ? (media?.kind === "video" ? "Video Meta'ya yükleniyor…" : "Reklam oluşturuluyor…") : "Reklamı oluştur (duraklatılmış)"}
+          </button>
+          <p className="faint" style={{ fontSize: 12.5, margin: "8px 0 0" }}>
+            Reklam Meta'da duraklatılmış oluşturulur. Reklamlarım sekmesinden "Yayına al" dediğinde harcama başlar.
+          </p>
+        </div>
+      </aside>
+    </form>
+  );
+}
+
+function LocationPicker({ value, onChange }: { value: Loc[]; onChange: (v: Loc[]) => void }) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<Loc[]>([]);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    clearTimeout(timer.current);
+    if (q.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    timer.current = setTimeout(() => {
+      api<{ locations: Loc[] }>(`/api/ads/meta/locations?q=${encodeURIComponent(q.trim())}`)
+        .then((d) => setResults(d.locations))
+        .catch(() => setResults([]));
+    }, 300);
+  }, [q]);
+
+  const add = (loc: Loc) => {
+    // Ülke dışında bir konum eklenince varsayılan "Türkiye" kaldırılır.
+    const base = loc.type === "country" ? value : value.filter((v) => v.type !== "country");
+    if (!base.some((v) => v.key === loc.key)) onChange([...base, loc]);
+    setQ("");
+    setResults([]);
+  };
+
+  const label = (l: Loc) => (l.type === "city" ? `${l.name}${l.region ? `, ${l.region}` : ""} (+10 km)` : l.name);
+
+  return (
+    <div className="field">
+      <label htmlFor="ad-loc">Konum</label>
+      <div className="loc-chips">
+        {value.map((l) => (
+          <span key={l.key} className="chip chip-soft">
+            {label(l)}
+            <button type="button" aria-label={`${l.name} kaldır`} onClick={() => onChange(value.filter((v) => v.key !== l.key))}>
+              <Icon name="close" size={12} />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="loc-search">
+        <input id="ad-loc" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Şehir veya ilçe ara: Çorlu, Kadıköy, İzmir…" autoComplete="off" />
+        {results.length > 0 && (
+          <ul>
+            {results.map((r) => (
+              <li key={r.key}>
+                <button type="button" onClick={() => add(r)}>
+                  {label(r)} <small>{r.type === "city" ? "Şehir/ilçe" : r.type === "region" ? "İl" : "Ülke"}</small>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
-      </section>
+      </div>
+    </div>
+  );
+}
+
+function MediaPicker({ value, onChange }: { value: Media | null; onChange: (m: Media | null) => void }) {
+  const up = useUploader(["image", "video"], 1, 0, (f) => onChange({ url: f.url, kind: f.kind === "video" ? "video" : "image" }));
+  const library = useMemo(() => {
+    const imgs = readHistory<{ url: string }>("gorsel").map((h) => ({ url: h.data.url, kind: "image" as const }));
+    const vids = readHistory<{ url: string }>("video").map((h) => ({ url: h.data.url, kind: "video" as const }));
+    return [...imgs, ...vids].filter((m) => m.url && m.url.startsWith("https://")).slice(0, 12);
+  }, []);
+
+  return (
+    <div className="field">
+      {up.field}
+      <div className="media-grid">
+        <button type="button" className="media-upload" onClick={up.pick} disabled={up.busy.length > 0}>
+          <Icon name="plus" size={20} />
+          <span>{up.busy.length ? `Yükleniyor %${up.busy[0].pct}` : "Görsel veya video yükle"}</span>
+          <small>JPG, PNG, MP4, MOV</small>
+        </button>
+        {value && !library.some((m) => m.url === value.url) && (
+          <MediaTile media={value} selected onClick={() => onChange(null)} />
+        )}
+        {library.map((m) => (
+          <MediaTile key={m.url} media={m} selected={value?.url === m.url} onClick={() => onChange(value?.url === m.url ? null : m)} />
+        ))}
+      </div>
+      <UploadProgress busy={up.busy} />
+      {up.error && <small className="error-text">{up.error}</small>}
+      <span className="hint">
+        Kendi dosyanı yükle ya da ajansAI'da ürettiğin görsel ve videolardan seç. Hikâye ve Reels için dikey (9:16), akış için kare veya 4:5 en iyisi.
+      </span>
+    </div>
+  );
+}
+
+function MediaTile({ media, selected, onClick }: { media: Media; selected: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className={`media-tile ${selected ? "selected" : ""}`} onClick={onClick} aria-pressed={selected}>
+      {media.kind === "image" ? <img src={media.url} alt="" /> : <video src={media.url} muted playsInline />}
+      {media.kind === "video" && <span className="badge">Video</span>}
+    </button>
+  );
+}
+
+/* ---------------- Reklamlarım ---------------- */
+
+function AdList() {
+  const [ads, setAds] = useState<AdRow[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  const load = () =>
+    api<{ ads: AdRow[] }>("/api/ads/meta/ads")
+      .then((d) => setAds(d.ads))
+      .catch((e) => {
+        setError((e as ApiError).message);
+        setAds([]);
+      });
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const act = async (id: string, action: "publish" | "pause") => {
+    setBusy(id);
+    setError("");
+    try {
+      await api(`/api/ads/meta/ads/${id}/${action}`, { method: "POST" });
+      setConfirmId(null);
+      await load();
+    } catch (e) {
+      setError((e as ApiError).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (ads === null) return <EmptyResult loading text="Reklamların ve metrikleri Meta'dan alınıyor…" />;
+
+  return (
+    <div>
+      {error && <div className="notice error">{error}</div>}
+      {ads.length === 0 ? (
+        <div className="panel empty">
+          <h3>Henüz reklam oluşturmadın</h3>
+          <p>"Yeni reklam" sekmesinden ilk Instagram reklamını oluştur; durumu ve sonuçları burada görürsün.</p>
+        </div>
+      ) : (
+        <div className="ad-list">
+          {ads.map((ad) => {
+            const st = STATUS[ad.status] || { label: ad.status, cls: "pending" };
+            const i = ad.insights;
+            const active = ad.status === "ACTIVE";
+            return (
+              <article key={ad.id} className="panel ad-row">
+                <div className="ad-thumb">
+                  {ad.media_url && (/\.(mp4|mov|webm)(\?|$)/i.test(ad.media_url) ? <video src={ad.media_url} muted playsInline /> : <img src={ad.media_url} alt="" />)}
+                </div>
+                <div className="ad-main">
+                  <div className="ad-title">
+                    <strong>{ad.name}</strong>
+                    <span className={`status-pill ${st.cls}`}>{st.label}</span>
+                  </div>
+                  <div className="faint" style={{ fontSize: 13 }}>
+                    {OBJECTIVES.find((o) => o.value === ad.objective)?.label} · Günlük {money(ad.daily_budget, ad.currency)} · Instagram
+                  </div>
+                  {i ? (
+                    <div className="ad-metrics">
+                      <span>
+                        <b>{money(i.spend, ad.currency)}</b> harcama
+                      </span>
+                      <span>
+                        <b>{i.reach.toLocaleString("tr-TR")}</b> erişim
+                      </span>
+                      <span>
+                        <b>{i.impressions.toLocaleString("tr-TR")}</b> gösterim
+                      </span>
+                      {ad.objective === "whatsapp" ? (
+                        <span>
+                          <b>{i.conversations}</b> mesaj
+                        </span>
+                      ) : (
+                        <span>
+                          <b>{i.clicks.toLocaleString("tr-TR")}</b> tıklama
+                        </span>
+                      )}
+                      <span>
+                        <b>%{i.ctr.toFixed(2)}</b> TO
+                      </span>
+                    </div>
+                  ) : (
+                    ad.error && <small className="error-text">{ad.error}</small>
+                  )}
+                </div>
+                <div className="ad-actions">
+                  {active ? (
+                    <button className="btn btn-ghost btn-sm" disabled={busy === ad.id} onClick={() => act(ad.id, "pause")}>
+                      Duraklat
+                    </button>
+                  ) : confirmId === ad.id ? (
+                    <>
+                      <span className="faint" style={{ fontSize: 12.5 }}>Harcama başlayacak. Emin misin?</span>
+                      <button className="btn btn-primary btn-sm" disabled={busy === ad.id} onClick={() => act(ad.id, "publish")}>
+                        Evet, yayına al
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setConfirmId(null)}>
+                        Vazgeç
+                      </button>
+                    </>
+                  ) : (
+                    <button className="btn btn-primary btn-sm" onClick={() => setConfirmId(ad.id)}>
+                      Yayına al
+                    </button>
+                  )}
+                  <a
+                    className="btn btn-ghost btn-sm"
+                    href={`https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${ad.ad_account_id}&selected_campaign_ids=${ad.campaign_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Meta'da aç
+                  </a>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

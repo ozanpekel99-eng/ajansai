@@ -111,6 +111,24 @@ meta_connections = Table(
     Column("updated_at", DateTime, nullable=False),
 )
 
+# ajansAI üzerinden oluşturulan Meta reklamları (durum ve metrikler Meta'dan canlı okunur).
+meta_ads = Table(
+    "meta_ads",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), nullable=False, index=True),
+    Column("ad_account_id", String(50), nullable=False),
+    Column("campaign_id", String(50), nullable=False),
+    Column("adset_id", String(50), nullable=False),
+    Column("ad_id", String(50), nullable=False),
+    Column("name", String(200), nullable=False),
+    Column("objective", String(20), nullable=False),
+    Column("daily_budget", Numeric(12, 2), nullable=False),
+    Column("currency", String(3), nullable=False),
+    Column("media_url", Text, nullable=True),
+    Column("created_at", DateTime, nullable=False),
+)
+
 # Uygulamanın kendi ürettiği ayarlar (ör. JWT_SECRET tanımlı değilse oluşturulan anahtar).
 app_settings = Table(
     "app_settings",
