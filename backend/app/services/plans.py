@@ -12,7 +12,7 @@ kredi düşer. Kredi maliyetleri sağlayıcı maliyetine göre belirlendi
 - Video 4K (Seedance 2.0): token ile ücretlenir, $4 / 1M token;
   token = 3840×2160×24 fps×sn / 1024 ≈ 194.400/sn → ≈ $0.78/sn (en kötü durum)
 
-Paket fiyatları KDV ve iyzico komisyonu düşüldükten sonra ~%70 brüt marj bırakır.
+Paketler $10 / $25 / $49; KDV ve iyzico komisyonu düşüldükten sonra ~%65-75 brüt marj bırakır.
 Deneme paketi satın alınamaz; yeni kayıt olan herkes bununla başlar.
 """
 
@@ -45,8 +45,7 @@ CREDIT_COSTS = {
 PLANS = {
     "deneme": {
         "name": "Deneme",
-        "price_try": 0,
-        "price_usd": 0,
+        "price": 0,
         "credits": 14,
         "video_enabled": False,
         "ads_enabled": False,
@@ -54,8 +53,7 @@ PLANS = {
     },
     "baslangic": {
         "name": "Başlangıç",
-        "price_try": 499,
-        "price_usd": 9.99,
+        "price": 10,
         "credits": 200,
         "video_enabled": True,
         "ads_enabled": False,
@@ -63,8 +61,7 @@ PLANS = {
     },
     "pro": {
         "name": "Pro",
-        "price_try": 1249,
-        "price_usd": 26.99,
+        "price": 25,
         "credits": 530,
         "video_enabled": True,
         "ads_enabled": True,
@@ -72,14 +69,17 @@ PLANS = {
     },
     "ajans": {
         "name": "Ajans",
-        "price_try": 1999,
-        "price_usd": 42.99,
+        "price": 49,
         "credits": 930,
         "video_enabled": True,
         "ads_enabled": True,
         "purchasable": True,
     },
 }
+
+# Paketler dolar cinsinden satılır; iyzico ödemeyi USD olarak alır
+# (iyzico üye işyeri hesabında döviz ile ödeme açık olmalı).
+CURRENCY = "USD"
 
 FREE_PLAN = "deneme"
 PLAN_DURATION_DAYS = 30
@@ -112,8 +112,8 @@ def public_plan(plan_id: str) -> dict:
     return {
         "id": plan_id,
         "name": p["name"],
-        "price_try": p["price_try"],
-        "price_usd": p["price_usd"],
+        "price": p["price"],
+        "currency": CURRENCY,
         "credits": c,
         "video_enabled": p["video_enabled"],
         "ads_enabled": p["ads_enabled"],

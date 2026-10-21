@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { api } from "../../lib/api";
-import { tl } from "../../lib/plans";
+import { money } from "../../lib/plans";
 import { useSession } from "../../lib/session";
 
 type Payment = {
   payment_id: string;
   plan_name: string;
-  amount_try: number;
+  amount: number;
+  currency: string;
   status: "success" | "failure" | "pending";
   created_at: string;
 };
@@ -97,7 +98,7 @@ export default function Faturalandirma() {
         <div className="section-head">
           <div>
             <h2>Ödeme geçmişi</h2>
-            <p>Kart bilgilerin ajansAI'da saklanmaz; ödemeler iyzico üzerinden alınır.</p>
+            <p>Kart bilgilerin ajansAI'da saklanmaz; ödemeler iyzico üzerinden dolar (USD) olarak alınır.</p>
           </div>
         </div>
         {payments === null ? null : payments.length === 0 ? (
@@ -121,7 +122,7 @@ export default function Faturalandirma() {
                   <tr key={p.payment_id}>
                     <td>{fmtDate(p.created_at)}</td>
                     <td>{p.plan_name}</td>
-                    <td className="num">{tl(p.amount_try)}</td>
+                    <td className="num">{money(p.amount, p.currency)}</td>
                     <td>
                       <span className={`status-pill ${p.status}`}>{STATUS_LABEL[p.status] ?? p.status}</span>
                     </td>

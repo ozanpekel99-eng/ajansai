@@ -523,7 +523,7 @@ BILLING = {"name": "Ozan", "surname": "Pekel", "phone": "0535 000 00 00", "city"
 
 def test_payment_success_activates_plan_once(client, monkeypatch):
     sent = _enable_iyzico(
-        monkeypatch, {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "1249.00", "currency": "TRY", "paymentId": "p1"}
+        monkeypatch, {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "25.00", "currency": "USD", "paymentId": "p1"}
     )
     token = register(client)
 
@@ -531,7 +531,8 @@ def test_payment_success_activates_plan_once(client, monkeypatch):
     assert r.status_code == 200, r.text
     assert r.json()["payment_page_url"].endswith("tok-1")
     init_payload = sent[0][1]
-    assert init_payload["price"] == "1249.00" and init_payload["paidPrice"] == "1249.00"
+    assert init_payload["price"] == "25.00" and init_payload["paidPrice"] == "25.00"
+    assert init_payload["currency"] == "USD"
     assert init_payload["buyer"]["gsmNumber"] == "+905350000000"
     assert init_payload["callbackUrl"].endswith("/api/payments/iyzico/callback")
 
@@ -555,10 +556,11 @@ def test_payment_success_activates_plan_once(client, monkeypatch):
 @pytest.mark.parametrize(
     "result",
     [
-        {"status": "success", "paymentStatus": "FAILURE", "paidPrice": "1249.00"},
+        {"status": "success", "paymentStatus": "FAILURE", "paidPrice": "25.00", "currency": "USD"},
         {"status": "failure", "errorMessage": "Kart reddedildi"},
-        {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "1.00"},  # eksik tutar
-        {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "1249.00", "basketId": "baska-sepet"},
+        {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "1.00", "currency": "USD"},  # eksik tutar
+        {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "25.00", "currency": "TRY"},  # yanlış para birimi
+        {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "25.00", "currency": "USD", "basketId": "baska-sepet"},
     ],
 )
 def test_payment_failure_does_not_activate(client, monkeypatch, result):
@@ -601,7 +603,8 @@ def test_payment_list_shows_only_own_payments(client, monkeypatch):
     assert client.get("/api/payments/", headers=auth(b)).json()["payments"] == []
     items = client.get("/api/payments/", headers=auth(a)).json()["payments"]
     assert len(items) == 1
-    assert items[0]["plan_name"] == "Pro" and items[0]["amount_try"] == 1249 and items[0]["status"] == "pending"
+    assert items[0]["plan_name"] == "Pro" and items[0]["amount"] == 25 and items[0]["currency"] == "USD"
+    assert items[0]["status"] == "pending"
 
 
 def test_image_rejects_unknown_aspect_ratio(client):

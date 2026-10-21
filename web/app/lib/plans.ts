@@ -7,8 +7,8 @@ import { CreditCosts, VideoDuration, VideoResolution, api } from "./api";
 export type Plan = {
   id: string;
   name: string;
-  price_try: number;
-  price_usd: number;
+  price: number;
+  currency: string;
   credits: number;
   video_enabled: boolean;
   ads_enabled: boolean;
@@ -76,6 +76,13 @@ export const videoCredits = (
 ) => (audio ? costs.video_audio ?? DEFAULT_COSTS.video_audio : costs.video)[resolution][String(duration)];
 
 export const tl = (n: number) => `₺${n.toLocaleString("tr-TR")}`;
+
+/** Tutarı para birimiyle gösterir: $25, ₺499, €10 */
+export const money = (n: number, currency = "USD") => {
+  const sym: Record<string, string> = { USD: "$", TRY: "₺", EUR: "€" };
+  const val = n.toLocaleString("tr-TR", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
+  return `${sym[currency] ?? currency + " "}${val}`;
+};
 export const num = (n: number) => n.toLocaleString("tr-TR");
 
 export const PLAN_ORDER = ["baslangic", "pro", "ajans"];

@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { api } from "../lib/api";
-import { PLAN_ORDER, tl, usePlans } from "../lib/plans";
+import { PLAN_ORDER, money, usePlans } from "../lib/plans";
 import Icon from "./Icon";
 
 const BILLING_KEY = "ajansai_billing";
@@ -85,7 +85,7 @@ export default function CheckoutModal({
               aria-pressed={planId === id}
             >
               <strong>{plans![id].name}</strong>
-              <span>{tl(plans![id].price_try)} · {plans![id].credits} kredi</span>
+              <span>{money(plans![id].price, plans![id].currency)} · {plans![id].credits} kredi</span>
             </button>
           ))}
         </div>
@@ -119,7 +119,7 @@ export default function CheckoutModal({
           <div className="summary">
             <div>
               <span className="muted">{plan.name} paketi, 30 gün</span>
-              <span>{tl(plan.price_try)}</span>
+              <span>{money(plan.price, plan.currency)}</span>
             </div>
             <div>
               <span className="muted">Dahil</span>
@@ -133,7 +133,7 @@ export default function CheckoutModal({
             </div>
             <div className="total">
               <span>Ödenecek tutar</span>
-              <span>{tl(plan.price_try)}</span>
+              <span>{money(plan.price, plan.currency)}</span>
             </div>
           </div>
         )}
@@ -142,9 +142,9 @@ export default function CheckoutModal({
 
         <button className="btn btn-primary btn-block" type="submit" disabled={paying || !plan}>
           <Icon name="lock" size={16} />
-          {paying ? "Ödeme sayfası açılıyor…" : plan ? `${tl(plan.price_try)} öde` : "Paket seç"}
+          {paying ? "Ödeme sayfası açılıyor…" : plan ? `${money(plan.price, plan.currency)} öde` : "Paket seç"}
         </button>
-        <p className="secure-note">Kart bilgilerin iyzico'nun güvenli ödeme sayfasında alınır, ajansAI kart bilgisi saklamaz.</p>
+        <p className="secure-note">Ödeme dolar (USD) olarak alınır; TL kartlarda tutar bankanın güncel kuruyla çevrilir. Kart bilgilerin iyzico'nun güvenli sayfasında alınır, ajansAI saklamaz.</p>
       </form>
     </div>
   );

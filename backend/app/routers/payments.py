@@ -12,7 +12,7 @@ from app import config
 from app.db import get_engine, payments, utcnow
 from app.security import get_current_user
 from app.services import iyzico_service
-from app.services.plans import get_plan, is_purchasable
+from app.services.plans import CURRENCY, get_plan, is_purchasable
 from app.services.usage_service import activate_plan
 
 router = APIRouter()
@@ -54,7 +54,7 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
 
     plan = get_plan(payload.plan_id)
     payment_id = str(uuid.uuid4())
-    amount = Decimal(plan["price_try"])
+    amount = Decimal(plan["price"])
 
     with get_engine().begin() as conn:
         conn.execute(
@@ -62,7 +62,8 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
                 id=payment_id,
                 user_id=user["id"],
                 plan_id=payload.plan_id,
-                amount_try=amount,
+                amount_try=amount,  # sütun adı eski; tutar `currency` biriminde
+                currency=CURRENCY,
                 status="pending",
                 created_at=utcnow(),
             )
@@ -74,7 +75,8 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
     try:
         result = iyzico_service.initialize_checkout(
             payment_id=payment_id,
-            amount_try=amount,
+            amount=amount,
+            currency=CURRENCY,
             plan_id=payload.plan_id,
             plan_name=plan["name"],
             user=user,
@@ -131,7 +133,7 @@ def iyzico_callback(token: str = Form(...)):
 
 def _finalize(payment, result: dict) -> RedirectResponse:
     success = iyzico_service.is_successful_payment(
-        result, payment_id=payment.id, amount_try=Decimal(payment.amount_try)
+        result, payment_id=payment.id, amount=Decimal(payment.amount_try), currency=payment.currency or "TRY"
     )
     new_status = "success" if success else "failure"
 
@@ -170,7 +172,8 @@ def list_payments(user: dict = Depends(get_current_user)):
                 "payment_id": r.id,
                 "plan": r.plan_id,
                 "plan_name": get_plan(r.plan_id)["name"],
-                "amount_try": float(r.amount_try),
+                "amount": float(r.amount_try),
+                "currency": r.currency or "TRY",
                 "status": r.status,
                 "created_at": r.created_at.isoformat(),
             }

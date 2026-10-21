@@ -1,7 +1,7 @@
 "use client";
 
 import { CreditCosts } from "../../lib/api";
-import { PLAN_ORDER, Plan, VIDEO_DURATIONS, VIDEO_RESOLUTIONS, num, tl, usePricing } from "../../lib/plans";
+import { PLAN_ORDER, Plan, VIDEO_DURATIONS, VIDEO_RESOLUTIONS, num, money, usePricing } from "../../lib/plans";
 import { useSession } from "../../lib/session";
 
 const PITCH: Record<string, string> = {
@@ -32,7 +32,7 @@ export default function Paketler() {
         <h1>İşine uyan paketi seç</h1>
         <p>
           Her paket 30 günlük bir kredi bakiyesi verir. Fikir, görsel ve video ürettikçe krediden düşer; ne üreteceğine
-          sen karar verirsin. Otomatik yenilenmez, ödeme iyzico ile Türk lirası olarak alınır.
+          sen karar verirsin. Otomatik yenilenmez; ödeme iyzico ile dolar (USD) olarak, kartından güncel kurla alınır.
         </p>
       </section>
 
@@ -59,7 +59,7 @@ export default function Paketler() {
                   <h2>{p.name}</h2>
                   <p className="muted" style={{ margin: 0, fontSize: 14 }}>{PITCH[id]}</p>
                   <div className="amount">
-                    {tl(p.price_try)} <small>/ 30 gün</small>
+                    {money(p.price, p.currency)} <small>/ 30 gün</small>
                   </div>
                   <div className="credit-badge">
                     <strong>{num(p.credits)}</strong> kredi
@@ -226,7 +226,7 @@ export default function Paketler() {
                 </thead>
                 <tbody>
                   {[
-                    ["Fiyat (30 gün)", (p: Plan) => (p.price_try ? tl(p.price_try) : "Ücretsiz")],
+                    ["Fiyat (30 gün)", (p: Plan) => (p.price ? money(p.price, p.currency) : "Ücretsiz")],
                     ["Kredi", (p: Plan) => num(p.credits)],
                     ["Fikir sohbeti mesajı (yalnızca)", (p: Plan) => num(p.examples.messages)],
                     ["Görsel (yalnızca)", (p: Plan) => num(p.examples.images)],

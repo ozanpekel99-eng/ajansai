@@ -81,7 +81,8 @@ def _money(amount: Decimal) -> str:
 def initialize_checkout(
     *,
     payment_id: str,
-    amount_try: Decimal,
+    amount: Decimal,
+    currency: str,
     plan_id: str,
     plan_name: str,
     user: dict,
@@ -89,7 +90,7 @@ def initialize_checkout(
     buyer_ip: str,
 ) -> dict:
     """Ödeme formunu başlatır. {"token", "payment_page_url"} döndürür."""
-    price = _money(amount_try)
+    price = _money(amount)
     contact_name = f"{billing['name']} {billing['surname']}"
     address = {
         "contactName": contact_name,
@@ -102,7 +103,7 @@ def initialize_checkout(
         "conversationId": payment_id,
         "price": price,
         "paidPrice": price,
-        "currency": "TRY",
+        "currency": currency,
         "basketId": payment_id,
         "paymentGroup": "PRODUCT",
         "callbackUrl": f"{config.PUBLIC_API_URL}/api/payments/iyzico/callback",
@@ -153,16 +154,16 @@ def retrieve_checkout(token: str, conversation_id: str) -> dict:
     )
 
 
-def is_successful_payment(result: dict, *, payment_id: str, amount_try: Decimal) -> bool:
+def is_successful_payment(result: dict, *, payment_id: str, amount: Decimal, currency: str = "TRY") -> bool:
     """iyzico yanıtının gerçekten bu ödemeye ait başarılı bir ödeme olduğunu doğrular."""
     if result.get("status") != "success" or result.get("paymentStatus") != "SUCCESS":
         return False
     if result.get("basketId") != payment_id:
         return False
-    if (result.get("currency") or "TRY") != "TRY":
+    if (result.get("currency") or "TRY") != currency:
         return False
     try:
         paid = Decimal(str(result.get("paidPrice")))
     except Exception:
         return False
-    return paid >= Decimal(amount_try)
+    return paid >= Decimal(amount)
