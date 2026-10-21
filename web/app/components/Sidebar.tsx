@@ -109,39 +109,26 @@ export default function Sidebar({ open, onNavigate }: { open: boolean; onNavigat
 function QuotaCard({ onUpgrade }: { onUpgrade: () => void }) {
   const { usage } = useSession();
   if (!usage) return null;
-
-  if (usage.plan === "deneme") {
-    const quota = usage.ideas.quota || 0;
-    const used = Math.min(usage.ideas.used, quota);
-    return (
-      <div className="quota-card">
-        <strong>Deneme paketi</strong>
-        <div className="meta">
-          Bu ay {quota - used} / {quota} fikir hakkın kaldı
-        </div>
-        <div className="meter">
-          <span style={{ width: `${quota ? ((quota - used) / quota) * 100 : 0}%` }} />
-        </div>
-        <button className="btn btn-light btn-sm btn-block" onClick={onUpgrade}>
-          Paket seç
-        </button>
-      </div>
-    );
-  }
-
-  const left = usage.video.quota - usage.video.used;
+  const { total, remaining } = usage.credits;
+  const trial = usage.plan === "deneme";
   return (
     <div className="quota-card">
       <strong>{usage.plan_name} paketi</strong>
       <div className="meta">
-        {left} video, {usage.image.quota - usage.image.used} görsel hakkın kaldı
+        {remaining.toLocaleString("tr-TR")} / {total.toLocaleString("tr-TR")} kredin kaldı
       </div>
-      <div className="meter">
-        <span style={{ width: `${usage.video.quota ? (left / usage.video.quota) * 100 : 0}%` }} />
+      <div className="meter" role="progressbar" aria-valuenow={remaining} aria-valuemin={0} aria-valuemax={total}>
+        <span style={{ width: `${total ? (remaining / total) * 100 : 0}%` }} />
       </div>
-      <Link href="/faturalandirma" className="btn btn-light btn-sm btn-block">
-        Paketi yönet
-      </Link>
+      {trial ? (
+        <button className="btn btn-light btn-sm btn-block" onClick={onUpgrade}>
+          Paket seç
+        </button>
+      ) : (
+        <Link href="/kullanim" className="btn btn-light btn-sm btn-block">
+          Kredi kullanımı
+        </Link>
+      )}
     </div>
   );
 }

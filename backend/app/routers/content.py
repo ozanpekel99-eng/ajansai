@@ -1,21 +1,30 @@
+import base64
+import json
+import logging
+import uuid
+
+import requests
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import and_, select, update
 
+from app.db import get_engine, utcnow, video_tasks
 from app.security import get_current_user
+from app.services import gateway_media, storage
 from app.services.claude_service import generate_content_ideas
-from app.services.image_service import generate_image
 from app.services.llm_service import LLMError
-from app.services.usage_service import (
-    QuotaExceededError,
-    consume,
-    get_video_job_owner,
-    record_video_job,
-    refund,
-    release_video_if_failed,
-)
-from app.services.video_service import get_video_status, start_video_generation
+from app.services.plans import CREDIT_COSTS, idea_cost, video_cost
+from app.services.usage_service import QuotaExceededError, consume, refund
 
 router = APIRouter()
+logger = logging.getLogger("ajansai.content")
+
+
+def _charge(user_id: str, action: str, credits: int, detail: str) -> str:
+    try:
+        return consume(user_id, action, credits, detail)
+    except QuotaExceededError as e:
+        raise HTTPException(status_code=402, detail=str(e))
 
 
 class ContentIdeaRequest(BaseModel):
@@ -29,10 +38,8 @@ class ContentIdeaRequest(BaseModel):
 
 @router.post("/ideas")
 def create_content_ideas(payload: ContentIdeaRequest, user: dict = Depends(get_current_user)):
-    try:
-        consume(user["id"], "idea")
-    except QuotaExceededError as e:
-        raise HTTPException(status_code=402, detail=str(e))
+    credits = idea_cost(payload.idea_count)
+    event_id = _charge(user["id"], "idea", credits, f"{payload.idea_count} fikir: {payload.topic}")
 
     try:
         result = generate_content_ideas(
@@ -44,12 +51,16 @@ def create_content_ideas(payload: ContentIdeaRequest, user: dict = Depends(get_c
             idea_count=payload.idea_count,
         )
     except LLMError:
-        refund(user["id"], "idea")
+        refund(event_id)
         raise HTTPException(status_code=503, detail="Yapay zeka servisine şu an ulaşılamıyor, birazdan tekrar dene.")
 
     if result.get("error"):
-        refund(user["id"], "idea")
-    return result
+        refund(event_id)
+        return result
+    return {**result, "credits_spent": credits}
+
+
+ASPECTS = {"ASPECT_1_1": "1:1", "ASPECT_9_16": "9:16", "ASPECT_3_4": "3:4", "ASPECT_16_9": "16:9", "ASPECT_4_3": "4:3"}
 
 
 class ImageRequest(BaseModel):
@@ -59,22 +70,32 @@ class ImageRequest(BaseModel):
 
 @router.post("/image")
 def create_image(payload: ImageRequest, user: dict = Depends(get_current_user)):
-    try:
-        consume(user["id"], "image")
-    except QuotaExceededError as e:
-        raise HTTPException(status_code=402, detail=str(e))
+    if not gateway_media.is_enabled():
+        raise HTTPException(status_code=503, detail="Görsel üretimi henüz yapılandırılmadı.")
+    credits = CREDIT_COSTS["image"]
+    event_id = _charge(user["id"], "image", credits, payload.concept)
 
-    result = generate_image(prompt=payload.concept, aspect_ratio=payload.aspect_ratio)
-    if not result.get("image_url"):
-        refund(user["id"], "image")
-    return result
+    try:
+        data, mime = gateway_media.generate_image(payload.concept, ASPECTS[payload.aspect_ratio])
+    except gateway_media.MediaError as e:
+        logger.error("Görsel üretilemedi: %s", e)
+        refund(event_id)
+        return {"image_url": None, "error": "Görsel üretilemedi, kredin iade edildi. Tekrar dene."}
+
+    if storage.is_enabled():
+        try:
+            url = storage.save(data, mime, f"gorsel/{user['id']}")
+        except storage.StorageError as e:
+            logger.error("Görsel saklanamadı: %s", e)
+            url = f"data:{mime};base64,{base64.b64encode(data).decode()}"
+    else:
+        url = f"data:{mime};base64,{base64.b64encode(data).decode()}"
+    return {"image_url": url, "error": None, "credits_spent": credits}
 
 
 class VideoRequest(BaseModel):
     concept: str = Field(..., max_length=2000, examples=["Buzlu kahvenin bardağa dökülüşü, ağır çekim"])
-    image_url: str | None = Field(
-        None, description="Varsa, önce /image ile üretilmiş görselin URL'si (image-to-video)"
-    )
+    image_url: str | None = Field(None, max_length=2000, description="Varsa görsel aracından gelen https adresi (image-to-video)")
     duration: int = Field(5, ge=5, le=10)
 
 
@@ -82,33 +103,98 @@ class VideoRequest(BaseModel):
 def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
     """Video üretimini başlatır. Yanıttaki job_id ile /video/{job_id} sorgulanmalı.
 
-    Kota job başlamadan önce atomik olarak düşülür. Job başlatılamazsa hemen,
-    Runway job'ı FAILED dönerse sorgulandığında iade edilir.
+    Kredi iş başlamadan önce atomik olarak düşülür. İş başlatılamazsa hemen,
+    üretim başarısız olursa sorgulandığında iade edilir.
     """
+    if not gateway_media.is_enabled():
+        raise HTTPException(status_code=503, detail="Video üretimi henüz yapılandırılmadı.")
+    image_url = payload.image_url if payload.image_url and payload.image_url.startswith("https://") else None
+    duration = 10 if payload.duration > 5 else 5
+    credits = video_cost(duration)
+    event_id = _charge(user["id"], "video", credits, f"{duration} sn: {payload.concept}")
+
     try:
-        consume(user["id"], "video")
-    except QuotaExceededError as e:
-        raise HTTPException(status_code=402, detail=str(e))
+        operation = gateway_media.start_video(payload.concept, duration, image_url)
+    except gateway_media.MediaError as e:
+        logger.error("Video başlatılamadı: %s", e)
+        refund(event_id)
+        return {"job_id": None, "error": "Video üretimi başlatılamadı, kredin iade edildi. Tekrar dene."}
 
-    result = start_video_generation(
-        prompt=payload.concept, image_url=payload.image_url, duration=payload.duration
-    )
+    job_id = str(uuid.uuid4())
+    with get_engine().begin() as conn:
+        conn.execute(
+            video_tasks.insert().values(
+                id=job_id,
+                user_id=user["id"],
+                credit_event_id=event_id,
+                operation=json.dumps(operation),
+                status="pending",
+                created_at=utcnow(),
+            )
+        )
+    return {"job_id": job_id, "error": None, "credits_spent": credits}
 
-    if result.get("error") or not result.get("job_id"):
-        refund(user["id"], "video")
-        return result
 
-    record_video_job(user["id"], result["job_id"])
-    return result
+def _store_video(video: dict, user_id: str) -> str:
+    """Bitmiş videoyu kalıcı depoya taşır; depo yoksa sağlayıcının süreli adresini döndürür."""
+    if video.get("type") == "url":
+        if not storage.is_enabled():
+            return video["url"]
+        data = requests.get(video["url"], timeout=120).content
+    else:
+        data = base64.b64decode(video.get("data", ""))
+        if not storage.is_enabled():
+            raise storage.StorageError("Blob deposu yok; video baytları saklanamıyor.")
+    return storage.save(data, "video/mp4", f"video/{user_id}")
 
 
 @router.get("/video/{job_id}")
 def check_video(job_id: str, user: dict = Depends(get_current_user)):
-    """Video üretim görevinin durumunu ve tamamlandıysa video_url'ini döndürür."""
-    if get_video_job_owner(job_id) != user["id"]:
+    """Durum: PENDING, SUCCEEDED, FAILED. SUCCEEDED olunca video_url dolu gelir."""
+    with get_engine().connect() as conn:
+        task = conn.execute(
+            select(video_tasks).where(and_(video_tasks.c.id == job_id, video_tasks.c.user_id == user["id"]))
+        ).first()
+    if task is None:
         raise HTTPException(status_code=404, detail="Video bulunamadı.")
 
-    status = get_video_status(job_id)
-    if status.get("status") == "FAILED":
-        release_video_if_failed(job_id)
-    return status
+    if task.status == "completed":
+        return {"status": "SUCCEEDED", "video_url": task.video_url, "error": None}
+    if task.status == "failed":
+        return {"status": "FAILED", "video_url": None, "error": task.error}
+
+    try:
+        result = gateway_media.video_status(json.loads(task.operation))
+    except gateway_media.MediaError as e:
+        # Geçici hata olabilir: işi başarısız saymıyoruz, istemci tekrar sorar.
+        logger.warning("Video durumu alınamadı: %s", e)
+        return {"status": "PENDING", "video_url": None, "error": None}
+
+    if result["status"] == "pending":
+        return {"status": "PENDING", "video_url": None, "error": None}
+
+    if result["status"] == "completed":
+        try:
+            url = _store_video(result["video"], user["id"])
+        except (requests.RequestException, storage.StorageError) as e:
+            logger.error("Video saklanamadı: %s", e)
+            return {"status": "PENDING", "video_url": None, "error": None}
+        with get_engine().begin() as conn:
+            conn.execute(
+                update(video_tasks)
+                .where(and_(video_tasks.c.id == job_id, video_tasks.c.status == "pending"))
+                .values(status="completed", video_url=url)
+            )
+        return {"status": "SUCCEEDED", "video_url": url, "error": None}
+
+    error = str(result.get("error") or "Video üretilemedi.")[:500]
+    with get_engine().begin() as conn:
+        changed = conn.execute(
+            update(video_tasks)
+            .where(and_(video_tasks.c.id == job_id, video_tasks.c.status == "pending"))
+            .values(status="failed", error=error)
+        ).rowcount
+    if changed:
+        refund(task.credit_event_id)
+    logger.error("Video başarısız (%s): %s", job_id, error)
+    return {"status": "FAILED", "video_url": None, "error": "Video üretilemedi, kredin iade edildi."}

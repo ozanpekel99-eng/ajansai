@@ -71,7 +71,7 @@ export default function Tools() {
           </span>
           <div>
             <h3>Pro ile reklam kampanyaları da burada</h3>
-            <p>Ayda 30 video, 60 görsel ve Meta reklam entegrasyonu.</p>
+            <p>800 kredi ve Meta reklam entegrasyonu: örneğin 200 görsel ya da 66 kısa video.</p>
           </div>
           <button className="btn btn-light" onClick={() => openCheckout("pro")}>
             Pro'ya geç

@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column,
+    inspect,
+    text,
     DateTime,
     Integer,
     MetaData,
@@ -39,6 +41,36 @@ users = Table(
     Column("video_used", Integer, nullable=False, default=0),
     Column("image_used", Integer, nullable=False, default=0),
     Column("idea_used", Integer, nullable=False, default=0),
+    # Bu dönemde harcanan kredi. Bakiye = paketin kredisi - credits_used.
+    Column("credits_used", Integer, nullable=False, default=0, server_default="0"),
+    Column("created_at", DateTime, nullable=False),
+)
+
+# Her kredi harcaması bir satır. Kullanıcıya "neye kaç kredi harcadım" gösterilir;
+# başarısız üretimde refunded=1 yapılıp kredi iade edilir.
+credit_events = Table(
+    "credit_events",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), nullable=False, index=True),
+    Column("action", String(32), nullable=False),  # idea | image | video | ads_draft
+    Column("credits", Integer, nullable=False),
+    Column("detail", String(300), nullable=False, default=""),
+    Column("refunded", Integer, nullable=False, default=0),
+    Column("created_at", DateTime, nullable=False),
+)
+
+# AI Gateway video işleri: durum sorgusu için gateway'in "operation" nesnesi saklanır.
+video_tasks = Table(
+    "video_tasks",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), nullable=False, index=True),
+    Column("credit_event_id", String(36), nullable=False),
+    Column("operation", Text, nullable=False),
+    Column("status", String(16), nullable=False),  # pending | completed | failed
+    Column("video_url", Text, nullable=True),
+    Column("error", Text, nullable=True),
     Column("created_at", DateTime, nullable=False),
 )
 
@@ -129,7 +161,13 @@ def reset_engine(url: str | None = None) -> None:
 
 
 def init_db() -> None:
-    metadata.create_all(get_engine())
+    engine = get_engine()
+    metadata.create_all(engine)
+    # Eski kurulumlara sonradan eklenen sütunlar (create_all mevcut tabloya sütun eklemez).
+    columns = {c["name"] for c in inspect(engine).get_columns("users")}
+    if "credits_used" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN credits_used INTEGER NOT NULL DEFAULT 0"))
 
 
 def utcnow() -> datetime:

@@ -6,7 +6,8 @@ import Link from "next/link";
 import { ApiError, api } from "../../lib/api";
 import { HistoryEntry, addHistory, readHistory } from "../../lib/history";
 import { useSession } from "../../lib/session";
-import { EmptyResult, HistoryList, LockedNotice, RemainingLine, WorkspaceProps } from "./common";
+import { ideaCredits } from "../../lib/plans";
+import { CreditLine, EmptyResult, HistoryList, LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
 
 type Idea = {
   platform: string;
@@ -41,6 +42,9 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
     setHistory(readHistory<Idea[]>("fikir"));
   }, []);
 
+  const cost = ideaCredits(count, usage?.costs);
+  const noCredits = !!usage && usage.credits.remaining < cost;
+
   const update = (key: keyof typeof EMPTY, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
   const submit = async (e: FormEvent) => {
@@ -59,7 +63,7 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
         body: JSON.stringify({ ...form, idea_count: count }),
       });
       if (data.error || !data.ideas?.length) {
-        setError("Fikirler oluşturulamadı, hakkın iade edildi. Konuyu biraz daha açıp tekrar dene.");
+        setError("Fikirler oluşturulamadı, kredin iade edildi. Konuyu biraz daha açıp tekrar dene.");
       } else {
         setIdeas(data.ideas);
         addHistory("fikir", `${form.business_name}: ${form.topic}`, data.ideas);
@@ -101,6 +105,7 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
     <div className="workspace">
       <form className="panel ws-panel" onSubmit={submit}>
         <h2>İşletme bilgileri</h2>
+        <NoCreditsNotice cost={cost} />
         <div className="field">
           <label htmlFor="f-name">İşletme adı</label>
           <input id="f-name" required value={form.business_name} onChange={(e) => update("business_name", e.target.value)} placeholder="Başak Beyaz Eşya" />
@@ -128,16 +133,16 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
           <div className="segmented">
             {[2, 4, 6].map((n) => (
               <button type="button" key={n} className={count === n ? "active" : ""} onClick={() => setCount(n)} aria-pressed={count === n}>
-                {n} fikir
+                {n} fikir · {ideaCredits(n, usage?.costs)} kredi
               </button>
             ))}
           </div>
         </div>
         <div className="generate">
-          <button className="btn btn-primary btn-block" type="submit" disabled={loading}>
-            {loading ? "Fikirler hazırlanıyor…" : "Fikir üret"}
+          <button className="btn btn-primary btn-block" type="submit" disabled={loading || noCredits}>
+            {loading ? "Fikirler hazırlanıyor…" : `Fikir üret · ${cost} kredi`}
           </button>
-          <RemainingLine kind="ideas" />
+          <CreditLine cost={cost} />
         </div>
       </form>
 
@@ -177,7 +182,7 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
           <EmptyResult
             text={
               usage?.plan === "deneme"
-                ? "Soldaki formu doldur. Deneme paketinde ayda 10 fikir üretebilirsin."
+                ? "Soldaki formu doldur. Deneme paketindeki 20 krediyle fikir ve görsel üretebilirsin."
                 : "Soldaki formu doldur, fikirler burada görünecek."
             }
           />

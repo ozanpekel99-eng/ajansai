@@ -50,7 +50,7 @@ export default function Faturalandirma() {
         <div className="big">{usage?.plan_name ?? "…"}</div>
         <div className="muted" style={{ fontSize: 14 }}>
           {trial
-            ? "Ücretsiz deneme: ayda 10 içerik fikri"
+            ? `Ücretsiz deneme: ${usage?.credits.total ?? 20} kredi`
             : usage?.plan_expires_at
               ? `${fmtDate(usage.plan_expires_at)} tarihine kadar geçerli · ${daysLeft} gün kaldı`
               : ""}
@@ -68,25 +68,27 @@ export default function Faturalandirma() {
       {usage && (
         <div className="stats" style={{ marginTop: 16 }}>
           <div className="panel stat">
-            <div className="name">İçerik fikri</div>
+            <div className="name">Kalan kredi</div>
             <div className="value">
-              {usage.ideas.used} <small>/ {usage.ideas.quota ?? "sınırsız"}</small>
+              {usage.credits.remaining} <small>/ {usage.credits.total}</small>
             </div>
-            <div className="foot">Bu dönem kullanılan</div>
+            <div className="foot">
+              <Link href="/kullanim" style={{ color: "inherit" }}>
+                Kredi hareketlerini gör
+              </Link>
+            </div>
           </div>
           <div className="panel stat">
-            <div className="name">Görsel</div>
-            <div className="value">
-              {usage.image.used} <small>/ {usage.image.quota}</small>
+            <div className="name">Bu dönem harcanan</div>
+            <div className="value">{usage.credits.used}</div>
+            <div className="foot">
+              {usage.counts.idea} fikir üretimi · {usage.counts.image} görsel · {usage.counts.video} video
             </div>
-            <div className="foot">Bu dönem kullanılan</div>
           </div>
           <div className="panel stat">
-            <div className="name">Video</div>
-            <div className="value">
-              {usage.video.used} <small>/ {usage.video.quota}</small>
-            </div>
-            <div className="foot">Bu dönem kullanılan</div>
+            <div className="name">Kredi yenilenme</div>
+            <div className="value" style={{ fontSize: 22 }}>{fmtDate(usage.period_end)}</div>
+            <div className="foot">Kullanılmayan kredi devretmez</div>
           </div>
         </div>
       )}

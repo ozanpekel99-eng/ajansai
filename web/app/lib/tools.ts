@@ -31,7 +31,7 @@ export const TOOLS: Tool[] = [
     short: "İşletmeni anlat, platforma özel gönderi fikirleri, caption ve hashtag'ler gelsin.",
     long: "İşletme bilgilerine göre Instagram, TikTok ve Facebook için hazır içerik fikirleri üretir. Her fikirde konsept, paylaşıma hazır caption ve hashtag'ler bulunur.",
     quota: "ideas",
-    costLabel: "1 fikir hakkı / üretim",
+    costLabel: "Her 2 fikir 1 kredi",
     ready: true,
   },
   {
@@ -41,9 +41,8 @@ export const TOOLS: Tool[] = [
     short: "Konsept metninden gönderiye hazır kare, dikey ve yatay görseller.",
     long: "Yazdığın konsepte göre sosyal medya görseli üretir. Kare, hikâye ve yatay formatları destekler.",
     quota: "image",
-    costLabel: "1 görsel hakkı / görsel",
+    costLabel: "Görsel başı 4 kredi",
     ready: true,
-    plan: "Başlangıç",
   },
   {
     slug: "video",
@@ -52,7 +51,7 @@ export const TOOLS: Tool[] = [
     short: "Reels ve hikâyeler için dikey, 5–10 saniyelik kısa videolar.",
     long: "Konsepti dikey kısa videoya dönüştürür. İstersen ürettiğin bir görseli canlandırabilirsin. Üretim genelde 1–3 dakika sürer.",
     quota: "video",
-    costLabel: "1 video hakkı / video",
+    costLabel: "5 sn 12 kredi · 10 sn 24 kredi",
     ready: true,
     plan: "Başlangıç",
   },
@@ -63,7 +62,7 @@ export const TOOLS: Tool[] = [
     short: "Meta reklam hesabını bağla, kampanya taslağını buradan oluştur.",
     long: "Kendi Meta reklam hesabını bağlarsın; kampanya taslakları duraklatılmış olarak oluşturulur, sen onaylamadan yayına girmez.",
     quota: null,
-    costLabel: "Pro ve Ajans paketlerinde",
+    costLabel: "Kredi harcamaz",
     ready: true,
     plan: "Pro",
   },
@@ -74,7 +73,7 @@ export const TOOLS: Tool[] = [
     short: "Meta reklamları için birincil metin, başlık ve açıklama varyasyonları.",
     long: "",
     quota: "ideas",
-    costLabel: "1 fikir hakkı",
+    costLabel: "Kredi bilgisi yakında",
     ready: false,
   },
   {
@@ -84,7 +83,7 @@ export const TOOLS: Tool[] = [
     short: "Görselini veya konunu yaz, markanın tonunda caption alternatifleri al.",
     long: "",
     quota: "ideas",
-    costLabel: "1 fikir hakkı",
+    costLabel: "Kredi bilgisi yakında",
     ready: false,
   },
   {
@@ -94,7 +93,7 @@ export const TOOLS: Tool[] = [
     short: "Şehir, sektör ve ürüne göre karışık hashtag setleri.",
     long: "",
     quota: "ideas",
-    costLabel: "1 fikir hakkı",
+    costLabel: "Kredi bilgisi yakında",
     ready: false,
   },
   {
@@ -104,7 +103,7 @@ export const TOOLS: Tool[] = [
     short: "Bir aylık paylaşım planı: gün, format ve konu başlıklarıyla.",
     long: "",
     quota: "ideas",
-    costLabel: "1 fikir hakkı",
+    costLabel: "Kredi bilgisi yakında",
     ready: false,
   },
 ];

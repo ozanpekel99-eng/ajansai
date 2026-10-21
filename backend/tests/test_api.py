@@ -130,23 +130,43 @@ def test_ideas_fall_back_to_anthropic_when_omniroute_down(client, monkeypatch):
     assert r.json()["provider"] == "anthropic"
 
 
+def _credits(client, token):
+    return client.get("/api/plans/usage", headers=auth(token)).json()["credits"]
+
+
 def test_ideas_503_and_refund_when_no_ai(client):
     token = register(client)
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
     assert r.status_code == 503
-    assert client.get("/api/plans/usage", headers=auth(token)).json()["ideas"]["used"] == 0
+    assert _credits(client, token)["used"] == 0
 
 
-def test_trial_idea_quota(client, monkeypatch):
-    monkeypatch.setattr(llm_service, "complete", lambda *a, **k: (json.dumps(IDEAS_JSON), "test"))
+def _fake_ideas(monkeypatch):
     from app.services import claude_service
 
     monkeypatch.setattr(claude_service, "complete", lambda *a, **k: (json.dumps(IDEAS_JSON), "test"))
+
+
+def test_idea_cost_is_one_credit_per_two_ideas(client, monkeypatch):
+    _fake_ideas(monkeypatch)
     token = register(client)
-    for _ in range(10):
+    r = client.post("/api/content/ideas", json={**IDEA_BODY, "idea_count": 6}, headers=auth(token))
+    assert r.status_code == 200 and r.json()["credits_spent"] == 3
+    r = client.post("/api/content/ideas", json={**IDEA_BODY, "idea_count": 1}, headers=auth(token))
+    assert r.json()["credits_spent"] == 1
+    c = _credits(client, token)
+    assert c == {"total": 20, "used": 4, "remaining": 16}
+    events = client.get("/api/plans/history", headers=auth(token)).json()["events"]
+    assert [e["credits"] for e in events] == [1, 3] and events[0]["label"] == "İçerik fikri"
+
+
+def test_trial_credits_run_out(client, monkeypatch):
+    _fake_ideas(monkeypatch)
+    token = register(client)
+    for _ in range(10):  # 10 x 2 kredi = 20
         assert client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token)).status_code == 200
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
-    assert r.status_code == 402
+    assert r.status_code == 402 and "Kredin yetmiyor" in r.json()["detail"]
 
 
 def test_unparseable_ai_answer_refunds(client, monkeypatch):
@@ -156,10 +176,11 @@ def test_unparseable_ai_answer_refunds(client, monkeypatch):
     token = register(client)
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
     assert r.json()["error"]
-    assert client.get("/api/plans/usage", headers=auth(token)).json()["ideas"]["used"] == 0
+    assert _credits(client, token)["used"] == 0
+    assert client.get("/api/plans/history", headers=auth(token)).json()["events"][0]["refunded"] is True
 
 
-# ---------------- Kota ----------------
+# ---------------- Kredi / görsel / video ----------------
 
 def _set_plan(user_id, plan):
     with get_engine().begin() as conn:
@@ -168,61 +189,160 @@ def _set_plan(user_id, plan):
         )
 
 
-def test_trial_cannot_make_images(client):
-    token = register(client)
-    r = client.post("/api/content/image", json={"concept": "kahve"}, headers=auth(token))
-    assert r.status_code == 402
-    assert "paketinde bulunmuyor" in r.json()["detail"]
-
-
-def test_image_failure_refunds_quota(client):
-    token = register(client)
-    _set_plan(_user_id(client, token), "baslangic")
-    # IDEOGRAM_API_KEY yok -> üretim başarısız -> kota iade
-    r = client.post("/api/content/image", json={"concept": "kahve"}, headers=auth(token))
-    assert r.status_code == 200 and r.json()["image_url"] is None
-    assert client.get("/api/plans/usage", headers=auth(token)).json()["image"]["used"] == 0
-
-
-def test_video_quota_and_failed_job_refund(client, monkeypatch):
+def _enable_media(monkeypatch):
     from app.routers import content
 
+    config.AI_GATEWAY_ENABLED = True
+    return content
+
+
+def test_trial_can_make_images_and_pays_four_credits(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    calls = {}
+
+    def fake_image(prompt, aspect):
+        calls["aspect"] = aspect
+        return b"\x89PNG\r\n\x1a\nveri", "image/png"
+
+    monkeypatch.setattr(content.gateway_media, "generate_image", fake_image)
     token = register(client)
-    uid = _user_id(client, token)
-    _set_plan(uid, "baslangic")
+    r = client.post("/api/content/image", json={"concept": "kahve", "aspect_ratio": "ASPECT_9_16"}, headers=auth(token))
+    assert r.status_code == 200, r.text
+    assert r.json()["image_url"].startswith("data:image/png;base64,")
+    assert r.json()["credits_spent"] == 4 and calls["aspect"] == "9:16"
+    assert _credits(client, token)["used"] == 4
 
-    counter = {"n": 0}
 
-    def fake_start(**kw):
-        counter["n"] += 1
-        return {"job_id": f"job-{counter['n']}", "error": None}
+def test_image_saved_to_blob_when_configured(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    monkeypatch.setattr(content.gateway_media, "generate_image", lambda p, a: (b"\xff\xd8\xffjpg", "image/jpeg"))
+    config.BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_store_x"
+    sent = {}
 
-    monkeypatch.setattr(content, "start_video_generation", fake_start)
-    monkeypatch.setattr(content, "get_video_status", lambda job_id: {"status": "FAILED", "video_url": None})
+    def fake_put(url, params=None, data=None, headers=None, timeout=None):
+        sent.update(url=url, params=params, headers=headers)
+        return FakeResponse(200, {"url": "https://store.public.blob.vercel-storage.com/" + params["pathname"]})
 
-    for _ in range(10):
-        assert client.post("/api/content/video", json={"concept": "x"}, headers=auth(token)).status_code == 200
-    assert client.post("/api/content/video", json={"concept": "x"}, headers=auth(token)).status_code == 402
+    from app.services import storage
 
-    # Başarısız job iki kez sorgulansa da kota yalnızca bir kez iade edilir
-    client.get("/api/content/video/job-1", headers=auth(token))
-    client.get("/api/content/video/job-1", headers=auth(token))
-    assert client.get("/api/plans/usage", headers=auth(token)).json()["video"]["used"] == 9
+    monkeypatch.setattr(storage.requests, "put", fake_put)
+    try:
+        token = register(client)
+        r = client.post("/api/content/image", json={"concept": "kahve"}, headers=auth(token))
+    finally:
+        config.BLOB_READ_WRITE_TOKEN = None
+    assert r.json()["image_url"].startswith("https://store.public.blob.vercel-storage.com/gorsel/")
+    assert sent["params"]["pathname"].endswith(".jpg")
+    assert sent["headers"]["x-vercel-blob-access"] == "public"
+
+
+def test_image_failure_refunds_credits(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+
+    def broken(prompt, aspect):
+        raise content.gateway_media.MediaError("kapalı")
+
+    monkeypatch.setattr(content.gateway_media, "generate_image", broken)
+    token = register(client)
+    r = client.post("/api/content/image", json={"concept": "kahve"}, headers=auth(token))
+    assert r.status_code == 200 and r.json()["image_url"] is None
+    assert _credits(client, token)["used"] == 0
+
+
+def test_trial_cannot_make_videos(client, monkeypatch):
+    _enable_media(monkeypatch)
+    token = register(client)
+    r = client.post("/api/content/video", json={"concept": "x"}, headers=auth(token))
+    assert r.status_code == 402 and "paketinde bulunmuyor" in r.json()["detail"]
+    assert _credits(client, token)["used"] == 0
+
+
+def test_video_costs_and_failed_job_refunded_once(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "baslangic")
+    started = []
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, i=None: started.append((d, i)) or {"id": "op"})
+    monkeypatch.setattr(content.gateway_media, "video_status", lambda op: {"status": "error", "error": "model hatası"})
+
+    r5 = client.post("/api/content/video", json={"concept": "x"}, headers=auth(token)).json()
+    r10 = client.post(
+        "/api/content/video",
+        json={"concept": "x", "duration": 10, "image_url": "https://blob.example/a.png"},
+        headers=auth(token),
+    ).json()
+    assert (r5["credits_spent"], r10["credits_spent"]) == (12, 24)
+    assert started == [(5, None), (10, "https://blob.example/a.png")]
+    assert _credits(client, token)["used"] == 36
+
+    # Başarısız iş iki kez sorgulansa da kredi bir kez iade edilir
+    for _ in range(2):
+        st = client.get(f"/api/content/video/{r5['job_id']}", headers=auth(token)).json()
+        assert st["status"] == "FAILED"
+    assert _credits(client, token)["used"] == 24
+
+
+def test_video_completes_and_is_cached(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "pro")
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, i=None: {"id": "op"})
+    states = iter([{"status": "pending"}, {"status": "completed", "video": {"type": "url", "url": "https://cdn/v.mp4"}}])
+    monkeypatch.setattr(content.gateway_media, "video_status", lambda op: next(states))
+
+    job = client.post("/api/content/video", json={"concept": "x"}, headers=auth(token)).json()["job_id"]
+    assert client.get(f"/api/content/video/{job}", headers=auth(token)).json()["status"] == "PENDING"
+    done = client.get(f"/api/content/video/{job}", headers=auth(token)).json()
+    assert done == {"status": "SUCCEEDED", "video_url": "https://cdn/v.mp4", "error": None}
+    # Üçüncü sorgu sağlayıcıya gitmez (iterator bitti, gitseydi hata verirdi)
+    assert client.get(f"/api/content/video/{job}", headers=auth(token)).json()["status"] == "SUCCEEDED"
 
 
 def test_cannot_read_other_users_video(client, monkeypatch):
-    from app.routers import content
-
+    content = _enable_media(monkeypatch)
     owner = register(client, "a@example.com")
     _set_plan(_user_id(client, owner), "baslangic")
-    monkeypatch.setattr(content, "start_video_generation", lambda **kw: {"job_id": "job-x", "error": None})
-    monkeypatch.setattr(content, "get_video_status", lambda job_id: {"status": "FAILED"})
-    client.post("/api/content/video", json={"concept": "x"}, headers=auth(owner))
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, i=None: {"id": "op"})
+    monkeypatch.setattr(content.gateway_media, "video_status", lambda op: {"status": "error"})
+    job = client.post("/api/content/video", json={"concept": "x"}, headers=auth(owner)).json()["job_id"]
 
     other = register(client, "b@example.com")
-    assert client.get("/api/content/video/job-x", headers=auth(other)).status_code == 404
-    # Başkası sorgulayamadığı için sahibin kotası iade edilmemiş olmalı
-    assert client.get("/api/plans/usage", headers=auth(owner)).json()["video"]["used"] == 1
+    assert client.get(f"/api/content/video/{job}", headers=auth(other)).status_code == 404
+    # Başkası sorgulayamadığı için sahibin kredisi iade edilmemiş olmalı
+    assert _credits(client, owner)["used"] == 12
+
+
+def test_plans_endpoint_shows_credit_examples(client):
+    data = client.get("/api/plans/").json()
+    assert data["costs"]["image"] == 4 and data["costs"]["video_5"] == 12
+    pro = data["plans"]["pro"]
+    assert pro["credits"] == 800 and pro["examples"]["images"] == 200 and pro["examples"]["videos_5"] == 66
+    assert data["trial"]["examples"]["videos_5"] == 0
+
+
+def test_gateway_media_request_format(monkeypatch):
+    from app.services import gateway_media, llm_service as ls
+
+    config.AI_GATEWAY_API_KEY = "gw-key"
+    sent = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        sent.update(url=url, headers=headers, body=json)
+        if url.endswith("/image-model"):
+            return FakeResponse(200, {"images": [base64.b64encode(b"\xff\xd8\xffx").decode()]})
+        return FakeResponse(200, {"operation": {"gatewayJobId": "job_1"}})
+
+    monkeypatch.setattr(gateway_media.requests, "post", fake_post)
+    data, mime = gateway_media.generate_image("kahve", "1:1")
+    assert mime == "image/jpeg" and sent["url"].endswith("/v4/ai/image-model")
+    assert sent["headers"]["ai-model-id"] == config.IMAGE_MODEL
+    assert sent["headers"]["ai-image-model-specification-version"] == "4"
+    assert sent["headers"]["Authorization"] == "Bearer gw-key"
+
+    op = gateway_media.start_video("dalga", 5, "https://x/a.png")
+    assert op == {"gatewayJobId": "job_1"} and sent["url"].endswith("/video-model/start")
+    assert sent["body"]["image"] == {"type": "url", "url": "https://x/a.png"}
+    assert sent["body"]["aspectRatio"] == "9:16" and sent["body"]["duration"] == 5
 
 
 def test_expired_plan_falls_back_to_trial(client):
@@ -358,6 +478,7 @@ def test_payment_list_shows_only_own_payments(client, monkeypatch):
 
 
 def test_image_rejects_unknown_aspect_ratio(client):
+    config.AI_GATEWAY_ENABLED = True
     token = register(client)
     r = client.post("/api/content/image", json={"concept": "kahve", "aspect_ratio": "ASPECT_99"}, headers=auth(token))
     assert r.status_code == 422

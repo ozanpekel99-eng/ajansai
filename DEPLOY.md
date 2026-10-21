@@ -93,8 +93,7 @@ Cevap gelmeli. Anahtarsız denediğinde ise 401 hatası almalısın.
 | `OMNIROUTE_API_KEY` | 2. adımda oluşturduğun anahtar |
 | `OMNIROUTE_MODEL` | `anthropic/claude-sonnet-5`. Daha ucuz bir model ya da OmniRoute'taki bir combo adı da olabilir. |
 | `ANTHROPIC_API_KEY` | Claude key'in. **Yedek** olarak kullanılır: OmniRoute çökerse uygulama doğrudan Claude'la çalışmaya devam eder. |
-| `IDEOGRAM_API_KEY` | (görsel üretimi için) |
-| `RUNWAY_API_KEY` | (video üretimi için) |
+| `BLOB_READ_WRITE_TOKEN` | Vercel → Storage → Blob deposu projeye bağlanınca otomatik gelir (görsel/video saklama) |
 | `META_APP_ID` / `META_APP_SECRET` | (Meta App Review onayından sonra) |
 | `META_REDIRECT_URI` | `<WEB_URL>/ads/callback` |
 | `IYZICO_*` | 5. adımda |

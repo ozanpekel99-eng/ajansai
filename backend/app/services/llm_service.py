@@ -72,12 +72,12 @@ def _call_omniroute(system: str, user: str, max_tokens: int) -> str:
     )
 
 
-def _ai_gateway_token() -> str | None:
+def ai_gateway_token() -> str | None:
     return config.AI_GATEWAY_API_KEY or current_oidc_token.get() or os.environ.get("VERCEL_OIDC_TOKEN")
 
 
 def _call_ai_gateway(system: str, user: str, max_tokens: int) -> str:
-    token = _ai_gateway_token()
+    token = ai_gateway_token()
     if not token:
         raise LLMError("AI Gateway için kimlik bilgisi yok (OIDC token veya AI_GATEWAY_API_KEY)")
     return _call_openai_compatible(

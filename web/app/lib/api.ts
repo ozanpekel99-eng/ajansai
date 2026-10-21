@@ -86,13 +86,17 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
   return data as T;
 }
 
+export type CreditCosts = { idea_per_2: number; image: number; video_5: number; video_10: number; ads_draft: number };
+
 export type Usage = {
   plan: string;
   plan_name: string;
   plan_expires_at: string | null;
-  video: { used: number; quota: number };
-  image: { used: number; quota: number };
-  ideas: { used: number; quota: number | null };
-  ideas_unlimited: boolean;
+  period_start: string;
+  period_end: string;
+  credits: { total: number; used: number; remaining: number };
+  video_enabled: boolean;
   ads_enabled: boolean;
+  costs: CreditCosts;
+  counts: { idea: number; image: number; video: number; ads_draft: number };
 };

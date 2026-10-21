@@ -77,7 +77,7 @@ export function firstName(user: User | null) {
 export function onboardingSteps(usage: Usage | null, metaConnected: boolean) {
   return [
     { key: "account", title: "Hesabını oluştur", done: true },
-    { key: "idea", title: "İlk içerik fikrini üret", done: !!usage && usage.ideas.used > 0 },
+    { key: "idea", title: "İlk içerik fikrini üret", done: !!usage && usage.counts.idea > 0 },
     { key: "plan", title: "Paketini seç", done: !!usage && usage.plan !== "deneme" },
     { key: "meta", title: "Meta reklam hesabını bağla", done: metaConnected },
   ];

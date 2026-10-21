@@ -6,7 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { ApiError, api } from "../../lib/api";
 import { HistoryEntry, addHistory, readHistory } from "../../lib/history";
 import { useSession } from "../../lib/session";
-import { EmptyResult, HistoryList, LockedNotice, RemainingLine, WorkspaceProps } from "./common";
+import { videoCredits } from "../../lib/plans";
+import { CreditLine, EmptyResult, HistoryList, LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
 
 type Result = { url: string; concept: string };
 
@@ -27,7 +28,9 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
     return () => clearTimeout(timer.current);
   }, []);
 
-  const locked = usage?.video.quota === 0;
+  const cost = videoCredits(duration, usage?.costs);
+  const featureLocked = !!usage && !usage.video_enabled;
+  const locked = featureLocked || (!!usage && usage.credits.remaining < cost);
 
   const poll = (jobId: string, text: string) => {
     const check = async () => {
@@ -42,7 +45,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
           return;
         }
         if (data.status === "FAILED") {
-          setError("Video üretilemedi, hakkın iade edildi. Konsepti sadeleştirip tekrar dene.");
+          setError("Video üretilemedi, kredin iade edildi. Konsepti sadeleştirip tekrar dene.");
           setStatus("idle");
           refresh();
           return;
@@ -66,7 +69,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
         body: JSON.stringify({ concept, duration, image_url: imageUrl || null }),
       });
       if (!data.job_id) {
-        setError(`${data.error || "Video başlatılamadı."} Hakkın iade edildi.`);
+        setError(data.error || "Video başlatılamadı, kredin iade edildi.");
         setStatus("idle");
       } else {
         setStatus("running");
@@ -98,7 +101,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
     <div className="workspace">
       <form className="panel ws-panel" onSubmit={submit}>
         <h2>Video ayarları</h2>
-        {locked && <LockedNotice text="Video üretimi Başlangıç ve üzeri paketlerde açılır." />}
+        {featureLocked ? <LockedNotice text="Video üretimi Başlangıç ve üzeri paketlerde açılır." /> : <NoCreditsNotice cost={cost} />}
         <div className="field">
           <label htmlFor="v-concept">Konsept</label>
           <textarea
@@ -121,16 +124,16 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
           <div className="segmented">
             {[5, 10].map((d) => (
               <button type="button" key={d} className={duration === d ? "active" : ""} onClick={() => setDuration(d)} aria-pressed={duration === d}>
-                {d} saniye
+                {d} saniye · {videoCredits(d, usage?.costs)} kredi
               </button>
             ))}
           </div>
         </div>
         <div className="generate">
           <button className="btn btn-primary btn-block" type="submit" disabled={busy || locked}>
-            {status === "starting" ? "Başlatılıyor…" : status === "running" ? "Video üretiliyor…" : "Video üret"}
+            {status === "starting" ? "Başlatılıyor…" : status === "running" ? "Video üretiliyor…" : `Video üret · ${cost} kredi`}
           </button>
-          <RemainingLine kind="video" />
+          {!featureLocked && <CreditLine cost={cost} />}
         </div>
       </form>
 

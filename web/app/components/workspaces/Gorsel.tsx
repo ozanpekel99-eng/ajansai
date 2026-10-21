@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { ApiError, api } from "../../lib/api";
 import { HistoryEntry, addHistory, readHistory } from "../../lib/history";
 import { useSession } from "../../lib/session";
-import { EmptyResult, HistoryList, LockedNotice, RemainingLine, WorkspaceProps } from "./common";
+import { CreditLine, EmptyResult, HistoryList, NoCreditsNotice, WorkspaceProps } from "./common";
 
 const RATIOS = [
   { value: "ASPECT_1_1", label: "Kare 1:1" },
@@ -30,7 +30,8 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
 
   useEffect(() => setHistory(readHistory<Result>("gorsel")), []);
 
-  const locked = usage?.image.quota === 0;
+  const cost = usage?.costs.image ?? 4;
+  const locked = !!usage && usage.credits.remaining < cost;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -42,7 +43,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
         body: JSON.stringify({ concept, aspect_ratio: ratio }),
       });
       if (!data.image_url) {
-        setError(`${data.error || "Görsel üretilemedi."} Hakkın iade edildi.`);
+        setError(data.error || "Görsel üretilemedi, kredin iade edildi.");
       } else {
         const r = { url: data.image_url, concept };
         setResult(r);
@@ -68,7 +69,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
     <div className="workspace">
       <form className="panel ws-panel" onSubmit={submit}>
         <h2>Görsel ayarları</h2>
-        {locked && <LockedNotice text="Görsel üretimi Başlangıç ve üzeri paketlerde açılır." />}
+        <NoCreditsNotice cost={cost} />
         <div className="field">
           <label htmlFor="g-concept">Konsept</label>
           <textarea
@@ -93,9 +94,9 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
         </div>
         <div className="generate">
           <button className="btn btn-primary btn-block" type="submit" disabled={loading || locked}>
-            {loading ? "Görsel üretiliyor…" : "Görsel üret"}
+            {loading ? "Görsel üretiliyor…" : `Görsel üret · ${cost} kredi`}
           </button>
-          <RemainingLine kind="image" />
+          <CreditLine cost={cost} />
         </div>
       </form>
 

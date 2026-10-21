@@ -26,6 +26,7 @@ def fresh_db(tmp_path):
     config.AI_GATEWAY_ENABLED = False
     config.AI_GATEWAY_API_KEY = None
     config.IYZICO_API_KEY = None
+    config.BLOB_READ_WRITE_TOKEN = None
     config.IYZICO_SECRET_KEY = None
     yield
     metadata.drop_all(get_engine())

@@ -7,19 +7,35 @@ import { useSession } from "../../lib/session";
 
 export type WorkspaceProps = { tab: "create" | "history"; showCreate: () => void };
 
-/** Üret düğmesinin altındaki "kalan hak" satırı. */
-export function RemainingLine({ kind }: { kind: "ideas" | "image" | "video" }) {
+/** Üret düğmesinin altındaki kredi satırı: bu işlem kaç kredi, sonra kaç kredi kalır. */
+export function CreditLine({ cost }: { cost: number }) {
   const { usage } = useSession();
   if (!usage) return null;
-  const q = usage[kind];
-  const label = kind === "ideas" ? "fikir" : kind === "image" ? "görsel" : "video";
-  if (q.quota === null) return <div className="cost"><span>Bu ay sınırsız {label}</span><span>{usage.plan_name}</span></div>;
+  const left = usage.credits.remaining;
+  const enough = left >= cost;
   return (
     <div className="cost">
       <span>
-        Bu ay {Math.max(q.quota - q.used, 0)} / {q.quota} {label} hakkın kaldı
+        {cost === 0 ? "Kredi harcamaz" : `Bu işlem ${cost} kredi`}
+        {cost > 0 && (enough ? ` · sonra ${left - cost} kredin kalır` : ` · ${left} kredin var, yetmiyor`)}
       </span>
       <span>{usage.plan_name}</span>
+    </div>
+  );
+}
+
+/** Kredi yetmiyorsa üretim yerine gösterilir. */
+export function NoCreditsNotice({ cost }: { cost: number }) {
+  const { usage, openCheckout } = useSession();
+  if (!usage || usage.credits.remaining >= cost) return null;
+  return (
+    <div className="notice">
+      <span>
+        Bu işlem {cost} kredi, {usage.credits.remaining} kredin kaldı. Paketini yükselterek kredi alabilirsin.
+      </span>
+      <button type="button" className="btn btn-light btn-sm" onClick={() => openCheckout(usage.plan === "deneme" ? "baslangic" : usage.plan)}>
+        Kredi al
+      </button>
     </div>
   );
 }
@@ -30,7 +46,7 @@ export function LockedNotice({ text, plan = "baslangic" }: { text: string; plan?
   return (
     <div className="notice">
       <span>{text}</span>
-      <button className="btn btn-light btn-sm" onClick={() => openCheckout(plan)}>
+      <button type="button" className="btn btn-light btn-sm" onClick={() => openCheckout(plan)}>
         Paket seç
       </button>
     </div>

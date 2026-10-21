@@ -68,9 +68,12 @@ AI_GATEWAY_ENABLED = _bool("AI_GATEWAY_ENABLED", bool(_env("VERCEL")) or bool(AI
 ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
 ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 
-# --- Görsel / video ---
-IDEOGRAM_API_KEY = _env("IDEOGRAM_API_KEY")
-RUNWAY_API_KEY = _env("RUNWAY_API_KEY")
+# --- Görsel / video (Vercel AI Gateway üzerinden, ayrı anahtar gerekmez) ---
+IMAGE_MODEL = _env("IMAGE_MODEL", "bytedance/seedream-5.0-pro")
+VIDEO_MODEL = _env("VIDEO_MODEL", "bytedance/seedance-v1.5-pro")
+VIDEO_RESOLUTION = _env("VIDEO_RESOLUTION", "720x1280")  # dikey 720p
+# Üretilen dosyaların saklandığı Vercel Blob deposu (projeye bağlanınca otomatik gelir)
+BLOB_READ_WRITE_TOKEN = _env("BLOB_READ_WRITE_TOKEN")
 
 # --- Meta ---
 META_APP_ID = _env("META_APP_ID")

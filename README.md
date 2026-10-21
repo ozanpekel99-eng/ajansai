@@ -16,8 +16,8 @@ DEPLOY.md  → Railway + Vercel + iyzico canlıya alma rehberi (adım adım)
 | Paketler ve kota | ✅ | Kota atomik olarak düşülür; aynı anda gelen istekler kotayı aşamaz. Sağlayıcı hatasında kota iade edilir. |
 | iyzico ödeme | ✅ (sandbox anahtarıyla test edilmeli) | Paket yalnızca iyzico'dan doğrulanan ödemeyle açılır, 30 gün geçerlidir. |
 | Veritabanı | ✅ | Railway'de Postgres, yerelde SQLite. Aynı kod ikisinde de çalışır. |
-| Görsel üretimi | ⚙️ Kod hazır | `IDEOGRAM_API_KEY` gerekli |
-| Video üretimi | ⚙️ Kod hazır | `RUNWAY_API_KEY` gerekli, asenkron (job + sorgulama) |
+| Görsel üretimi | ✅ | Vercel AI Gateway (Seedream 5.0 Pro), 4 kredi |
+| Video üretimi | ✅ | Vercel AI Gateway (Seedance 1.5 Pro, 720p dikey), 5 sn 12 / 10 sn 24 kredi |
 | Meta Ads | ⚙️ Kod hazır | Hesap bağlama, reklam hesapları, PAUSED kampanya taslağı. **Meta App Review onayı şart.** |
 | Mobil | ✅ Temel akış | Giriş, fikir, video. Paket satın alma web'e yönlendirir. |
 

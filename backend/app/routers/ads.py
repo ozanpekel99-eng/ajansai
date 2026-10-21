@@ -7,6 +7,8 @@ from sqlalchemy import delete, select
 from app import config
 from app.db import get_engine, meta_connections, utcnow
 from app.security import create_token, decode_token, get_current_user
+from app.services.plans import CREDIT_COSTS
+from app.services.usage_service import consume
 from app.services.meta_ads_service import (
     MetaError,
     create_campaign_draft,
@@ -108,10 +110,13 @@ def meta_campaign_draft(payload: CampaignDraftRequest, user: dict = Depends(get_
     """PAUSED durumda bir kampanya taslağı oluşturur; yayına alma kullanıcıya bırakılır."""
     _require_ads(user)
     try:
-        return create_campaign_draft(
+        result = create_campaign_draft(
             ad_account_id=payload.ad_account_id,
             access_token=_get_token(user["id"]),
             campaign_name=payload.campaign_name,
         )
     except MetaError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    # Kredi düşmez; kullanım geçmişinde görünsün diye 0 kredilik kayıt.
+    consume(user["id"], "ads_draft", CREDIT_COSTS["ads_draft"], payload.campaign_name)
+    return result

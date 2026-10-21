@@ -1,26 +1,29 @@
-"""Paket, kota ve kullanım takibi.
+"""Paket, kredi ve kullanım takibi.
 
-Kota düşürme işlemleri tek bir koşullu UPDATE ile yapılır
-(`... WHERE used < quota`). Böylece aynı anda gelen iki istek kotayı aşamaz.
+Kredi düşme tek bir koşullu UPDATE ile yapılır
+(`... WHERE credits_used + n <= kredi`). Böylece aynı anda gelen iki istek
+bakiyeyi aşamaz. Her harcama `credit_events` tablosuna yazılır; başarısız
+üretimde o satır iade edilir (iade idempotent: bir kez yapılır).
 """
 
+import uuid
 from datetime import timedelta
 
 from sqlalchemy import and_, select, update
 
-from app.db import get_engine, users, utcnow, video_jobs
-from app.services.plans import FREE_PLAN, PLAN_DURATION_DAYS, get_plan
+from app.db import credit_events, get_engine, users, utcnow
+from app.services.plans import CREDIT_COSTS, FREE_PLAN, PLAN_DURATION_DAYS, get_plan, public_plan
 
 PERIOD_DAYS = 30
 
-_KINDS = {
-    "video": ("video_used", "video_quota", "Video"),
-    "image": ("image_used", "image_quota", "Görsel"),
-    "idea": ("idea_used", "idea_quota", "Fikir"),
-}
+ACTION_LABELS = {"idea": "İçerik fikri", "image": "Görsel", "video": "Video", "ads_draft": "Reklam taslağı"}
 
 
 class QuotaExceededError(Exception):
+    pass
+
+
+class FeatureNotInPlanError(QuotaExceededError):
     pass
 
 
@@ -32,30 +35,24 @@ class UserNotFoundError(Exception):
     pass
 
 
+def _reset_values(now) -> dict:
+    return {"period_start": now, "credits_used": 0, "video_used": 0, "image_used": 0, "idea_used": 0}
+
+
 def _refresh_period(conn, row) -> None:
-    """Süresi biten paketi deneme paketine düşürür, dolan dönemin kotasını sıfırlar."""
+    """Süresi biten paketi deneme paketine düşürür, dolan dönemin kredisini yeniler."""
     now = utcnow()
     values = {}
-
     if row.plan != FREE_PLAN and row.plan_expires_at is not None and row.plan_expires_at <= now:
-        values = {
-            "plan": FREE_PLAN,
-            "plan_expires_at": None,
-            "period_start": now,
-            "video_used": 0,
-            "image_used": 0,
-            "idea_used": 0,
-        }
+        values = {"plan": FREE_PLAN, "plan_expires_at": None, **_reset_values(now)}
     elif now - row.period_start > timedelta(days=PERIOD_DAYS):
-        values = {"period_start": now, "video_used": 0, "image_used": 0, "idea_used": 0}
-
+        values = _reset_values(now)
     if values:
         conn.execute(update(users).where(users.c.id == row.id).values(**values))
 
 
 def get_user(user_id: str) -> dict:
-    engine = get_engine()
-    with engine.begin() as conn:
+    with get_engine().begin() as conn:
         row = conn.execute(select(users).where(users.c.id == user_id)).first()
         if row is None:
             raise UserNotFoundError(user_id)
@@ -64,61 +61,131 @@ def get_user(user_id: str) -> dict:
     return dict(row._mapping)
 
 
+def _period_end(user: dict):
+    if user["plan_expires_at"]:
+        return user["plan_expires_at"]
+    return user["period_start"] + timedelta(days=PERIOD_DAYS)
+
+
 def get_usage(user_id: str) -> dict:
     user = get_user(user_id)
     plan = get_plan(user["plan"])
+    total = plan["credits"]
+    used = min(user["credits_used"], total)
+
+    with get_engine().connect() as conn:
+        counts = {}
+        for r in conn.execute(
+            select(credit_events.c.action, credit_events.c.detail).where(
+                and_(
+                    credit_events.c.user_id == user_id,
+                    credit_events.c.refunded == 0,
+                    credit_events.c.created_at >= user["period_start"],
+                )
+            )
+        ):
+            counts[r.action] = counts.get(r.action, 0) + 1
+
     return {
         "plan": user["plan"],
         "plan_name": plan["name"],
         "plan_expires_at": user["plan_expires_at"].isoformat() + "Z" if user["plan_expires_at"] else None,
-        "video": {"used": user["video_used"], "quota": plan["video_quota"]},
-        "image": {"used": user["image_used"], "quota": plan["image_quota"]},
-        "ideas": {"used": user["idea_used"], "quota": plan["idea_quota"]},
-        "ideas_unlimited": plan["ideas_unlimited"],
+        "period_start": user["period_start"].isoformat() + "Z",
+        "period_end": _period_end(user).isoformat() + "Z",
+        "credits": {"total": total, "used": used, "remaining": total - used},
+        "video_enabled": plan["video_enabled"],
         "ads_enabled": plan["ads_enabled"],
+        "costs": CREDIT_COSTS,
+        "counts": {
+            "idea": counts.get("idea", 0),
+            "image": counts.get("image", 0),
+            "video": counts.get("video", 0),
+            "ads_draft": counts.get("ads_draft", 0),
+        },
+        "plan_details": public_plan(user["plan"]),
     }
 
 
-def consume(user_id: str, kind: str) -> None:
-    """Kotadan 1 birim düşer. Kota doluysa QuotaExceededError fırlatır."""
-    used_col_name, quota_key, label = _KINDS[kind]
+def consume(user_id: str, action: str, credits: int, detail: str = "") -> str:
+    """Bakiye yetiyorsa `credits` kadar kredi düşer ve harcama kaydının id'sini döndürür."""
     user = get_user(user_id)  # dönem/paket süresi kontrolü
     plan = get_plan(user["plan"])
-    quota = plan[quota_key]
-    used_col = users.c[used_col_name]
+    label = ACTION_LABELS.get(action, action)
 
-    condition = users.c.id == user_id
-    if quota is not None:
-        condition = and_(condition, used_col < quota)
-
-    with get_engine().begin() as conn:
-        result = conn.execute(update(users).where(condition).values({used_col_name: used_col + 1}))
-
-    if result.rowcount == 0:
-        if quota == 0:
-            raise QuotaExceededError(
-                f"{label} üretimi '{plan['name']}' paketinde bulunmuyor. Bir paket seçerek açabilirsin."
-            )
-        raise QuotaExceededError(
-            f"{label} kotan doldu ({quota}/{quota}). "
-            "Daha yüksek bir pakete geçebilir veya bir sonraki döneme kadar bekleyebilirsin."
+    if action == "video" and not plan["video_enabled"]:
+        raise FeatureNotInPlanError(
+            f"Video üretimi '{plan['name']}' paketinde bulunmuyor. Başlangıç veya üzeri bir paket seçerek açabilirsin."
         )
 
-
-def refund(user_id: str, kind: str) -> None:
-    """Sağlayıcı hatası yüzünden üretim başarısız olduysa düşülen kotayı geri verir."""
-    used_col_name = _KINDS[kind][0]
-    used_col = users.c[used_col_name]
+    event_id = str(uuid.uuid4())
     with get_engine().begin() as conn:
+        result = conn.execute(
+            update(users)
+            .where(and_(users.c.id == user_id, users.c.credits_used + credits <= plan["credits"]))
+            .values(credits_used=users.c.credits_used + credits)
+        )
+        if result.rowcount == 0:
+            remaining = max(plan["credits"] - user["credits_used"], 0)
+            raise QuotaExceededError(
+                f"Kredin yetmiyor: {label} için {credits} kredi gerekiyor, {remaining} kredin kaldı. "
+                "Paketini yükseltebilir veya yenileyebilirsin."
+            )
+        conn.execute(
+            credit_events.insert().values(
+                id=event_id,
+                user_id=user_id,
+                action=action,
+                credits=credits,
+                detail=detail[:300],
+                refunded=0,
+                created_at=utcnow(),
+            )
+        )
+    return event_id
+
+
+def refund(event_id: str) -> None:
+    """Sağlayıcı hatası yüzünden üretim başarısız olduysa krediyi geri verir (bir kez)."""
+    with get_engine().begin() as conn:
+        changed = conn.execute(
+            update(credit_events)
+            .where(and_(credit_events.c.id == event_id, credit_events.c.refunded == 0))
+            .values(refunded=1)
+        ).rowcount
+        if not changed:
+            return
+        ev = conn.execute(select(credit_events).where(credit_events.c.id == event_id)).first()
         conn.execute(
             update(users)
-            .where(and_(users.c.id == user_id, used_col > 0))
-            .values({used_col_name: used_col - 1})
+            .where(and_(users.c.id == ev.user_id, users.c.credits_used >= ev.credits))
+            .values(credits_used=users.c.credits_used - ev.credits)
         )
+
+
+def list_events(user_id: str, limit: int = 50) -> list[dict]:
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            select(credit_events)
+            .where(credit_events.c.user_id == user_id)
+            .order_by(credit_events.c.created_at.desc())
+            .limit(limit)
+        ).all()
+    return [
+        {
+            "id": r.id,
+            "action": r.action,
+            "label": ACTION_LABELS.get(r.action, r.action),
+            "credits": r.credits,
+            "detail": r.detail,
+            "refunded": bool(r.refunded),
+            "created_at": r.created_at.isoformat() + "Z",
+        }
+        for r in rows
+    ]
 
 
 def activate_plan(user_id: str, plan_id: str) -> None:
-    """Başarılı ödemeden sonra çağrılır: paketi 30 gün için açar, kotayı sıfırlar.
+    """Başarılı ödemeden sonra çağrılır: paketi 30 gün için açar, krediyi yeniler.
 
     Aynı paketi süresi bitmeden yenileyen kullanıcının kalan günleri korunur.
     """
@@ -132,50 +199,7 @@ def activate_plan(user_id: str, plan_id: str) -> None:
         conn.execute(
             update(users)
             .where(users.c.id == user_id)
-            .values(
-                plan=plan_id,
-                plan_expires_at=start + timedelta(days=PLAN_DURATION_DAYS),
-                period_start=now,
-                video_used=0,
-                image_used=0,
-                idea_used=0,
-            )
-        )
-
-
-def record_video_job(user_id: str, job_id: str) -> None:
-    """Runway job'ı başlatıldıktan sonra, başarısız olursa iade edilebilmesi için kaydedilir."""
-    with get_engine().begin() as conn:
-        conn.execute(
-            video_jobs.insert().values(job_id=job_id, user_id=user_id, released=0, created_at=utcnow())
-        )
-
-
-def get_video_job_owner(job_id: str) -> str | None:
-    with get_engine().connect() as conn:
-        row = conn.execute(select(video_jobs.c.user_id).where(video_jobs.c.job_id == job_id)).first()
-    return row.user_id if row else None
-
-
-def release_video_if_failed(job_id: str) -> None:
-    """Video üretimi başarısız olduysa kotayı geri yükler.
-
-    İdempotent: `released` bayrağı koşullu UPDATE ile çevrildiği için aynı job
-    için kaç kez çağrılırsa çağrılsın kota yalnızca bir kez iade edilir.
-    """
-    with get_engine().begin() as conn:
-        result = conn.execute(
-            update(video_jobs)
-            .where(and_(video_jobs.c.job_id == job_id, video_jobs.c.released == 0))
-            .values(released=1)
-        )
-        if result.rowcount == 0:
-            return
-        owner = conn.execute(select(video_jobs.c.user_id).where(video_jobs.c.job_id == job_id)).scalar_one()
-        conn.execute(
-            update(users)
-            .where(and_(users.c.id == owner, users.c.video_used > 0))
-            .values(video_used=users.c.video_used - 1)
+            .values(plan=plan_id, plan_expires_at=start + timedelta(days=PLAN_DURATION_DAYS), **_reset_values(now))
         )
 
 

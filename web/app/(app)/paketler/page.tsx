@@ -1,8 +1,8 @@
 "use client";
 
-import { PLAN_ORDER, Plan, tl, usePlans } from "../../lib/plans";
+import { CreditCosts } from "../../lib/api";
+import { PLAN_ORDER, Plan, num, tl, usePricing } from "../../lib/plans";
 import { useSession } from "../../lib/session";
-import { READY_TOOLS } from "../../lib/tools";
 
 const PITCH: Record<string, string> = {
   baslangic: "Kendi işletmesinin hesabını yöneten esnaf için.",
@@ -10,125 +10,126 @@ const PITCH: Record<string, string> = {
   ajans: "Birden fazla markayı yöneten ajans ve danışmanlar için.",
 };
 
-function features(p: Plan) {
-  return [
-    { text: "Sınırsız içerik fikri", ok: true },
-    { text: `Ayda ${p.image_quota} görsel`, ok: true },
-    { text: `Ayda ${p.video_quota} dikey video`, ok: true },
-    { text: "Instagram reklam taslağı (Meta)", ok: p.ads_enabled },
-  ];
+/** Krediyi gerçekçi bir aya bölen örnek: biraz fikir, çoğu görsel ve video. */
+function sampleMonth(p: Plan, c: CreditCosts) {
+  const ideaCredits = Math.floor(p.credits * 0.03);
+  const ideas = Math.floor(ideaCredits / c.idea_per_2) * 2;
+  const images = Math.floor((p.credits * 0.37) / c.image);
+  const videos = p.video_enabled ? Math.floor((p.credits - ideaCredits - images * c.image) / c.video_5) : 0;
+  return { ideas, images, videos };
 }
 
 export default function Paketler() {
-  const plans = usePlans();
+  const pricing = usePricing();
   const { usage, openCheckout } = useSession();
+  const plans = pricing?.plans;
+  const costs = pricing?.costs;
   const ids = PLAN_ORDER.filter((id) => plans?.[id]);
 
   return (
     <div className="page">
       <section className="price-hero">
         <h1>İşine uyan paketi seç</h1>
-        <p>Her paket 30 gün geçerli, otomatik yenilenmez. Ödeme iyzico güvencesiyle Türk lirası olarak alınır.</p>
+        <p>
+          Her paket 30 günlük bir kredi bakiyesi verir. Fikir, görsel ve video ürettikçe krediden düşer; ne üreteceğine
+          sen karar verirsin. Otomatik yenilenmez, ödeme iyzico ile Türk lirası olarak alınır.
+        </p>
       </section>
 
-      {plans === null ? (
+      {pricing === null ? (
         <div className="plans">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="panel plan" style={{ minHeight: 360 }} />
+            <div key={i} className="panel plan" style={{ minHeight: 420 }} />
           ))}
         </div>
-      ) : ids.length === 0 ? (
+      ) : ids.length === 0 || !plans || !costs ? (
         <div className="panel empty" style={{ marginTop: 32 }}>
           <h3>Paketler yüklenemedi</h3>
           <p>Sayfayı yenileyip tekrar dene.</p>
         </div>
       ) : (
-        <div className="plans">
-          {ids.map((id) => {
-            const p = plans[id];
-            const current = usage?.plan === id;
-            return (
-              <article key={id} className={`panel plan ${id === "pro" ? "featured" : ""}`}>
-                {id === "pro" ? <span className="chip chip-indigo">En çok tercih edilen</span> : <span className="chip chip-muted">{p.name}</span>}
-                <h2>{p.name}</h2>
-                <p className="muted" style={{ margin: 0, fontSize: 14 }}>{PITCH[id]}</p>
-                <div className="amount">
-                  {tl(p.price_try)} <small>/ 30 gün</small>
-                </div>
-                <ul>
-                  {features(p).map((f) => (
-                    <li key={f.text} className={f.ok ? "" : "no"}>
-                      {f.text}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  className={`btn btn-block ${id === "pro" ? "btn-primary" : "btn-light"}`}
-                  onClick={() => openCheckout(id)}
-                >
-                  {current ? "30 gün uzat" : `${p.name} paketini al`}
-                </button>
-              </article>
-            );
-          })}
-        </div>
-      )}
-
-      {ids.length > 0 && plans && (
         <>
+          <div className="plans">
+            {ids.map((id) => {
+              const p = plans[id];
+              const current = usage?.plan === id;
+              return (
+                <article key={id} className={`panel plan ${id === "pro" ? "featured" : ""}`}>
+                  {id === "pro" ? <span className="chip chip-indigo">En çok tercih edilen</span> : <span className="chip chip-muted">{p.name}</span>}
+                  <h2>{p.name}</h2>
+                  <p className="muted" style={{ margin: 0, fontSize: 14 }}>{PITCH[id]}</p>
+                  <div className="amount">
+                    {tl(p.price_try)} <small>/ 30 gün</small>
+                  </div>
+                  <div className="credit-badge">
+                    <strong>{num(p.credits)}</strong> kredi
+                  </div>
+                  <p className="plan-sub">Bu krediyle yalnızca birini yaparsan:</p>
+                  <ul>
+                    <li>{num(p.examples.ideas)} içerik fikri</li>
+                    <li>{num(p.examples.images)} görsel</li>
+                    <li>{num(p.examples.videos_5)} video (5 sn) ya da {num(p.examples.videos_10)} video (10 sn)</li>
+                    <li className={p.ads_enabled ? "" : "no"}>Instagram reklam taslağı (Meta){p.ads_enabled ? ", kredi harcamaz" : ""}</li>
+                  </ul>
+                  <button
+                    className={`btn btn-block ${id === "pro" ? "btn-primary" : "btn-light"}`}
+                    onClick={() => openCheckout(id)}
+                  >
+                    {current ? "30 gün uzat" : `${p.name} paketini al`}
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+
+          {pricing.trial && (
+            <p className="muted" style={{ textAlign: "center", fontSize: 14, marginTop: 16 }}>
+              Kayıt olan herkes {pricing.trial.credits} kredilik ücretsiz deneme paketiyle başlar: fikir ve görsel üretebilir,
+              video ve reklam için paket gerekir.
+            </p>
+          )}
+
           <section className="section">
             <div className="section-head">
               <div>
-                <h2>Paketleri karşılaştır</h2>
-                <p>Deneme paketi kayıt olan herkese açıktır ve ücretsizdir.</p>
+                <h2>Hangi işlem kaç kredi?</h2>
+                <p>Üretim başarısız olursa harcanan kredi otomatik olarak iade edilir.</p>
               </div>
             </div>
             <div className="panel table-wrap">
               <table className="data">
                 <thead>
                   <tr>
-                    <th></th>
-                    <th>Deneme</th>
-                    {ids.map((id) => (
-                      <th key={id}>{plans[id].name}</th>
-                    ))}
+                    <th>İşlem</th>
+                    <th>Kredi</th>
+                    <th>Ne alırsın</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td>Fiyat (30 gün)</td>
-                    <td className="num">Ücretsiz</td>
-                    {ids.map((id) => (
-                      <td key={id} className="num">{tl(plans[id].price_try)}</td>
-                    ))}
-                  </tr>
-                  <tr>
                     <td>İçerik fikri</td>
-                    <td className="num">Ayda 10</td>
-                    {ids.map((id) => (
-                      <td key={id}>Sınırsız</td>
-                    ))}
+                    <td className="num">Her 2 fikir {costs.idea_per_2}</td>
+                    <td>Konsept, paylaşıma hazır caption ve hashtag'ler (bir seferde 2, 4 veya 6 fikir)</td>
                   </tr>
                   <tr>
                     <td>Görsel</td>
-                    <td className="num">—</td>
-                    {ids.map((id) => (
-                      <td key={id} className="num">{plans[id].image_quota}</td>
-                    ))}
+                    <td className="num">{costs.image}</td>
+                    <td>Kare, hikâye, gönderi veya yatay formatta bir görsel</td>
                   </tr>
                   <tr>
-                    <td>Dikey video</td>
-                    <td className="num">—</td>
-                    {ids.map((id) => (
-                      <td key={id} className="num">{plans[id].video_quota}</td>
-                    ))}
+                    <td>Video, 5 saniye</td>
+                    <td className="num">{costs.video_5}</td>
+                    <td>Reels ve hikâye için dikey 720p video; istersen ürettiğin görseli canlandırır</td>
+                  </tr>
+                  <tr>
+                    <td>Video, 10 saniye</td>
+                    <td className="num">{costs.video_10}</td>
+                    <td>Aynı video, iki kat uzun</td>
                   </tr>
                   <tr>
                     <td>Meta reklam taslağı</td>
-                    <td>—</td>
-                    {ids.map((id) => (
-                      <td key={id}>{plans[id].ads_enabled ? "Var" : "—"}</td>
-                    ))}
+                    <td className="num">{costs.ads_draft === 0 ? "Ücretsiz" : costs.ads_draft}</td>
+                    <td>Instagram için duraklatılmış kampanya taslağı (Pro ve Ajans)</td>
                   </tr>
                 </tbody>
               </table>
@@ -138,29 +139,90 @@ export default function Paketler() {
           <section className="section">
             <div className="section-head">
               <div>
-                <h2>Hangi araç neyi kullanır?</h2>
-                <p>Üretim başarısız olursa kullandığın hak otomatik iade edilir.</p>
+                <h2>Örnek bir ay</h2>
+                <p>Krediyi karışık kullanan bir işletmenin bir ayda üretebileceği içerik.</p>
+              </div>
+            </div>
+            <div className="stats">
+              {ids.map((id) => {
+                const m = sampleMonth(plans[id], costs);
+                return (
+                  <div key={id} className="panel stat">
+                    <div className="name">{plans[id].name}</div>
+                    <div className="value" style={{ fontSize: 22 }}>
+                      {m.ideas} fikir · {m.images} görsel · {m.videos} video
+                    </div>
+                    <div className="foot">{num(plans[id].credits)} kredinin karşılığı</div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="section">
+            <div className="section-head">
+              <div>
+                <h2>Paketleri karşılaştır</h2>
               </div>
             </div>
             <div className="panel table-wrap">
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Araç</th>
-                    <th>Bir kullanım</th>
-                    <th>Açık olduğu paketler</th>
+                    <th></th>
+                    {pricing.trial && <th>Deneme</th>}
+                    {ids.map((id) => (
+                      <th key={id}>{plans[id].name}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {READY_TOOLS.map((t) => (
-                    <tr key={t.slug}>
-                      <td>{t.name}</td>
-                      <td>{t.costLabel}</td>
-                      <td>{t.plan ? `${t.plan} ve üzeri` : "Tüm paketler"}</td>
-                    </tr>
-                  ))}
+                  {[
+                    ["Fiyat (30 gün)", (p: Plan) => (p.price_try ? tl(p.price_try) : "Ücretsiz")],
+                    ["Kredi", (p: Plan) => num(p.credits)],
+                    ["İçerik fikri (yalnızca)", (p: Plan) => num(p.examples.ideas)],
+                    ["Görsel (yalnızca)", (p: Plan) => num(p.examples.images)],
+                    ["5 sn video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos_5) : "—")],
+                    ["10 sn video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos_10) : "—")],
+                    ["Meta reklam taslağı", (p: Plan) => (p.ads_enabled ? "Var" : "—")],
+                  ].map(([label, fn]) => {
+                    const f = fn as (p: Plan) => string;
+                    return (
+                      <tr key={label as string}>
+                        <td>{label as string}</td>
+                        {pricing.trial && <td className="num">{f(pricing.trial)}</td>}
+                        {ids.map((id) => (
+                          <td key={id} className="num">
+                            {f(plans[id])}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
+            </div>
+          </section>
+
+          <section className="section">
+            <div className="section-head">
+              <div>
+                <h2>Sık sorulanlar</h2>
+              </div>
+            </div>
+            <div className="faq">
+              <div className="panel">
+                <h3>Krediler bir sonraki aya devreder mi?</h3>
+                <p>Hayır. Kredi paketin 30 günü boyunca geçerlidir; paketi yenilediğinde bakiye yeniden dolar.</p>
+              </div>
+              <div className="panel">
+                <h3>Üretim başarısız olursa ne olur?</h3>
+                <p>Görsel ya da video üretilemezse harcanan kredi otomatik iade edilir. İadeyi kullanım sayfasında görebilirsin.</p>
+              </div>
+              <div className="panel">
+                <h3>Reklam bütçesi krediden mi düşer?</h3>
+                <p>Hayır. Meta reklam bütçesi kendi Meta hesabından harcanır; ajansAI'da taslak oluşturmak kredi harcamaz.</p>
+              </div>
             </div>
           </section>
         </>

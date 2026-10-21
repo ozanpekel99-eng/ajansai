@@ -1,22 +1,29 @@
 from fastapi import APIRouter, Depends
 
 from app.security import get_current_user
-from app.services.plans import PLANS
-from app.services.usage_service import get_usage
+from app.services.plans import CREDIT_COSTS, PLANS, public_plan
+from app.services.usage_service import get_usage, list_events
 
 router = APIRouter()
 
 
 @router.get("/")
 def list_plans():
-    """Fiyatlandırma sayfasında gösterilecek satın alınabilir paketler."""
-    return {"plans": {pid: p for pid, p in PLANS.items() if p["purchasable"]}}
+    """Paketler sayfası: satın alınabilir paketler, deneme paketi ve işlem başına kredi maliyetleri."""
+    return {
+        "plans": {pid: public_plan(pid) for pid, p in PLANS.items() if p["purchasable"]},
+        "trial": public_plan("deneme"),
+        "costs": CREDIT_COSTS,
+    }
 
 
 @router.get("/usage")
 def usage(user: dict = Depends(get_current_user)):
-    """Kullanıcının mevcut paketini ve kalan kotasını döndürür.
-
-    Paket değişikliği artık yalnızca başarılı ödemeyle olur (/api/payments/checkout).
-    """
+    """Kullanıcının paketi, kredi bakiyesi ve bu dönemki kullanımı."""
     return get_usage(user["id"])
+
+
+@router.get("/history")
+def history(user: dict = Depends(get_current_user)):
+    """Son kredi hareketleri: hangi işleme kaç kredi harcandı, iade edildi mi."""
+    return {"events": list_events(user["id"])}

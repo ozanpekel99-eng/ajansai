@@ -1550,6 +1550,59 @@ select {
   background: var(--surface-3);
 }
 
+.credit-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: 14px;
+  padding: 6px 12px;
+  border-radius: var(--r-md);
+  background: rgba(65, 63, 245, 0.16);
+  color: #c9c8ff;
+  font-size: 14px;
+}
+
+.credit-badge strong {
+  font-family: var(--display);
+  font-size: 22px;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.plan-sub {
+  margin: 16px 0 -6px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.faq {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.faq .panel {
+  padding: 18px;
+}
+
+.faq h3 {
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+
+.faq p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+@media (max-width: 900px) {
+  .faq {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 900px) {
   .plans {
     grid-template-columns: 1fr;

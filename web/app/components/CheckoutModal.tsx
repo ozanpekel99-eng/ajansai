@@ -85,7 +85,7 @@ export default function CheckoutModal({
               aria-pressed={planId === id}
             >
               <strong>{plans![id].name}</strong>
-              <span>{tl(plans![id].price_try)}</span>
+              <span>{tl(plans![id].price_try)} · {plans![id].credits} kredi</span>
             </button>
           ))}
         </div>
@@ -123,8 +123,12 @@ export default function CheckoutModal({
             </div>
             <div>
               <span className="muted">Dahil</span>
+              <span>{plan.credits.toLocaleString("tr-TR")} kredi</span>
+            </div>
+            <div>
+              <span className="muted">Örneğin</span>
               <span>
-                {plan.video_quota} video, {plan.image_quota} görsel
+                {plan.examples.images} görsel veya {plan.examples.videos_5} video
               </span>
             </div>
             <div className="total">
