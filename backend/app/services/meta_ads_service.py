@@ -4,7 +4,8 @@ import requests
 
 from app import config
 
-META_API_VERSION = "v20.0"
+# v20.0 24 Eylül 2026'da kapandı; güncel sürüm (Temmuz 2026).
+META_API_VERSION = config.META_API_VERSION
 META_BASE_URL = f"https://graph.facebook.com/{META_API_VERSION}"
 
 
@@ -18,14 +19,15 @@ def get_oauth_url(redirect_uri: str, state: str) -> str:
     `state`, CSRF'e karşı imzalı ve kısa ömürlü bir değerdir; callback'te
     doğrulanır. ads_management izni Meta App Review onayı gerektirir.
     """
-    query = urlencode(
-        {
-            "client_id": config.META_APP_ID,
-            "redirect_uri": redirect_uri,
-            "scope": "ads_management,pages_show_list",
-            "state": state,
-        }
-    )
+    params = {"client_id": config.META_APP_ID, "redirect_uri": redirect_uri, "state": state}
+    if config.META_CONFIG_ID:
+        # Facebook Login for Business: izinler Meta panelindeki yapılandırmadan gelir.
+        params["config_id"] = config.META_CONFIG_ID
+        params["response_type"] = "code"
+        params["override_default_response_type"] = "true"
+    else:
+        params["scope"] = "ads_management,ads_read,business_management,pages_show_list"
+    query = urlencode(params)
     return f"https://www.facebook.com/{META_API_VERSION}/dialog/oauth?{query}"
 
 
@@ -95,6 +97,8 @@ def create_campaign_draft(
                 "objective": objective,
                 "status": "PAUSED",
                 "special_ad_categories": "[]",
+                # Kampanya bütçesi kullanılmadığında yeni API sürümleri bu alanı zorunlu tutuyor.
+                "is_adset_budget_sharing_enabled": "false",
                 "access_token": access_token,
             },
             timeout=30,

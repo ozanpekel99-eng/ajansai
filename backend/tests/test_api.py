@@ -668,3 +668,17 @@ def test_omniroute_failure_falls_back_to_ai_gateway(client, monkeypatch):
     token = register(client)
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
     assert r.json()["provider"] == "ai_gateway"
+
+
+def test_meta_oauth_url_uses_business_login_config(monkeypatch):
+    from app.services import meta_ads_service
+
+    monkeypatch.setattr(config, "META_APP_ID", "1640836891080236")
+    monkeypatch.setattr(config, "META_CONFIG_ID", "1641489131038900")
+    url = meta_ads_service.get_oauth_url("https://www.ajansai.tr/ads/callback", "imzali-state")
+    assert url.startswith("https://www.facebook.com/v26.0/dialog/oauth?")
+    assert "config_id=1641489131038900" in url and "scope=" not in url
+    assert "redirect_uri=https%3A%2F%2Fwww.ajansai.tr%2Fads%2Fcallback" in url
+
+    monkeypatch.setattr(config, "META_CONFIG_ID", None)
+    assert "scope=ads_management" in meta_ads_service.get_oauth_url("https://x/cb", "s")
