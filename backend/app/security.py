@@ -1,17 +1,49 @@
 """Şifre özetleme, JWT üretimi ve istekten giriş yapmış kullanıcıyı bulma."""
 
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app import config
+from app.db import app_settings, get_engine
 from app.services.usage_service import UserNotFoundError, get_user
 
 ALGORITHM = "HS256"
 _bearer = HTTPBearer(auto_error=False)
+_cached_secret: str | None = None
+
+
+def _jwt_secret() -> str:
+    """JWT_SECRET ortam değişkeni varsa onu, yoksa veritabanında saklanan anahtarı kullanır.
+
+    Veritabanında da yoksa güçlü bir anahtar üretilip saklanır. Aynı anda iki
+    örnek üretmeye çalışırsa birincisinin yazdığı kazanır, ikincisi onu okur.
+    """
+    global _cached_secret
+    if config.JWT_SECRET:
+        return config.JWT_SECRET
+    if _cached_secret:
+        return _cached_secret
+
+    engine = get_engine()
+    with engine.connect() as conn:
+        value = conn.execute(select(app_settings.c.value).where(app_settings.c.key == "jwt_secret")).scalar()
+    if value is None:
+        try:
+            with engine.begin() as conn:
+                conn.execute(app_settings.insert().values(key="jwt_secret", value=secrets.token_urlsafe(48)))
+        except IntegrityError:
+            pass
+        with engine.connect() as conn:
+            value = conn.execute(select(app_settings.c.value).where(app_settings.c.key == "jwt_secret")).scalar_one()
+    _cached_secret = value
+    return value
 
 
 def hash_password(password: str) -> str:
@@ -34,13 +66,13 @@ def create_token(user_id: str, purpose: str = "access", expires: timedelta | Non
         "iat": now,
         "exp": now + (expires or timedelta(days=config.JWT_EXPIRE_DAYS)),
     }
-    return jwt.encode(payload, config.JWT_SECRET, algorithm=ALGORITHM)
+    return jwt.encode(payload, _jwt_secret(), algorithm=ALGORITHM)
 
 
 def decode_token(token: str, purpose: str = "access") -> str:
     """Geçerliyse kullanıcı ID'sini döndürür, değilse ValueError fırlatır."""
     try:
-        payload = jwt.decode(token, config.JWT_SECRET, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, _jwt_secret(), algorithms=[ALGORITHM])
     except jwt.PyJWTError as e:
         raise ValueError("Geçersiz veya süresi dolmuş oturum") from e
     if payload.get("typ") != purpose or not payload.get("sub"):

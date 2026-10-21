@@ -1,7 +1,6 @@
 """Tüm ayarlar ortam değişkenlerinden okunur. Örnekler için .env.example'a bakın."""
 
 import os
-import secrets
 
 from dotenv import load_dotenv
 
@@ -28,12 +27,13 @@ IS_PRODUCTION = ENVIRONMENT == "production"
 DATABASE_URL = _env("DATABASE_URL", "sqlite:///./data.db")
 
 # --- Kimlik doğrulama ---
+# Tanımlı değilse ilk açılışta rastgele üretilip veritabanında saklanır
+# (bkz. security._jwt_secret). Böylece elle gizli anahtar girmeye gerek kalmaz
+# ve sunucusuz ortamda bütün örnekler aynı anahtarı kullanır.
 JWT_SECRET = _env("JWT_SECRET")
-if not JWT_SECRET:
-    if IS_PRODUCTION:
-        raise RuntimeError("JWT_SECRET production ortamında zorunludur.")
-    # Geliştirmede her başlatmada yeni anahtar: oturumlar yeniden başlatınca düşer.
-    JWT_SECRET = secrets.token_urlsafe(48)
+
+# Vercel gibi sunucusuz ortamlarda bağlantı havuzu tutulmaz.
+IS_SERVERLESS = bool(_env("VERCEL"))
 JWT_EXPIRE_DAYS = int(_env("JWT_EXPIRE_DAYS", "30"))
 
 # --- CORS ---

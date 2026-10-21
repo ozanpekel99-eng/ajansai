@@ -349,3 +349,20 @@ def test_payment_status_only_visible_to_owner(client, monkeypatch):
 def test_health(client):
     h = client.get("/health").json()
     assert h["status"] == "ok"
+
+
+def test_jwt_secret_generated_and_stored_when_not_configured(client, monkeypatch):
+    from app import security
+    from app.db import app_settings
+
+    monkeypatch.setattr(config, "JWT_SECRET", None)
+    monkeypatch.setattr(security, "_cached_secret", None)
+
+    token = register(client)
+    with get_engine().connect() as conn:
+        stored = conn.execute(select(app_settings.c.value).where(app_settings.c.key == "jwt_secret")).scalar()
+    assert stored and len(stored) > 40
+
+    # Yeni bir sunucu örneği gibi önbelleği temizle: aynı anahtar veritabanından okunmalı
+    monkeypatch.setattr(security, "_cached_secret", None)
+    assert client.get("/api/auth/me", headers=auth(token)).status_code == 200

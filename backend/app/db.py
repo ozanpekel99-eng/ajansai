@@ -19,6 +19,7 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 
 from app import config
 
@@ -77,6 +78,14 @@ meta_connections = Table(
     Column("updated_at", DateTime, nullable=False),
 )
 
+# Uygulamanın kendi ürettiği ayarlar (ör. JWT_SECRET tanımlı değilse oluşturulan anahtar).
+app_settings = Table(
+    "app_settings",
+    metadata,
+    Column("key", String(100), primary_key=True),
+    Column("value", Text, nullable=False),
+)
+
 
 def _normalize_url(url: str) -> str:
     # Railway "postgresql://" veya "postgres://" verir; psycopg 3 sürücüsünü seçiyoruz.
@@ -97,6 +106,14 @@ def get_engine() -> Engine:
         kwargs = {"pool_pre_ping": True}
         if url.startswith("sqlite"):
             kwargs["connect_args"] = {"check_same_thread": False}
+        else:
+            # Neon/PgBouncer gibi havuzlayıcılar sunucu tarafı hazır sorguları
+            # desteklemez; psycopg'nin otomatik hazırlamasını kapatıyoruz.
+            kwargs["connect_args"] = {"prepare_threshold": None}
+            if config.IS_SERVERLESS:
+                # Her fonksiyon örneği kısa ömürlü; bağlantıyı açık tutmuyoruz.
+                kwargs["poolclass"] = NullPool
+                kwargs.pop("pool_pre_ping")
         _engine = create_engine(url, **kwargs)
     return _engine
 
