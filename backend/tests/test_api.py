@@ -366,3 +366,40 @@ def test_jwt_secret_generated_and_stored_when_not_configured(client, monkeypatch
     # Yeni bir sunucu örneği gibi önbelleği temizle: aynı anahtar veritabanından okunmalı
     monkeypatch.setattr(security, "_cached_secret", None)
     assert client.get("/api/auth/me", headers=auth(token)).status_code == 200
+
+
+def test_ideas_via_vercel_ai_gateway_with_oidc_header(client, monkeypatch):
+    """Vercel'de API key olmadan: istekle gelen OIDC token AI Gateway'e iletilir."""
+    config.AI_GATEWAY_ENABLED = True
+    monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
+    calls = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None, **kw):
+        calls["url"], calls["auth"], calls["model"] = url, headers.get("Authorization"), json["model"]
+        return FakeResponse(200, {"choices": [{"message": {"content": __import__("json").dumps(IDEAS_JSON)}}]})
+
+    monkeypatch.setattr(llm_service.requests, "post", fake_post)
+    token = register(client)
+    headers = {**auth(token), "x-vercel-oidc-token": "oidc-123"}
+    r = client.post("/api/content/ideas", json=IDEA_BODY, headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["provider"] == "ai_gateway"
+    assert calls["url"] == "https://ai-gateway.vercel.sh/v1/chat/completions"
+    assert calls["auth"] == "Bearer oidc-123"
+    assert calls["model"] == config.AI_GATEWAY_MODEL
+
+
+def test_omniroute_failure_falls_back_to_ai_gateway(client, monkeypatch):
+    config.OMNIROUTE_BASE_URL = "http://omniroute.test/v1"
+    config.AI_GATEWAY_ENABLED = True
+    config.AI_GATEWAY_API_KEY = "gw-key"
+
+    def fake_post(url, headers=None, json=None, timeout=None, **kw):
+        if "omniroute" in url:
+            raise requests.ConnectionError("kapalı")
+        return FakeResponse(200, {"choices": [{"message": {"content": __import__("json").dumps(IDEAS_JSON)}}]})
+
+    monkeypatch.setattr(llm_service.requests, "post", fake_post)
+    token = register(client)
+    r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
+    assert r.json()["provider"] == "ai_gateway"

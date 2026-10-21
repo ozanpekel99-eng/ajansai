@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import config
 from app.db import init_db
 from app.routers import ads, auth, content, payments, plans
-from app.services import iyzico_service
+from app.services import iyzico_service, llm_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -26,6 +26,22 @@ app = FastAPI(
     redoc_url=None,
 )
 
+class OidcTokenMiddleware:
+    """Vercel'in her isteğe eklediği OIDC token'ını AI Gateway çağrıları için saklar."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            for name, value in scope.get("headers", []):
+                if name == b"x-vercel-oidc-token":
+                    llm_service.current_oidc_token.set(value.decode("latin-1"))
+                    break
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(OidcTokenMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.ALLOWED_ORIGINS,
@@ -44,8 +60,8 @@ app.include_router(payments.router, prefix="/api/payments", tags=["payments"])
 def health_check():
     return {
         "status": "ok",
-        "ai": "omniroute" if config.OMNIROUTE_BASE_URL else ("anthropic" if config.ANTHROPIC_API_KEY else "yok"),
-        "ai_fallback": bool(config.OMNIROUTE_BASE_URL and config.ANTHROPIC_API_KEY),
+        # Sırayla denenecek yapay zeka sağlayıcıları; ilki birincil, gerisi yedek.
+        "ai": llm_service.available_providers(),
         "payments": iyzico_service.is_configured(),
         "database": "postgres" if config.DATABASE_URL.startswith("postgres") else "sqlite",
     }

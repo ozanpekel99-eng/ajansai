@@ -23,6 +23,8 @@ def fresh_db(tmp_path):
     # Testler dış servislere gitmesin
     config.OMNIROUTE_BASE_URL = None
     config.ANTHROPIC_API_KEY = None
+    config.AI_GATEWAY_ENABLED = False
+    config.AI_GATEWAY_API_KEY = None
     config.IYZICO_API_KEY = None
     config.IYZICO_SECRET_KEY = None
     yield

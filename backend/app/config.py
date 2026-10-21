@@ -57,6 +57,14 @@ OMNIROUTE_API_KEY = _env("OMNIROUTE_API_KEY")
 OMNIROUTE_MODEL = _env("OMNIROUTE_MODEL", "anthropic/claude-sonnet-5")
 OMNIROUTE_TIMEOUT = float(_env("OMNIROUTE_TIMEOUT", "90"))
 
+# Vercel AI Gateway: Vercel'de çalışırken API key gerektirmez (proje kimliği /
+# OIDC token ile doğrulanır). AI_GATEWAY_API_KEY verilirse onu kullanır.
+AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh/v1"
+AI_GATEWAY_API_KEY = _env("AI_GATEWAY_API_KEY")
+AI_GATEWAY_MODEL = _env("AI_GATEWAY_MODEL", "anthropic/claude-sonnet-5")
+# Varsayılan: Vercel'de çalışıyorsa açık. Kapatmak için AI_GATEWAY_ENABLED=false.
+AI_GATEWAY_ENABLED = _bool("AI_GATEWAY_ENABLED", bool(_env("VERCEL")) or bool(AI_GATEWAY_API_KEY))
+
 ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
 ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 

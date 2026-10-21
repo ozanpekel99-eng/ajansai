@@ -1,5 +1,11 @@
 # ajansAI — Canlıya alma rehberi
 
+> **Şu anki canlı kurulum (Vercel):** Web `ajansai` projesinde, backend `ajansai-api` projesinde (kök klasör
+> `backend`), veritabanı Vercel Marketplace üzerinden Neon Postgres. Yapay zeka çağrıları API key gerektirmeyen
+> **Vercel AI Gateway** üzerinden Claude'a gider (`AI_GATEWAY_MODEL`, varsayılan `anthropic/claude-sonnet-5`).
+> OmniRoute eklenince `OMNIROUTE_BASE_URL` / `OMNIROUTE_API_KEY` tanımlamak yeterli; AI Gateway otomatik yedek olur.
+> Aşağıdaki Railway adımları OmniRoute'u ayrı sunucuya kurmak için geçerli.
+
 Kurulacak yapı:
 
 ```
