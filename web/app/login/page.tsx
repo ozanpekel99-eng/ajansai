@@ -35,41 +35,31 @@ export default function Login() {
   };
 
   return (
-    <div className="page">
-      <header className="header">
-        <img src="/logo.png" alt="ajansAI" className="logo" />
-      </header>
+    <div className="auth">
+      <div className="auth-form">
+        <img src="/logo-on-dark.png" alt="ajansAI" className="logo" />
+        <h1>{mode === "login" ? "Tekrar hoş geldin" : "Hesabını oluştur"}</h1>
+        <p>
+          {mode === "login"
+            ? "İçerik fikirlerine, görsellerine ve paketine ulaşmak için giriş yap."
+            : "Ücretsiz deneme ile başla: ayda 10 içerik fikri, kart gerekmez."}
+        </p>
 
-      <div className="auth-wrap">
-        <section className="hero">
-          <h1>{mode === "login" ? "Tekrar hoş geldin." : "Hesabını oluştur."}</h1>
-          <p>
-            {mode === "login"
-              ? "İçerik fikirlerine ve paketine ulaşmak için giriş yap."
-              : "Ücretsiz deneme ile başla, ayda 10 içerik fikri senden."}
-          </p>
-        </section>
-
-        <form className="form-card" onSubmit={submit}>
+        <form onSubmit={submit}>
           {mode === "register" && (
             <div className="field">
-              <label>Ad soyad</label>
-              <input value={form.name} onChange={(e) => update("name", e.target.value)} autoComplete="name" />
+              <label htmlFor="l-name">Ad soyad</label>
+              <input id="l-name" value={form.name} onChange={(e) => update("name", e.target.value)} autoComplete="name" />
             </div>
           )}
           <div className="field">
-            <label>E-posta</label>
-            <input
-              required
-              type="email"
-              value={form.email}
-              onChange={(e) => update("email", e.target.value)}
-              autoComplete="email"
-            />
+            <label htmlFor="l-email">E-posta</label>
+            <input id="l-email" required type="email" value={form.email} onChange={(e) => update("email", e.target.value)} autoComplete="email" />
           </div>
           <div className="field">
-            <label>Şifre</label>
+            <label htmlFor="l-pass">Şifre</label>
             <input
+              id="l-pass"
               required
               type="password"
               minLength={mode === "register" ? 8 : undefined}
@@ -79,12 +69,10 @@ export default function Login() {
               placeholder={mode === "register" ? "En az 8 karakter" : ""}
             />
           </div>
-          <div className="submit-row">
-            <button className="primary" type="submit" disabled={loading}>
-              {loading ? "Bekle…" : mode === "login" ? "Giriş yap" : "Hesap oluştur"}
-            </button>
-            {error && <span className="error-text">{error}</span>}
-          </div>
+          {error && <div className="notice error">{error}</div>}
+          <button className="btn btn-primary btn-block" type="submit" disabled={loading} style={{ marginTop: 8 }}>
+            {loading ? "Bekle…" : mode === "login" ? "Giriş yap" : "Hesap oluştur"}
+          </button>
         </form>
 
         <div className="switch-link">
@@ -99,6 +87,15 @@ export default function Login() {
             {mode === "login" ? "Kayıt ol" : "Giriş yap"}
           </button>
         </div>
+      </div>
+
+      <div className="auth-art" aria-hidden="true">
+        <div className="tile" style={{ top: "12%", left: "14%", width: 120, height: 120 }} />
+        <div className="tile w" style={{ top: "20%", left: "52%", width: 64, height: 64 }} />
+        <div className="tile" style={{ top: "38%", left: "34%", width: 180, height: 90 }} />
+        <div className="tile w" style={{ top: "8%", right: "10%", width: 28, height: 28 }} />
+        <div className="tile" style={{ top: "48%", right: "12%", width: 72, height: 160 }} />
+        <p className="quote">Fikirden reklama, işletmenin sosyal medyası tek yerde.</p>
       </div>
     </div>
   );

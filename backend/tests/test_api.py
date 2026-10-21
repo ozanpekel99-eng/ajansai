@@ -346,6 +346,23 @@ def test_payment_status_only_visible_to_owner(client, monkeypatch):
     assert st["status"] == "pending"  # kullanıcı ödeme sayfasını bitirmedi
 
 
+def test_payment_list_shows_only_own_payments(client, monkeypatch):
+    _enable_iyzico(monkeypatch, {"status": "failure"})
+    a = register(client, "a@example.com")
+    client.post("/api/payments/checkout", json={"plan_id": "pro", "billing": BILLING}, headers=auth(a))
+    b = register(client, "b@example.com")
+    assert client.get("/api/payments/", headers=auth(b)).json()["payments"] == []
+    items = client.get("/api/payments/", headers=auth(a)).json()["payments"]
+    assert len(items) == 1
+    assert items[0]["plan_name"] == "Pro" and items[0]["amount_try"] == 1249 and items[0]["status"] == "pending"
+
+
+def test_image_rejects_unknown_aspect_ratio(client):
+    token = register(client)
+    r = client.post("/api/content/image", json={"concept": "kahve", "aspect_ratio": "ASPECT_99"}, headers=auth(token))
+    assert r.status_code == 422
+
+
 def test_health(client):
     h = client.get("/health").json()
     assert h["status"] == "ok"

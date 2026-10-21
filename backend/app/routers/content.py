@@ -54,7 +54,7 @@ def create_content_ideas(payload: ContentIdeaRequest, user: dict = Depends(get_c
 
 class ImageRequest(BaseModel):
     concept: str = Field(..., max_length=2000, examples=["Masada buğulanan bir buzlu kahve, sıcak yaz ışığı"])
-    aspect_ratio: str = "ASPECT_1_1"
+    aspect_ratio: str = Field("ASPECT_1_1", pattern=r"^ASPECT_(1_1|9_16|3_4|16_9|4_3)$")
 
 
 @router.post("/image")

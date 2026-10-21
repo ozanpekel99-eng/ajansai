@@ -154,6 +154,31 @@ def _finalize(payment, result: dict) -> RedirectResponse:
     return _result_redirect(new_status, payment.id)
 
 
+@router.get("/")
+def list_payments(user: dict = Depends(get_current_user)):
+    """Kullanıcının ödeme geçmişi (en yeni önce, son 50)."""
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            select(payments)
+            .where(payments.c.user_id == user["id"])
+            .order_by(payments.c.created_at.desc())
+            .limit(50)
+        ).all()
+    return {
+        "payments": [
+            {
+                "payment_id": r.id,
+                "plan": r.plan_id,
+                "plan_name": get_plan(r.plan_id)["name"],
+                "amount_try": float(r.amount_try),
+                "status": r.status,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in rows
+        ]
+    }
+
+
 @router.get("/{payment_id}")
 def payment_status(payment_id: str, user: dict = Depends(get_current_user)):
     """Ödeme sonuç sayfası için durum. 'pending' kaldıysa iyzico'ya tekrar sorar."""

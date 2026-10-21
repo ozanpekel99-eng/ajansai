@@ -35,19 +35,20 @@ function Result() {
   }, [paymentId]);
 
   return (
-    <div className="result-card">
+    <div className="panel result-card">
+      <img src="/logo-on-dark.png" alt="ajansAI" className="logo" />
       {status === "success" && (
         <>
-          <h1>Ödeme alındı 🎉</h1>
+          <h1>Ödeme alındı</h1>
           <p>{planName ? `${planName} paketin` : "Paketin"} açıldı ve 30 gün boyunca geçerli.</p>
-          <Link href="/">İçerik üretmeye başla →</Link>
+          <Link className="btn btn-primary btn-block" href="/araclar">İçerik üretmeye başla</Link>
         </>
       )}
       {status === "failure" && (
         <>
           <h1>Ödeme tamamlanamadı</h1>
           <p>Kartından para çekilmedi. Farklı bir kartla tekrar deneyebilirsin.</p>
-          <Link href="/pricing">Paketlere dön →</Link>
+          <Link className="btn btn-light btn-block" href="/paketler">Paketlere dön</Link>
         </>
       )}
       {status === "pending" && (
@@ -62,12 +63,7 @@ function Result() {
 
 export default function PaymentResult() {
   return (
-    <div className="page">
-      <header className="header">
-        <Link href="/">
-          <img src="/logo.png" alt="ajansAI" className="logo" />
-        </Link>
-      </header>
+    <div className="result-page">
       <Suspense fallback={null}>
         <Result />
       </Suspense>

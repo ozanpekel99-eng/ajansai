@@ -26,7 +26,7 @@ function Callback() {
     api("/api/ads/meta/callback", { method: "POST", body: JSON.stringify({ code, state: oauthState }) })
       .then(() => {
         setState("done");
-        setTimeout(() => (window.location.href = "/ads"), 1500);
+        setTimeout(() => (window.location.href = "/araclar/reklam"), 1500);
       })
       .catch((e) => {
         setState("error");
@@ -35,14 +35,15 @@ function Callback() {
   }, [params]);
 
   return (
-    <div className="result-card">
+    <div className="panel result-card">
+      <img src="/logo-on-dark.png" alt="ajansAI" className="logo" />
       {state === "working" && <h1>Meta hesabın bağlanıyor…</h1>}
-      {state === "done" && <h1>Meta hesabın bağlandı ✓</h1>}
+      {state === "done" && <h1>Meta hesabın bağlandı</h1>}
       {state === "error" && (
         <>
           <h1>Bağlantı kurulamadı</h1>
           <p>{error}</p>
-          <Link href="/ads">Tekrar dene →</Link>
+          <Link className="btn btn-light btn-block" href="/araclar/reklam">Tekrar dene</Link>
         </>
       )}
     </div>
@@ -51,7 +52,7 @@ function Callback() {
 
 export default function MetaCallback() {
   return (
-    <div className="page">
+    <div className="result-page">
       <Suspense fallback={null}>
         <Callback />
       </Suspense>

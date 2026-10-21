@@ -1,10 +1,14 @@
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "ajansAI — KOBİ'ler için İçerik ve Reklam Asistanı",
-  description: "İşletmen için sosyal medya içerik fikirleri üret, görsel/video hazırla ve reklamını ver.",
-  icons: { icon: "/logo.png" },
+  title: "ajansAI — KOBİ'ler için içerik ve reklam asistanı",
+  description: "İşletmen için sosyal medya içerik fikirleri üret, görsel ve video hazırla, Meta reklamlarını yönet.",
+  icons: { icon: "/icon.png", apple: "/icon.png" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
