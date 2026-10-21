@@ -92,7 +92,7 @@ export default function Dashboard() {
           </span>
           <div>
             <h3>Görsel ve video üretimini aç</h3>
-            <p>Başlangıç paketi 300 kredi: örneğin 75 görsel ya da 25 kısa video.</p>
+            <p>Başlangıç paketi 200 kredi: örneğin 50 görsel ya da 16 kısa video.</p>
           </div>
           <button className="btn btn-light" onClick={() => openCheckout("baslangic")}>
             Paketi seç

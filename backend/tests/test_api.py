@@ -155,7 +155,7 @@ def test_idea_cost_is_one_credit_per_two_ideas(client, monkeypatch):
     r = client.post("/api/content/ideas", json={**IDEA_BODY, "idea_count": 1}, headers=auth(token))
     assert r.json()["credits_spent"] == 1
     c = _credits(client, token)
-    assert c == {"total": 20, "used": 4, "remaining": 16}
+    assert c == {"total": 14, "used": 4, "remaining": 10}
     events = client.get("/api/plans/history", headers=auth(token)).json()["events"]
     assert [e["credits"] for e in events] == [1, 3] and events[0]["label"] == "İçerik fikri"
 
@@ -163,7 +163,7 @@ def test_idea_cost_is_one_credit_per_two_ideas(client, monkeypatch):
 def test_trial_credits_run_out(client, monkeypatch):
     _fake_ideas(monkeypatch)
     token = register(client)
-    for _ in range(10):  # 10 x 2 kredi = 20
+    for _ in range(7):  # 7 x 2 kredi = 14
         assert client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token)).status_code == 200
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
     assert r.status_code == 402 and "Kredin yetmiyor" in r.json()["detail"]
@@ -316,7 +316,7 @@ def test_plans_endpoint_shows_credit_examples(client):
     data = client.get("/api/plans/").json()
     assert data["costs"]["image"] == 4 and data["costs"]["video_5"] == 12
     pro = data["plans"]["pro"]
-    assert pro["credits"] == 800 and pro["examples"]["images"] == 200 and pro["examples"]["videos_5"] == 66
+    assert pro["credits"] == 530 and pro["examples"]["images"] == 132 and pro["examples"]["videos_5"] == 44
     assert data["trial"]["examples"]["videos_5"] == 0
 
 

@@ -42,7 +42,7 @@ export default function Login() {
         <p>
           {mode === "login"
             ? "İçerik fikirlerine, görsellerine ve paketine ulaşmak için giriş yap."
-            : "Ücretsiz 20 krediyle başla: fikir ve görsel üret, kart gerekmez."}
+            : "Ücretsiz 14 krediyle başla: fikir ve görsel üret, kart gerekmez."}
         </p>
 
         <form onSubmit={submit}>

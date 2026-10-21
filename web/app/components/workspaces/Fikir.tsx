@@ -182,7 +182,7 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
           <EmptyResult
             text={
               usage?.plan === "deneme"
-                ? "Soldaki formu doldur. Deneme paketindeki 20 krediyle fikir ve görsel üretebilirsin."
+                ? "Soldaki formu doldur. Deneme paketindeki 14 krediyle fikir ve görsel üretebilirsin."
                 : "Soldaki formu doldur, fikirler burada görünecek."
             }
           />

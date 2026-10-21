@@ -9,7 +9,8 @@ kredi düşer. Kredi maliyetleri sağlayıcı maliyetine göre belirlendi
 - Video 720p, sessiz (Seedance 1.5 Pro): $0.026/sn → 5 sn 12, 10 sn 24 kredi
 
 Böylece 1 kredinin bize maliyeti en fazla ~$0.011 olur. Paket fiyatları
-KDV ve iyzico komisyonu düşüldükten sonra ~%60 brüt marj bırakır.
+KDV ve iyzico komisyonu düşüldükten sonra ~%70 brüt marj bırakır.
+(Ekim 2026: paket kredileri ilk taslağın 2/3'üne indirildi.)
 
 Deneme paketi satın alınamaz; yeni kayıt olan herkes bununla başlar.
 """
@@ -29,7 +30,7 @@ PLANS = {
         "name": "Deneme",
         "price_try": 0,
         "price_usd": 0,
-        "credits": 20,
+        "credits": 14,
         "video_enabled": False,
         "ads_enabled": False,
         "purchasable": False,
@@ -38,7 +39,7 @@ PLANS = {
         "name": "Başlangıç",
         "price_try": 499,
         "price_usd": 9.99,
-        "credits": 300,
+        "credits": 200,
         "video_enabled": True,
         "ads_enabled": False,
         "purchasable": True,
@@ -47,7 +48,7 @@ PLANS = {
         "name": "Pro",
         "price_try": 1249,
         "price_usd": 26.99,
-        "credits": 800,
+        "credits": 530,
         "video_enabled": True,
         "ads_enabled": True,
         "purchasable": True,
@@ -56,7 +57,7 @@ PLANS = {
         "name": "Ajans",
         "price_try": 1999,
         "price_usd": 42.99,
-        "credits": 1400,
+        "credits": 930,
         "video_enabled": True,
         "ads_enabled": True,
         "purchasable": True,
