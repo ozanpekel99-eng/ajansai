@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import urlencode
 
 import requests
@@ -7,6 +8,9 @@ from app import config
 # v20.0 24 Eylül 2026'da kapandı; güncel sürüm (Temmuz 2026).
 META_API_VERSION = config.META_API_VERSION
 META_BASE_URL = f"https://graph.facebook.com/{META_API_VERSION}"
+
+
+logger = logging.getLogger("ajansai.meta")
 
 
 class MetaError(Exception):
@@ -31,20 +35,28 @@ def get_oauth_url(redirect_uri: str, state: str) -> str:
     return f"https://www.facebook.com/{META_API_VERSION}/dialog/oauth?{query}"
 
 
+def _meta_error(response) -> str:
+    """Meta'nın hata mesajını (token/secret içermeden) döndürür."""
+    try:
+        err = response.json().get("error") or {}
+        return f"{response.status_code} {err.get('type', '')} {err.get('code', '')}: {err.get('message', '')}"
+    except ValueError:
+        return f"{response.status_code}: {response.text[:200]}"
+
+
 def exchange_code_for_token(code: str, redirect_uri: str) -> str:
     """OAuth kodunu uzun ömürlü erişim token'ına çevirir."""
+    secret = (config.META_APP_SECRET or "").strip()
+    app_id = (config.META_APP_ID or "").strip()
     try:
         short = requests.get(
             f"{META_BASE_URL}/oauth/access_token",
-            params={
-                "client_id": config.META_APP_ID,
-                "client_secret": config.META_APP_SECRET,
-                "redirect_uri": redirect_uri,
-                "code": code,
-            },
+            params={"client_id": app_id, "client_secret": secret, "redirect_uri": redirect_uri, "code": code},
             timeout=30,
         )
-        short.raise_for_status()
+        if short.status_code != 200:
+            logger.error("Meta kod değişimi başarısız: %s", _meta_error(short))
+            raise MetaError("Meta hesabı bağlanamadı: " + _meta_error(short).split(": ", 1)[-1])
         short_token = short.json()["access_token"]
 
         # Kısa ömürlü (1-2 saat) token'ı ~60 günlük token'a çeviriyoruz.
@@ -52,15 +64,19 @@ def exchange_code_for_token(code: str, redirect_uri: str) -> str:
             f"{META_BASE_URL}/oauth/access_token",
             params={
                 "grant_type": "fb_exchange_token",
-                "client_id": config.META_APP_ID,
-                "client_secret": config.META_APP_SECRET,
+                "client_id": app_id,
+                "client_secret": secret,
                 "fb_exchange_token": short_token,
             },
             timeout=30,
         )
-        long.raise_for_status()
+        if long.status_code != 200:
+            # Uzun ömürlüye çevrilemezse kısa ömürlü token ile devam edilir.
+            logger.warning("Uzun ömürlü token alınamadı: %s", _meta_error(long))
+            return short_token
         return long.json()["access_token"]
     except (requests.RequestException, KeyError, ValueError) as e:
+        logger.error("Meta token isteği hatası: %s", type(e).__name__)
         raise MetaError("Meta hesabı bağlanamadı.") from e
 
 
