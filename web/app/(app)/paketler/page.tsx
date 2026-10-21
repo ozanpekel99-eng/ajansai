@@ -1,7 +1,7 @@
 "use client";
 
 import { CreditCosts } from "../../lib/api";
-import { PLAN_ORDER, Plan, num, tl, usePricing } from "../../lib/plans";
+import { PLAN_ORDER, Plan, VIDEO_DURATIONS, VIDEO_RESOLUTIONS, num, tl, usePricing } from "../../lib/plans";
 import { useSession } from "../../lib/session";
 
 const PITCH: Record<string, string> = {
@@ -15,7 +15,7 @@ function sampleMonth(p: Plan, c: CreditCosts) {
   const ideaCredits = Math.floor(p.credits * 0.03);
   const ideas = Math.floor(ideaCredits / c.idea_per_2) * 2;
   const images = Math.floor((p.credits * 0.37) / c.image);
-  const videos = p.video_enabled ? Math.floor((p.credits - ideaCredits - images * c.image) / c.video_5) : 0;
+  const videos = p.video_enabled ? Math.floor((p.credits - ideaCredits - images * c.image) / c.video["720p"]["5"]) : 0;
   return { ideas, images, videos };
 }
 
@@ -68,7 +68,9 @@ export default function Paketler() {
                   <ul>
                     <li>{num(p.examples.ideas)} içerik fikri</li>
                     <li>{num(p.examples.images)} görsel</li>
-                    <li>{num(p.examples.videos_5)} video (5 sn) ya da {num(p.examples.videos_10)} video (10 sn)</li>
+                    <li>
+                      5 sn video: {num(p.examples.videos["720p"])} adet 720p, {num(p.examples.videos["1080p"])} adet 1080p ya da {num(p.examples.videos["4k"])} adet 4K
+                    </li>
                     <li className={p.ads_enabled ? "" : "no"}>Instagram reklam taslağı (Meta){p.ads_enabled ? ", kredi harcamaz" : ""}</li>
                   </ul>
                   <button
@@ -117,20 +119,56 @@ export default function Paketler() {
                     <td>Kare, hikâye, gönderi veya yatay formatta bir görsel</td>
                   </tr>
                   <tr>
-                    <td>Video, 5 saniye</td>
-                    <td className="num">{costs.video_5}</td>
-                    <td>Reels ve hikâye için dikey 720p video; istersen ürettiğin görseli canlandırır</td>
-                  </tr>
-                  <tr>
-                    <td>Video, 10 saniye</td>
-                    <td className="num">{costs.video_10}</td>
-                    <td>Aynı video, iki kat uzun</td>
+                    <td>Video</td>
+                    <td className="num">{costs.video["720p"]["5"]}–{num(costs.video["4k"]["10"])}</td>
+                    <td>Reels ve hikâye için dikey video; süre ve çözünürlüğe göre, aşağıdaki tabloya bak</td>
                   </tr>
                   <tr>
                     <td>Meta reklam taslağı</td>
                     <td className="num">{costs.ads_draft === 0 ? "Ücretsiz" : costs.ads_draft}</td>
                     <td>Instagram için duraklatılmış kampanya taslağı (Pro ve Ajans)</td>
                   </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="section">
+            <div className="section-head">
+              <div>
+                <h2>Video kredi tablosu</h2>
+                <p>Dikey (9:16), sessiz video. İstersen ürettiğin bir görseli canlandırarak başlar.</p>
+              </div>
+            </div>
+            <div className="panel table-wrap">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Çözünürlük</th>
+                    {VIDEO_DURATIONS.map((d) => (
+                      <th key={d}>{d} saniye</th>
+                    ))}
+                    <th>Ne zaman seçilir</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {VIDEO_RESOLUTIONS.map((r) => (
+                    <tr key={r.value}>
+                      <td>{r.label}</td>
+                      {VIDEO_DURATIONS.map((d) => (
+                        <td key={d} className="num">
+                          {num(costs.video[r.value][String(d)])} kredi
+                        </td>
+                      ))}
+                      <td className="muted">
+                        {r.value === "720p"
+                          ? "Instagram Reels ve hikâye için yeterli, en ekonomik"
+                          : r.value === "1080p"
+                            ? "Daha net görüntü, reklam videoları için"
+                            : "Ekran, mağaza içi tabela ve sinema kalitesi gereken işler"}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -150,7 +188,7 @@ export default function Paketler() {
                   <div key={id} className="panel stat">
                     <div className="name">{plans[id].name}</div>
                     <div className="value" style={{ fontSize: 22 }}>
-                      {m.ideas} fikir · {m.images} görsel · {m.videos} video
+                      {m.ideas} fikir · {m.images} görsel · {m.videos} video (720p, 5 sn)
                     </div>
                     <div className="foot">{num(plans[id].credits)} kredinin karşılığı</div>
                   </div>
@@ -182,8 +220,9 @@ export default function Paketler() {
                     ["Kredi", (p: Plan) => num(p.credits)],
                     ["İçerik fikri (yalnızca)", (p: Plan) => num(p.examples.ideas)],
                     ["Görsel (yalnızca)", (p: Plan) => num(p.examples.images)],
-                    ["5 sn video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos_5) : "—")],
-                    ["10 sn video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos_10) : "—")],
+                    ["5 sn 720p video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["720p"]) : "—")],
+                    ["5 sn 1080p video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["1080p"]) : "—")],
+                    ["5 sn 4K video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["4k"]) : "—")],
                     ["Meta reklam taslağı", (p: Plan) => (p.ads_enabled ? "Var" : "—")],
                   ].map(([label, fn]) => {
                     const f = fn as (p: Plan) => string;

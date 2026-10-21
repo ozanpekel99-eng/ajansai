@@ -2,27 +2,34 @@
 
 Her paket 30 günlük bir kredi bakiyesi verir; her üretim işlemi sabit sayıda
 kredi düşer. Kredi maliyetleri sağlayıcı maliyetine göre belirlendi
-(Vercel AI Gateway fiyatları, Ekim 2026):
+(Vercel AI Gateway fiyatları, Ekim 2026); 1 kredi ≈ en fazla $0.011 maliyet:
 
 - Fikir (Claude Sonnet 5): 2 fikir ≈ $0.006 → her 2 fikir 1 kredi
 - Görsel (Seedream 5.0 Pro): $0.035 → 4 kredi
-- Video 720p, sessiz (Seedance 1.5 Pro): $0.026/sn → 5 sn 12, 10 sn 24 kredi
+- Video 720p (Seedance 1.5 Pro, sessiz): $0.0259/sn
+- Video 1080p (Seedance 1.5 Pro, sessiz): $0.0583/sn
+- Video 4K (Seedance 2.0): token ile ücretlenir, $4 / 1M token;
+  token = 3840×2160×24 fps×sn / 1024 ≈ 194.400/sn → ≈ $0.78/sn (en kötü durum)
 
-Böylece 1 kredinin bize maliyeti en fazla ~$0.011 olur. Paket fiyatları
-KDV ve iyzico komisyonu düşüldükten sonra ~%70 brüt marj bırakır.
-(Ekim 2026: paket kredileri ilk taslağın 2/3'üne indirildi.)
-
+Paket fiyatları KDV ve iyzico komisyonu düşüldükten sonra ~%70 brüt marj bırakır.
 Deneme paketi satın alınamaz; yeni kayıt olan herkes bununla başlar.
 """
 
 import math
 
+VIDEO_DURATIONS = (5, 7, 10)
+VIDEO_RESOLUTIONS = ("720p", "1080p", "4k")
+
 CREDIT_COSTS = {
     "idea_per_2": 1,  # her 2 fikir için
     "image": 4,
-    "video_5": 12,
-    "video_10": 24,
     "ads_draft": 0,
+    # çözünürlük → süre (sn) → kredi
+    "video": {
+        "720p": {"5": 12, "7": 17, "10": 24},
+        "1080p": {"5": 27, "7": 37, "10": 53},
+        "4k": {"5": 355, "7": 495, "10": 710},
+    },
 }
 
 PLANS = {
@@ -80,8 +87,8 @@ def idea_cost(count: int) -> int:
     return max(1, math.ceil(count / 2)) * CREDIT_COSTS["idea_per_2"]
 
 
-def video_cost(duration: int) -> int:
-    return CREDIT_COSTS["video_10"] if duration > 5 else CREDIT_COSTS["video_5"]
+def video_cost(duration: int, resolution: str = "720p") -> int:
+    return CREDIT_COSTS["video"][resolution][str(duration)]
 
 
 def public_plan(plan_id: str) -> dict:
@@ -100,7 +107,9 @@ def public_plan(plan_id: str) -> dict:
         "examples": {
             "ideas": c // CREDIT_COSTS["idea_per_2"] * 2,
             "images": c // CREDIT_COSTS["image"],
-            "videos_5": c // CREDIT_COSTS["video_5"] if p["video_enabled"] else 0,
-            "videos_10": c // CREDIT_COSTS["video_10"] if p["video_enabled"] else 0,
+            # 5 sn videolar, çözünürlüğe göre
+            "videos": {
+                res: (c // video_cost(5, res) if p["video_enabled"] else 0) for res in VIDEO_RESOLUTIONS
+            },
         },
     }

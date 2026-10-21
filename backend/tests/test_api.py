@@ -262,31 +262,37 @@ def test_video_costs_and_failed_job_refunded_once(client, monkeypatch):
     token = register(client)
     _set_plan(_user_id(client, token), "baslangic")
     started = []
-    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, i=None: started.append((d, i)) or {"id": "op"})
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, r="720p", i=None: started.append((d, r, i)) or {"model": "m", "operation": {"id": "op"}})
     monkeypatch.setattr(content.gateway_media, "video_status", lambda op: {"status": "error", "error": "model hatası"})
 
     r5 = client.post("/api/content/video", json={"concept": "x"}, headers=auth(token)).json()
     r10 = client.post(
         "/api/content/video",
-        json={"concept": "x", "duration": 10, "image_url": "https://blob.example/a.png"},
+        json={"concept": "x", "duration": 7, "resolution": "1080p", "image_url": "https://blob.example/a.png"},
         headers=auth(token),
     ).json()
-    assert (r5["credits_spent"], r10["credits_spent"]) == (12, 24)
-    assert started == [(5, None), (10, "https://blob.example/a.png")]
-    assert _credits(client, token)["used"] == 36
+    assert (r5["credits_spent"], r10["credits_spent"]) == (12, 37)
+    assert started == [(5, "720p", None), (7, "1080p", "https://blob.example/a.png")]
+    assert _credits(client, token)["used"] == 49
+    # Desteklenmeyen süre/çözünürlük reddedilir
+    assert client.post("/api/content/video", json={"concept": "x", "duration": 6}, headers=auth(token)).status_code == 422
+    assert client.post("/api/content/video", json={"concept": "x", "resolution": "8k"}, headers=auth(token)).status_code == 422
+    # 4K, Başlangıç paketinin 200 kredisine sığmaz
+    r4k = client.post("/api/content/video", json={"concept": "x", "resolution": "4k"}, headers=auth(token))
+    assert r4k.status_code == 402 and "355 kredi" in r4k.json()["detail"]
 
     # Başarısız iş iki kez sorgulansa da kredi bir kez iade edilir
     for _ in range(2):
         st = client.get(f"/api/content/video/{r5['job_id']}", headers=auth(token)).json()
         assert st["status"] == "FAILED"
-    assert _credits(client, token)["used"] == 24
+    assert _credits(client, token)["used"] == 37
 
 
 def test_video_completes_and_is_cached(client, monkeypatch):
     content = _enable_media(monkeypatch)
     token = register(client)
     _set_plan(_user_id(client, token), "pro")
-    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, i=None: {"id": "op"})
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, r="720p", i=None: {"model": "m", "operation": {"id": "op"}})
     states = iter([{"status": "pending"}, {"status": "completed", "video": {"type": "url", "url": "https://cdn/v.mp4"}}])
     monkeypatch.setattr(content.gateway_media, "video_status", lambda op: next(states))
 
@@ -302,7 +308,7 @@ def test_cannot_read_other_users_video(client, monkeypatch):
     content = _enable_media(monkeypatch)
     owner = register(client, "a@example.com")
     _set_plan(_user_id(client, owner), "baslangic")
-    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, i=None: {"id": "op"})
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, r="720p", i=None: {"model": "m", "operation": {"id": "op"}})
     monkeypatch.setattr(content.gateway_media, "video_status", lambda op: {"status": "error"})
     job = client.post("/api/content/video", json={"concept": "x"}, headers=auth(owner)).json()["job_id"]
 
@@ -314,10 +320,13 @@ def test_cannot_read_other_users_video(client, monkeypatch):
 
 def test_plans_endpoint_shows_credit_examples(client):
     data = client.get("/api/plans/").json()
-    assert data["costs"]["image"] == 4 and data["costs"]["video_5"] == 12
+    assert data["costs"]["image"] == 4
+    assert data["costs"]["video"]["720p"] == {"5": 12, "7": 17, "10": 24}
+    assert data["costs"]["video"]["4k"]["10"] == 710
     pro = data["plans"]["pro"]
-    assert pro["credits"] == 530 and pro["examples"]["images"] == 132 and pro["examples"]["videos_5"] == 44
-    assert data["trial"]["examples"]["videos_5"] == 0
+    assert pro["credits"] == 530 and pro["examples"]["images"] == 132
+    assert pro["examples"]["videos"] == {"720p": 44, "1080p": 19, "4k": 1}
+    assert data["trial"]["examples"]["videos"]["720p"] == 0
 
 
 def test_gateway_media_request_format(monkeypatch):
@@ -339,10 +348,12 @@ def test_gateway_media_request_format(monkeypatch):
     assert sent["headers"]["ai-image-model-specification-version"] == "4"
     assert sent["headers"]["Authorization"] == "Bearer gw-key"
 
-    op = gateway_media.start_video("dalga", 5, "https://x/a.png")
-    assert op == {"gatewayJobId": "job_1"} and sent["url"].endswith("/video-model/start")
+    job = gateway_media.start_video("dalga", 7, "4k", "https://x/a.png")
+    assert job == {"model": "bytedance/seedance-2.0", "operation": {"gatewayJobId": "job_1"}}
+    assert sent["url"].endswith("/video-model/start") and sent["headers"]["ai-model-id"] == "bytedance/seedance-2.0"
     assert sent["body"]["image"] == {"type": "url", "url": "https://x/a.png"}
-    assert sent["body"]["aspectRatio"] == "9:16" and sent["body"]["duration"] == 5
+    assert sent["body"]["aspectRatio"] == "9:16" and sent["body"]["duration"] == 7
+    assert sent["body"]["resolution"] == "3840x2160"
 
 
 def test_expired_plan_falls_back_to_trial(client):

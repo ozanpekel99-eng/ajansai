@@ -86,27 +86,29 @@ def generate_image(prompt: str, aspect_ratio: str) -> tuple[bytes, str]:
     return payload, _sniff_mime(payload)
 
 
-def start_video(prompt: str, duration: int, image_url: str | None = None) -> dict:
-    """Video işini başlatır, durum sorgusu için gerekli `operation` nesnesini döndürür."""
+def start_video(prompt: str, duration: int, resolution: str = "720p", image_url: str | None = None) -> dict:
+    """Video işini başlatır. Durum sorgusu için {"model", "operation"} döndürür."""
+    model, size = config.VIDEO_MODELS[resolution]
     body = {
         "prompt": prompt,
         "n": 1,
         "aspectRatio": "9:16",
-        "resolution": config.VIDEO_RESOLUTION,
+        "resolution": size,
         "duration": duration,
         "generateAudio": False,
     }
     if image_url:
         body["image"] = {"type": "url", "url": image_url}
-    data = _post("/video-model/start", config.VIDEO_MODEL, "video", body, timeout=60)
+    data = _post("/video-model/start", model, "video", body, timeout=60)
     if data.get("operation") is None:
         raise MediaError(f"Video işi başlatılamadı: {str(data)[:300]}")
-    return data["operation"]
+    return {"model": model, "operation": data["operation"]}
 
 
-def video_status(operation) -> dict:
+def video_status(job: dict) -> dict:
     """{"status": pending|completed|error, "video": {"url"} veya {"data", "mediaType"}, "error"}."""
-    data = _post("/video-model/status", config.VIDEO_MODEL, "video", {"operation": operation}, timeout=60)
+    model = job.get("model") or config.VIDEO_MODELS["720p"][0]
+    data = _post("/video-model/status", model, "video", {"operation": job.get("operation")}, timeout=60)
     status = data.get("status")
     if status == "completed":
         videos = data.get("videos") or []

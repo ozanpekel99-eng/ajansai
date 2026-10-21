@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import uuid
+from typing import Literal
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException
@@ -96,7 +97,8 @@ def create_image(payload: ImageRequest, user: dict = Depends(get_current_user)):
 class VideoRequest(BaseModel):
     concept: str = Field(..., max_length=2000, examples=["Buzlu kahvenin bardağa dökülüşü, ağır çekim"])
     image_url: str | None = Field(None, max_length=2000, description="Varsa görsel aracından gelen https adresi (image-to-video)")
-    duration: int = Field(5, ge=5, le=10)
+    duration: Literal[5, 7, 10] = 5
+    resolution: Literal["720p", "1080p", "4k"] = "720p"
 
 
 @router.post("/video")
@@ -109,12 +111,13 @@ def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
     if not gateway_media.is_enabled():
         raise HTTPException(status_code=503, detail="Video üretimi henüz yapılandırılmadı.")
     image_url = payload.image_url if payload.image_url and payload.image_url.startswith("https://") else None
-    duration = 10 if payload.duration > 5 else 5
-    credits = video_cost(duration)
-    event_id = _charge(user["id"], "video", credits, f"{duration} sn: {payload.concept}")
+    duration, resolution = payload.duration, payload.resolution
+    credits = video_cost(duration, resolution)
+    label = "4K" if resolution == "4k" else resolution
+    event_id = _charge(user["id"], "video", credits, f"{label}, {duration} sn: {payload.concept}")
 
     try:
-        operation = gateway_media.start_video(payload.concept, duration, image_url)
+        operation = gateway_media.start_video(payload.concept, duration, resolution, image_url)
     except gateway_media.MediaError as e:
         logger.error("Video başlatılamadı: %s", e)
         refund(event_id)

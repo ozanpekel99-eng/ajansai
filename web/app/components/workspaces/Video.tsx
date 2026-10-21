@@ -6,7 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { ApiError, api } from "../../lib/api";
 import { HistoryEntry, addHistory, readHistory } from "../../lib/history";
 import { useSession } from "../../lib/session";
-import { videoCredits } from "../../lib/plans";
+import { VideoDuration, VideoResolution } from "../../lib/api";
+import { VIDEO_DURATIONS, VIDEO_RESOLUTIONS, videoCredits } from "../../lib/plans";
 import { CreditLine, EmptyResult, HistoryList, LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
 
 type Result = { url: string; concept: string };
@@ -16,7 +17,8 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
   const { usage, refresh } = useSession();
   const [concept, setConcept] = useState(params.get("konsept") || "");
   const [imageUrl, setImageUrl] = useState(params.get("gorsel") || "");
-  const [duration, setDuration] = useState(5);
+  const [duration, setDuration] = useState<VideoDuration>(5);
+  const [resolution, setResolution] = useState<VideoResolution>("720p");
   const [status, setStatus] = useState<"idle" | "starting" | "running">("idle");
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
@@ -28,7 +30,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
     return () => clearTimeout(timer.current);
   }, []);
 
-  const cost = videoCredits(duration, usage?.costs);
+  const cost = videoCredits(duration, resolution, usage?.costs);
   const featureLocked = !!usage && !usage.video_enabled;
   const locked = featureLocked || (!!usage && usage.credits.remaining < cost);
 
@@ -66,7 +68,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
     try {
       const data = await api<{ job_id: string | null; error: string | null }>("/api/content/video", {
         method: "POST",
-        body: JSON.stringify({ concept, duration, image_url: imageUrl || null }),
+        body: JSON.stringify({ concept, duration, resolution, image_url: imageUrl || null }),
       });
       if (!data.job_id) {
         setError(data.error || "Video başlatılamadı, kredin iade edildi.");
@@ -122,12 +124,23 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
         <div className="field">
           <label>Süre</label>
           <div className="segmented">
-            {[5, 10].map((d) => (
+            {VIDEO_DURATIONS.map((d) => (
               <button type="button" key={d} className={duration === d ? "active" : ""} onClick={() => setDuration(d)} aria-pressed={duration === d}>
-                {d} saniye · {videoCredits(d, usage?.costs)} kredi
+                {d} saniye
               </button>
             ))}
           </div>
+        </div>
+        <div className="field">
+          <label>Çözünürlük</label>
+          <div className="segmented">
+            {VIDEO_RESOLUTIONS.map((r) => (
+              <button type="button" key={r.value} className={resolution === r.value ? "active" : ""} onClick={() => setResolution(r.value)} aria-pressed={resolution === r.value}>
+                {r.label} · {videoCredits(duration, r.value, usage?.costs)} kredi
+              </button>
+            ))}
+          </div>
+          {resolution === "4k" && <span className="hint">4K en yüksek kalitedir; üretimi daha uzun sürer ve çok daha fazla kredi harcar.</span>}
         </div>
         <div className="generate">
           <button className="btn btn-primary btn-block" type="submit" disabled={busy || locked}>

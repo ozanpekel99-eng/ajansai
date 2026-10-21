@@ -128,7 +128,7 @@ export default function CheckoutModal({
             <div>
               <span className="muted">Örneğin</span>
               <span>
-                {plan.examples.images} görsel veya {plan.examples.videos_5} video
+                {plan.examples.images} görsel veya {plan.examples.videos["720p"]} video (720p, 5 sn)
               </span>
             </div>
             <div className="total">

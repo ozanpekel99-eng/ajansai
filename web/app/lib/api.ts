@@ -86,7 +86,16 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
   return data as T;
 }
 
-export type CreditCosts = { idea_per_2: number; image: number; video_5: number; video_10: number; ads_draft: number };
+export type VideoResolution = "720p" | "1080p" | "4k";
+export type VideoDuration = 5 | 7 | 10;
+
+export type CreditCosts = {
+  idea_per_2: number;
+  image: number;
+  ads_draft: number;
+  /** çözünürlük → süre ("5" | "7" | "10") → kredi */
+  video: Record<VideoResolution, Record<string, number>>;
+};
 
 export type Usage = {
   plan: string;

@@ -70,8 +70,13 @@ ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 
 # --- Görsel / video (Vercel AI Gateway üzerinden, ayrı anahtar gerekmez) ---
 IMAGE_MODEL = _env("IMAGE_MODEL", "bytedance/seedream-5.0-pro")
-VIDEO_MODEL = _env("VIDEO_MODEL", "bytedance/seedance-v1.5-pro")
-VIDEO_RESOLUTION = _env("VIDEO_RESOLUTION", "720x1280")  # dikey 720p
+# Çözünürlüğe göre video modeli ve sağlayıcıya gönderilen çözünürlük. Videolar
+# dikey (9:16) üretilir; çözünürlük sağlayıcının kademe adıyla verilir.
+VIDEO_MODELS = {
+    "720p": (_env("VIDEO_MODEL_720P", "bytedance/seedance-v1.5-pro"), "1280x720"),
+    "1080p": (_env("VIDEO_MODEL_1080P", "bytedance/seedance-v1.5-pro"), "1920x1080"),
+    "4k": (_env("VIDEO_MODEL_4K", "bytedance/seedance-2.0"), "3840x2160"),
+}
 # Üretilen dosyaların saklandığı Vercel Blob deposu (projeye bağlanınca otomatik gelir)
 BLOB_READ_WRITE_TOKEN = _env("BLOB_READ_WRITE_TOKEN")
 
