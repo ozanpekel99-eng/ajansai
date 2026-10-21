@@ -179,9 +179,25 @@ def list_pages(token: str) -> list[dict]:
 
 
 def list_instagram_accounts(ad_account_id: str, token: str) -> list[dict]:
+    """Reklamda kullanılabilecek Instagram hesapları: reklam hesabına atananlar +
+    kullanıcının sayfalarına bağlı işletme hesapları."""
+    found: dict[str, dict] = {}
     act = ad_account_id.removeprefix("act_")
-    data = _graph("GET", f"act_{act}/instagram_accounts", token, fields="id,username", limit=100)
-    return [{"id": a["id"], "username": a.get("username", "")} for a in data.get("data", [])]
+    try:
+        data = _graph("GET", f"act_{act}/instagram_accounts", token, fields="id,username", limit=100)
+        for a in data.get("data", []):
+            found[a["id"]] = {"id": a["id"], "username": a.get("username", ""), "page_id": None}
+    except MetaError:
+        pass
+    try:
+        pages = _graph("GET", "me/accounts", token, fields="id,instagram_business_account{id,username}", limit=100)
+        for p in pages.get("data", []):
+            ig = p.get("instagram_business_account")
+            if ig and ig.get("id"):
+                found.setdefault(ig["id"], {"id": ig["id"], "username": ig.get("username", ""), "page_id": p["id"]})
+    except MetaError:
+        pass
+    return list(found.values())
 
 
 def search_locations(query: str, token: str) -> list[dict]:
@@ -261,7 +277,7 @@ def create_instagram_ad(
     token: str,
     ad_account_id: str,
     page_id: str,
-    instagram_user_id: str,
+    instagram_user_id: str | None,
     name: str,
     objective: str,
     daily_budget: float,
@@ -326,7 +342,6 @@ def create_instagram_ad(
         if "image_hash" in uploaded:
             story = {
                 "page_id": page_id,
-                "instagram_user_id": instagram_user_id,
                 "link_data": {
                     "image_hash": uploaded["image_hash"],
                     "link": target_link,
@@ -338,7 +353,6 @@ def create_instagram_ad(
         else:
             story = {
                 "page_id": page_id,
-                "instagram_user_id": instagram_user_id,
                 "video_data": {
                     "video_id": uploaded["video_id"],
                     "image_url": uploaded["thumbnail"],
@@ -347,6 +361,8 @@ def create_instagram_ad(
                     "call_to_action": cta,
                 },
             }
+        if instagram_user_id:
+            story["instagram_user_id"] = instagram_user_id
         creative = _graph("POST", f"act_{act}/adcreatives", token, name=f"{name} - kreatif", object_story_spec=story)
         ad = _graph(
             "POST",

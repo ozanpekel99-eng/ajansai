@@ -175,7 +175,7 @@ CTA_TYPES = ("LEARN_MORE", "SHOP_NOW", "ORDER_NOW", "BOOK_NOW", "CONTACT_US", "S
 class CreateAdRequest(BaseModel):
     ad_account_id: str = Field(..., max_length=50)
     page_id: str = Field(..., max_length=50)
-    instagram_user_id: str = Field(..., max_length=50)
+    instagram_user_id: str | None = Field(None, max_length=50)
     name: str = Field(..., min_length=2, max_length=150)
     objective: Literal["traffic", "whatsapp", "awareness"]
     daily_budget: float = Field(..., gt=0, le=1_000_000)

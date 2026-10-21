@@ -13,7 +13,7 @@ import { EmptyResult, LockedNotice, WorkspaceProps } from "./common";
 
 type AdAccount = { account_id: string; name: string; currency: string; account_status: number };
 type Page = { id: string; name: string };
-type IgAccount = { id: string; username: string };
+type IgAccount = { id: string; username: string; page_id?: string | null };
 type Loc = { key: string; name: string; type: "country" | "region" | "city"; country_code?: string | null; region?: string | null };
 type Media = { url: string; kind: "image" | "video" };
 type Objective = "traffic" | "whatsapp" | "awareness";
@@ -180,7 +180,10 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
     api<{ accounts: IgAccount[] }>(`/api/ads/meta/instagram-accounts?ad_account_id=${accountId}`)
       .then((d) => {
         setIgAccounts(d.accounts);
-        if (d.accounts[0]) setIgId(d.accounts[0].id);
+        if (d.accounts[0]) {
+          setIgId(d.accounts[0].id);
+          if (d.accounts[0].page_id) setPageId(d.accounts[0].page_id);
+        }
       })
       .catch(() => setIgAccounts([]));
   }, [accountId]);
@@ -219,10 +222,6 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
       setError("Reklam için bir görsel veya video seç.");
       return;
     }
-    if (!igId) {
-      setError("Bu reklam hesabına bağlı bir Instagram hesabı bulunamadı. Meta İşletme ayarlarından Instagram hesabını reklam hesabına bağla.");
-      return;
-    }
     setSaving(true);
     setError("");
     try {
@@ -231,7 +230,7 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
         body: JSON.stringify({
           ad_account_id: accountId,
           page_id: pageId,
-          instagram_user_id: igId,
+          instagram_user_id: igId || null,
           name,
           objective,
           daily_budget: Number(budget),
@@ -260,7 +259,7 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
 
   if (loadError) return <div className="notice error">{loadError}</div>;
 
-  const igName = igAccounts.find((a) => a.id === igId)?.username || "hesabin";
+  const igName = igAccounts.find((a) => a.id === igId)?.username || pages.find((p) => p.id === pageId)?.name || "hesabin";
 
   return (
     <form className="ad-builder" onSubmit={submit}>
@@ -293,8 +292,16 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
             </div>
             <div className="field">
               <label htmlFor="ad-ig">Instagram hesabı</label>
-              <select id="ad-ig" value={igId} onChange={(e) => setIgId(e.target.value)} required>
-                {!igAccounts.length && <option value="">Bu hesaba bağlı yok</option>}
+              <select
+                id="ad-ig"
+                value={igId}
+                onChange={(e) => {
+                  setIgId(e.target.value);
+                  const linked = igAccounts.find((a) => a.id === e.target.value)?.page_id;
+                  if (linked) setPageId(linked);
+                }}
+              >
+                <option value="">Sayfa adına yayınla</option>
                 {igAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     @{a.username}
