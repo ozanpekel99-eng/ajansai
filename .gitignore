@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+.pytest_cache/
+
+# Ortam ve veri — gizli anahtarlar ve yerel veritabanı asla depoya girmemeli
+.env
+*.db
+
+# Node / Next / Expo
+node_modules/
+.next/
+.expo/
+dist/
+web/next-env.d.ts
