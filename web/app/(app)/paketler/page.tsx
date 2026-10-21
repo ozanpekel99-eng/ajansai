@@ -13,7 +13,7 @@ const PITCH: Record<string, string> = {
 /** Krediyi gerçekçi bir aya bölen örnek: biraz fikir, çoğu görsel ve video. */
 function sampleMonth(p: Plan, c: CreditCosts) {
   const ideaCredits = Math.floor(p.credits * 0.03);
-  const ideas = Math.floor(ideaCredits / c.idea_per_2) * 2;
+  const ideas = Math.floor(ideaCredits / c.chat_message);
   const images = Math.floor((p.credits * 0.37) / c.image);
   const videos = p.video_enabled ? Math.floor((p.credits - ideaCredits - images * c.image) / c.video["720p"]["5"]) : 0;
   return { ideas, images, videos };
@@ -66,7 +66,7 @@ export default function Paketler() {
                   </div>
                   <p className="plan-sub">Bu krediyle yalnızca birini yaparsan:</p>
                   <ul>
-                    <li>{num(p.examples.ideas)} içerik fikri</li>
+                    <li>{num(p.examples.messages)} fikir sohbeti mesajı</li>
                     <li>{num(p.examples.images)} görsel</li>
                     <li>
                       5 sn video: {num(p.examples.videos["720p"])} adet 720p, {num(p.examples.videos["1080p"])} adet 1080p ya da {num(p.examples.videos["4k"])} adet 4K
@@ -109,14 +109,21 @@ export default function Paketler() {
                 </thead>
                 <tbody>
                   <tr>
-                    <td>İçerik fikri</td>
-                    <td className="num">Her 2 fikir {costs.idea_per_2}</td>
-                    <td>Konsept, paylaşıma hazır caption ve hashtag'ler (bir seferde 2, 4 veya 6 fikir)</td>
+                    <td>Fikir sohbeti</td>
+                    <td className="num">
+                      Mesaj başı {costs.chat_message}, her ek +{costs.chat_attachment}
+                    </td>
+                    <td>Fikir, caption, hashtag ve reklam metni; fotoğraf, video ve belge ekleyerek örnek üzerinden çalışır</td>
+                  </tr>
+                  <tr>
+                    <td>Örnekten konsept</td>
+                    <td className="num">{costs.describe}</td>
+                    <td>Yüklediğin görsel veya videoya bakıp aynı tarzda yeni görsel/video için konsept yazar</td>
                   </tr>
                   <tr>
                     <td>Görsel</td>
                     <td className="num">{costs.image}</td>
-                    <td>Kare, hikâye, gönderi veya yatay formatta bir görsel</td>
+                    <td>Kare, hikâye, gönderi veya yatay formatta bir görsel; 4 adede kadar ürün/stil görseli örnek alabilir</td>
                   </tr>
                   <tr>
                     <td>Video</td>
@@ -137,7 +144,7 @@ export default function Paketler() {
             <div className="section-head">
               <div>
                 <h2>Video kredi tablosu</h2>
-                <p>Dikey (9:16), sessiz video. İstersen ürettiğin bir görseli canlandırarak başlar.</p>
+                <p>Metinden veya görselden (başlangıç ve bitiş karesi), 9:16, 1:1 veya 16:9. Parantez içi sesli fiyattır.</p>
               </div>
             </div>
             <div className="panel table-wrap">
@@ -158,6 +165,9 @@ export default function Paketler() {
                       {VIDEO_DURATIONS.map((d) => (
                         <td key={d} className="num">
                           {num(costs.video[r.value][String(d)])} kredi
+                          {costs.video_audio[r.value][String(d)] !== costs.video[r.value][String(d)] && (
+                            <span className="faint"> ({num(costs.video_audio[r.value][String(d)])})</span>
+                          )}
                         </td>
                       ))}
                       <td className="muted">
@@ -188,7 +198,7 @@ export default function Paketler() {
                   <div key={id} className="panel stat">
                     <div className="name">{plans[id].name}</div>
                     <div className="value" style={{ fontSize: 22 }}>
-                      {m.ideas} fikir · {m.images} görsel · {m.videos} video (720p, 5 sn)
+                      {m.ideas} sohbet mesajı · {m.images} görsel · {m.videos} video (720p, 5 sn)
                     </div>
                     <div className="foot">{num(plans[id].credits)} kredinin karşılığı</div>
                   </div>
@@ -218,7 +228,7 @@ export default function Paketler() {
                   {[
                     ["Fiyat (30 gün)", (p: Plan) => (p.price_try ? tl(p.price_try) : "Ücretsiz")],
                     ["Kredi", (p: Plan) => num(p.credits)],
-                    ["İçerik fikri (yalnızca)", (p: Plan) => num(p.examples.ideas)],
+                    ["Fikir sohbeti mesajı (yalnızca)", (p: Plan) => num(p.examples.messages)],
                     ["Görsel (yalnızca)", (p: Plan) => num(p.examples.images)],
                     ["5 sn 720p video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["720p"]) : "—")],
                     ["5 sn 1080p video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["1080p"]) : "—")],

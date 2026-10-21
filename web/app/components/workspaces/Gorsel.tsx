@@ -7,6 +7,9 @@ import { useSearchParams } from "next/navigation";
 import { ApiError, api } from "../../lib/api";
 import { HistoryEntry, addHistory, readHistory } from "../../lib/history";
 import { useSession } from "../../lib/session";
+import { FileChips, PendingFile, UploadProgress, useUploader } from "../Attachments";
+import { ChipSelect, SampleToConcept } from "../Controls";
+import Icon from "../Icon";
 import { CreditLine, EmptyResult, HistoryList, NoCreditsNotice, WorkspaceProps } from "./common";
 
 const RATIOS = [
@@ -23,6 +26,8 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
   const { usage, refresh } = useSession();
   const [concept, setConcept] = useState(params.get("konsept") || "");
   const [ratio, setRatio] = useState("ASPECT_1_1");
+  const [refs, setRefs] = useState<PendingFile[]>([]);
+  const uploader = useUploader(["image"], 4, refs.length, (f) => setRefs((x) => [...x, f]));
   const [result, setResult] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,7 +45,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
     try {
       const data = await api<{ image_url: string | null; error: string | null }>("/api/content/image", {
         method: "POST",
-        body: JSON.stringify({ concept, aspect_ratio: ratio }),
+        body: JSON.stringify({ concept, aspect_ratio: ratio, reference_urls: refs.map((f) => f.url) }),
       });
       if (!data.image_url) {
         setError(data.error || "Görsel üretilemedi, kredin iade edildi.");
@@ -68,7 +73,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
   return (
     <div className="workspace">
       <form className="panel ws-panel" onSubmit={submit}>
-        <h2>Görsel ayarları</h2>
+        <h2>Girdi</h2>
         <NoCreditsNotice cost={cost} />
         <div className="field">
           <label htmlFor="g-concept">Konsept</label>
@@ -81,16 +86,25 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
             placeholder="Beyaz mutfakta yeni nesil gri buzdolabı, sabah ışığı, ön planda taze meyveler"
           />
           <span className="hint">Ne görünmesini istediğini, ışığı ve ortamı yaz. Yazı içeren görsellerde metni tırnak içinde ver.</span>
+          <SampleToConcept target="image" onConcept={setConcept} />
         </div>
         <div className="field">
-          <label>Format</label>
-          <div className="segmented">
-            {RATIOS.map((r) => (
-              <button type="button" key={r.value} className={ratio === r.value ? "active" : ""} onClick={() => setRatio(r.value)} aria-pressed={ratio === r.value}>
-                {r.label}
-              </button>
-            ))}
-          </div>
+          <label>Örnek görseller (isteğe bağlı)</label>
+          {uploader.field}
+          <FileChips files={refs} onRemove={(id) => setRefs((x) => x.filter((f) => f.id !== id))} />
+          <UploadProgress busy={uploader.busy} />
+          {refs.length < 4 && (
+            <button type="button" className="add-file" onClick={uploader.pick} disabled={uploader.busy.length > 0}>
+              <Icon name="plus" size={16} /> Ürün veya stil görseli ekle
+            </button>
+          )}
+          <span className="hint">
+            En fazla 4 görsel. Kendi ürününü yüklersen yeni görselde aynı ürün kullanılır; stil örneği yüklersen o tarzda üretilir. Ek kredi harcamaz.
+          </span>
+          {uploader.error && <small className="error-text">{uploader.error}</small>}
+        </div>
+        <div className="chip-row">
+          <ChipSelect icon="ratio" label="Format" value={ratio} onChange={setRatio} options={RATIOS.map((r) => ({ value: r.value, label: r.label }))} />
         </div>
         <div className="generate">
           <button className="btn btn-primary btn-block" type="submit" disabled={loading || locked}>

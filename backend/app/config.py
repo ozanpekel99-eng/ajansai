@@ -70,6 +70,9 @@ ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 
 # --- Görsel / video (Vercel AI Gateway üzerinden, ayrı anahtar gerekmez) ---
 IMAGE_MODEL = _env("IMAGE_MODEL", "bytedance/seedream-5.0-pro")
+# Fikir sohbeti: metin, görsel ve belge Claude ile; video eki varsa Gemini ile anlaşılır.
+CHAT_MODEL = _env("CHAT_MODEL", "anthropic/claude-sonnet-5")
+CHAT_VIDEO_MODEL = _env("CHAT_VIDEO_MODEL", "google/gemini-3.6-flash")
 # Çözünürlüğe göre video modeli ve sağlayıcıya gönderilen çözünürlük. Videolar
 # dikey (9:16) üretilir; çözünürlük sağlayıcının kademe adıyla verilir.
 VIDEO_MODELS = {

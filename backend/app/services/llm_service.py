@@ -138,3 +138,30 @@ def complete(system: str, user: str, max_tokens: int = 2000) -> tuple[str, str]:
             logger.warning("%s başarısız, sıradaki sağlayıcı deneniyor: %s", name, e)
             errors.append(f"{name}: {e}")
     raise LLMError("; ".join(errors))
+
+
+def chat_completion(model: str, messages: list[dict], max_tokens: int = 2000) -> str:
+    """Çok kipli (görsel, belge, video) sohbet: OpenAI uyumlu mesajlarla AI Gateway'e gider."""
+    token = ai_gateway_token() if config.AI_GATEWAY_ENABLED else None
+    if not token:
+        raise LLMError("AI Gateway yapılandırılmadı.")
+    try:
+        response = requests.post(
+            f"{config.AI_GATEWAY_BASE_URL}/chat/completions",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+            json={"model": model, "max_tokens": max_tokens, "messages": messages},
+            timeout=150,
+        )
+    except requests.RequestException as e:
+        raise LLMError(f"AI Gateway'e ulaşılamadı: {e}") from e
+    if response.status_code != 200:
+        raise LLMError(f"AI Gateway {response.status_code}: {response.text[:400]}")
+    try:
+        content = response.json()["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError, ValueError) as e:
+        raise LLMError(f"AI Gateway beklenmeyen yanıt: {response.text[:300]}") from e
+    if isinstance(content, list):
+        content = "".join(p.get("text", "") for p in content if isinstance(p, dict))
+    if not content:
+        raise LLMError("Boş yanıt")
+    return content

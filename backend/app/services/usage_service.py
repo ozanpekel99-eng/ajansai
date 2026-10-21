@@ -16,7 +16,14 @@ from app.services.plans import CREDIT_COSTS, FREE_PLAN, PLAN_DURATION_DAYS, get_
 
 PERIOD_DAYS = 30
 
-ACTION_LABELS = {"idea": "İçerik fikri", "image": "Görsel", "video": "Video", "ads_draft": "Reklam taslağı"}
+ACTION_LABELS = {
+    "idea": "İçerik fikri",
+    "chat": "Fikir sohbeti",
+    "describe": "Örnekten konsept",
+    "image": "Görsel",
+    "video": "Video",
+    "ads_draft": "Reklam taslağı",
+}
 
 
 class QuotaExceededError(Exception):
@@ -97,7 +104,7 @@ def get_usage(user_id: str) -> dict:
         "ads_enabled": plan["ads_enabled"],
         "costs": CREDIT_COSTS,
         "counts": {
-            "idea": counts.get("idea", 0),
+            "idea": counts.get("idea", 0) + counts.get("chat", 0),
             "image": counts.get("image", 0),
             "video": counts.get("video", 0),
             "ads_draft": counts.get("ads_draft", 0),

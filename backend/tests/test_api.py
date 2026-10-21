@@ -189,10 +189,15 @@ def _set_plan(user_id, plan):
         )
 
 
+BLOB_TOKEN = "vercel_blob_rw_StoreAbc123_gizli"
+BLOB_URL = "https://storeabc123.public.blob.vercel-storage.com/yuklemeler/u/"
+
+
 def _enable_media(monkeypatch):
     from app.routers import content
 
     config.AI_GATEWAY_ENABLED = True
+    monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", BLOB_TOKEN)
     return content
 
 
@@ -200,11 +205,12 @@ def test_trial_can_make_images_and_pays_four_credits(client, monkeypatch):
     content = _enable_media(monkeypatch)
     calls = {}
 
-    def fake_image(prompt, aspect):
+    def fake_image(prompt, aspect, refs=None):
         calls["aspect"] = aspect
         return b"\x89PNG\r\n\x1a\nveri", "image/png"
 
     monkeypatch.setattr(content.gateway_media, "generate_image", fake_image)
+    monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", None)  # depo yoksa data URL döner
     token = register(client)
     r = client.post("/api/content/image", json={"concept": "kahve", "aspect_ratio": "ASPECT_9_16"}, headers=auth(token))
     assert r.status_code == 200, r.text
@@ -215,8 +221,7 @@ def test_trial_can_make_images_and_pays_four_credits(client, monkeypatch):
 
 def test_image_saved_to_blob_when_configured(client, monkeypatch):
     content = _enable_media(monkeypatch)
-    monkeypatch.setattr(content.gateway_media, "generate_image", lambda p, a: (b"\xff\xd8\xffjpg", "image/jpeg"))
-    config.BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_store_x"
+    monkeypatch.setattr(content.gateway_media, "generate_image", lambda p, a, r=None: (b"\xff\xd8\xffjpg", "image/jpeg"))
     sent = {}
 
     def fake_put(url, params=None, data=None, headers=None, timeout=None):
@@ -226,11 +231,8 @@ def test_image_saved_to_blob_when_configured(client, monkeypatch):
     from app.services import storage
 
     monkeypatch.setattr(storage.requests, "put", fake_put)
-    try:
-        token = register(client)
-        r = client.post("/api/content/image", json={"concept": "kahve"}, headers=auth(token))
-    finally:
-        config.BLOB_READ_WRITE_TOKEN = None
+    token = register(client)
+    r = client.post("/api/content/image", json={"concept": "kahve"}, headers=auth(token))
     assert r.json()["image_url"].startswith("https://store.public.blob.vercel-storage.com/gorsel/")
     assert sent["params"]["pathname"].endswith(".jpg")
     assert sent["headers"]["x-vercel-blob-access"] == "public"
@@ -239,7 +241,7 @@ def test_image_saved_to_blob_when_configured(client, monkeypatch):
 def test_image_failure_refunds_credits(client, monkeypatch):
     content = _enable_media(monkeypatch)
 
-    def broken(prompt, aspect):
+    def broken(prompt, aspect, refs=None):
         raise content.gateway_media.MediaError("kapalı")
 
     monkeypatch.setattr(content.gateway_media, "generate_image", broken)
@@ -262,17 +264,24 @@ def test_video_costs_and_failed_job_refunded_once(client, monkeypatch):
     token = register(client)
     _set_plan(_user_id(client, token), "baslangic")
     started = []
-    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, r="720p", i=None: started.append((d, r, i)) or {"model": "m", "operation": {"id": "op"}})
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16": started.append((d, r, i, e, a, ar)) or {"model": "m", "operation": {"id": "op"}})
     monkeypatch.setattr(content.gateway_media, "video_status", lambda op: {"status": "error", "error": "model hatası"})
 
     r5 = client.post("/api/content/video", json={"concept": "x"}, headers=auth(token)).json()
     r10 = client.post(
         "/api/content/video",
-        json={"concept": "x", "duration": 7, "resolution": "1080p", "image_url": "https://blob.example/a.png"},
+        json={
+            "concept": "x",
+            "duration": 7,
+            "resolution": "1080p",
+            "image_url": BLOB_URL + "a.png",
+            "end_image_url": BLOB_URL + "b.png",
+            "aspect_ratio": "16:9",
+        },
         headers=auth(token),
     ).json()
     assert (r5["credits_spent"], r10["credits_spent"]) == (12, 37)
-    assert started == [(5, "720p", None), (7, "1080p", "https://blob.example/a.png")]
+    assert started == [(5, "720p", None, None, False, "9:16"), (7, "1080p", BLOB_URL + "a.png", BLOB_URL + "b.png", False, "16:9")]
     assert _credits(client, token)["used"] == 49
     # Desteklenmeyen süre/çözünürlük reddedilir
     assert client.post("/api/content/video", json={"concept": "x", "duration": 6}, headers=auth(token)).status_code == 422
@@ -292,7 +301,8 @@ def test_video_completes_and_is_cached(client, monkeypatch):
     content = _enable_media(monkeypatch)
     token = register(client)
     _set_plan(_user_id(client, token), "pro")
-    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, r="720p", i=None: {"model": "m", "operation": {"id": "op"}})
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda *a, **k: {"model": "m", "operation": {"id": "op"}})
+    monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", None)  # depo yoksa sağlayıcının adresi döner
     states = iter([{"status": "pending"}, {"status": "completed", "video": {"type": "url", "url": "https://cdn/v.mp4"}}])
     monkeypatch.setattr(content.gateway_media, "video_status", lambda op: next(states))
 
@@ -308,7 +318,7 @@ def test_cannot_read_other_users_video(client, monkeypatch):
     content = _enable_media(monkeypatch)
     owner = register(client, "a@example.com")
     _set_plan(_user_id(client, owner), "baslangic")
-    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, r="720p", i=None: {"model": "m", "operation": {"id": "op"}})
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda *a, **k: {"model": "m", "operation": {"id": "op"}})
     monkeypatch.setattr(content.gateway_media, "video_status", lambda op: {"status": "error"})
     job = client.post("/api/content/video", json={"concept": "x"}, headers=auth(owner)).json()["job_id"]
 
@@ -316,6 +326,112 @@ def test_cannot_read_other_users_video(client, monkeypatch):
     assert client.get(f"/api/content/video/{job}", headers=auth(other)).status_code == 404
     # Başkası sorgulayamadığı için sahibin kredisi iade edilmemiş olmalı
     assert _credits(client, owner)["used"] == 12
+
+
+def test_video_audio_costs_more_and_foreign_urls_rejected(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "pro")
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda *a, **k: {"model": "m", "operation": {}})
+    r = client.post("/api/content/video", json={"concept": "x", "resolution": "1080p", "audio": True}, headers=auth(token))
+    assert r.json()["credits_spent"] == 53
+    bad = client.post("/api/content/video", json={"concept": "x", "image_url": "https://kotu.site/a.png"}, headers=auth(token))
+    assert bad.status_code == 400
+    assert _credits(client, token)["used"] == 53
+
+
+def test_image_with_reference_images(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    seen = {}
+    monkeypatch.setattr(content.gateway_media, "generate_image", lambda p, a, r=None: seen.update(refs=r) or (b"\x89PNG\r\n\x1a\n", "image/png"))
+    monkeypatch.setattr(content.storage, "save", lambda d, m, f: "https://storeabc123.public.blob.vercel-storage.com/gorsel/x.png")
+    token = register(client)
+    r = client.post("/api/content/image", json={"concept": "aynı ürün, beyaz fon", "reference_urls": [BLOB_URL + "urun.jpg"]}, headers=auth(token))
+    assert r.status_code == 200 and seen["refs"] == [BLOB_URL + "urun.jpg"]
+    assert client.post("/api/content/image", json={"concept": "x", "reference_urls": ["https://baska.com/a.jpg"]}, headers=auth(token)).status_code == 400
+
+
+def test_upload_token_rules(client, monkeypatch):
+    _enable_media(monkeypatch)
+    token = register(client)
+    ok = client.post("/api/uploads/token", json={"filename": "urun.JPG", "content_type": "image/jpeg", "size": 1000}, headers=auth(token))
+    assert ok.status_code == 200, ok.text
+    body = ok.json()
+    assert body["kind"] == "image" and body["pathname"].endswith(".jpg")
+    assert body["client_token"].startswith("vercel_blob_client_StoreAbc123_")
+    signature, payload = base64.b64decode(body["client_token"].split("_", 4)[4]).decode().split(".", 1)
+    assert hmac.new(BLOB_TOKEN.encode(), payload.encode(), hashlib.sha256).hexdigest() == signature
+    claims = json.loads(base64.b64decode(payload))
+    assert claims["pathname"] == body["pathname"] and claims["allowedContentTypes"] == ["image/jpeg"]
+
+    too_big = client.post("/api/uploads/token", json={"filename": "v.mp4", "content_type": "video/mp4", "size": 60 * 1024 * 1024}, headers=auth(token))
+    assert too_big.status_code == 413
+    wrong = client.post("/api/uploads/token", json={"filename": "a.exe", "content_type": "application/x-msdownload", "size": 10}, headers=auth(token))
+    assert wrong.status_code == 400
+
+
+def test_chat_with_attachments(client, monkeypatch):
+    _enable_media(monkeypatch)
+    from app.services import assistant
+
+    sent = {}
+    monkeypatch.setattr(assistant.storage, "fetch", lambda url, max_bytes=0: b"video-bytes" if url.endswith(".mp4") else b"%PDF-1.4")
+    monkeypatch.setattr(assistant, "chat_completion", lambda model, messages, max_tokens=0: sent.update(model=model, messages=messages) or "Harika bir video!")
+    token = register(client)
+    r = client.post(
+        "/api/content/chat",
+        json={
+            "messages": [
+                {"role": "user", "content": "Merhaba"},
+                {"role": "assistant", "content": "Selam, nasıl yardımcı olayım?"},
+                {
+                    "role": "user",
+                    "content": "Bu videoya benzer 3 Reels fikri",
+                    "attachments": [
+                        {"url": BLOB_URL + "ornek.mp4", "content_type": "video/mp4", "name": "ornek.mp4"},
+                        {"url": BLOB_URL + "katalog.pdf", "content_type": "application/pdf", "name": "katalog.pdf"},
+                    ],
+                },
+            ]
+        },
+        headers=auth(token),
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"reply": "Harika bir video!", "model": config.CHAT_VIDEO_MODEL, "credits_spent": 3}
+    last = sent["messages"][-1]["content"]
+    assert last[1]["type"] == "file" and last[1]["file"]["file_data"].startswith("data:video/mp4;base64,")
+    assert last[2]["file"]["filename"] == "katalog.pdf"
+    assert sent["messages"][0]["role"] == "system"
+    events = client.get("/api/plans/history", headers=auth(token)).json()["events"]
+    assert events[0]["label"] == "Fikir sohbeti" and events[0]["credits"] == 3
+
+
+def test_chat_text_only_uses_claude_and_refunds_on_error(client, monkeypatch):
+    _enable_media(monkeypatch)
+    from app.services import assistant
+    from app.services.llm_service import LLMError
+
+    monkeypatch.setattr(assistant, "chat_completion", lambda model, messages, max_tokens=0: (_ for _ in ()).throw(LLMError("kapalı")))
+    token = register(client)
+    r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Fikir ver"}]}, headers=auth(token))
+    assert r.status_code == 503
+    assert _credits(client, token)["used"] == 0
+    assert client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "  "}]}, headers=auth(token)).status_code == 400
+
+
+def test_describe_sample_for_video(client, monkeypatch):
+    _enable_media(monkeypatch)
+    from app.services import assistant
+
+    monkeypatch.setattr(assistant.storage, "fetch", lambda url, max_bytes=0: b"\xff\xd8\xff")
+    monkeypatch.setattr(assistant, "chat_completion", lambda model, messages, max_tokens=0: " Buzdolabı kapağı açılıyor. ")
+    token = register(client)
+    r = client.post(
+        "/api/content/describe",
+        json={"attachment": {"url": BLOB_URL + "a.jpg", "content_type": "image/jpeg", "name": "a.jpg"}, "target": "video"},
+        headers=auth(token),
+    )
+    assert r.json() == {"concept": "Buzdolabı kapağı açılıyor.", "credits_spent": 1}
 
 
 def test_plans_endpoint_shows_credit_examples(client):

@@ -16,6 +16,13 @@ const PATHS: Record<string, string> = {
   copy: "M8 8h12v12H8zM4 16V4h12",
   lock: "M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4",
   arrowLeft: "M19 12H5M11 18l-6-6 6-6",
+  arrowUp: "M12 19V5M6 11l6-6 6 6",
+  clip: "M21 11.5 12.5 20a5 5 0 0 1-7-7L14 4.5a3.3 3.3 0 0 1 4.7 4.7L10.2 17.7a1.7 1.7 0 0 1-2.4-2.4L15.5 7.6",
+  plus: "M12 5v14M5 12h14",
+  clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
+  ratio: "M4 6h16v12H4z",
+  image: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9.5h.01",
+  chevronDown: "M6 9l6 6 6-6",
 };
 
 export default function Icon({ name, size = 18 }: { name: keyof typeof PATHS | string; size?: number }) {

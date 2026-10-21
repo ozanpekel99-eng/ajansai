@@ -91,10 +91,14 @@ export type VideoDuration = 5 | 7 | 10;
 
 export type CreditCosts = {
   idea_per_2: number;
+  chat_message: number;
+  chat_attachment: number;
+  describe: number;
   image: number;
   ads_draft: number;
   /** çözünürlük → süre ("5" | "7" | "10") → kredi */
   video: Record<VideoResolution, Record<string, number>>;
+  video_audio: Record<VideoResolution, Record<string, number>>;
 };
 
 export type Usage = {

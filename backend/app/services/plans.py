@@ -6,8 +6,9 @@ kredi düşer. Kredi maliyetleri sağlayıcı maliyetine göre belirlendi
 
 - Fikir (Claude Sonnet 5): 2 fikir ≈ $0.006 → her 2 fikir 1 kredi
 - Görsel (Seedream 5.0 Pro): $0.035 → 4 kredi
-- Video 720p (Seedance 1.5 Pro, sessiz): $0.0259/sn
-- Video 1080p (Seedance 1.5 Pro, sessiz): $0.0583/sn
+- Sohbet mesajı (Claude Sonnet 5 / video ekinde Gemini 3.6 Flash): ≈ $0.01 → 1 kredi, her ek +1
+- Video 720p (Seedance 1.5 Pro): sessiz $0.0259/sn, sesli $0.0518/sn
+- Video 1080p (Seedance 1.5 Pro): sessiz $0.0583/sn, sesli $0.1166/sn
 - Video 4K (Seedance 2.0): token ile ücretlenir, $4 / 1M token;
   token = 3840×2160×24 fps×sn / 1024 ≈ 194.400/sn → ≈ $0.78/sn (en kötü durum)
 
@@ -21,13 +22,22 @@ VIDEO_DURATIONS = (5, 7, 10)
 VIDEO_RESOLUTIONS = ("720p", "1080p", "4k")
 
 CREDIT_COSTS = {
-    "idea_per_2": 1,  # her 2 fikir için
+    "idea_per_2": 1,  # her 2 fikir için (eski form akışı)
+    "chat_message": 1,  # fikir sohbetinde her mesaj
+    "chat_attachment": 1,  # mesaja eklenen her dosya
+    "describe": 1,  # örnek görsel/videodan konsept çıkarma
     "image": 4,
     "ads_draft": 0,
     # çözünürlük → süre (sn) → kredi
     "video": {
         "720p": {"5": 12, "7": 17, "10": 24},
         "1080p": {"5": 27, "7": 37, "10": 53},
+        "4k": {"5": 355, "7": 495, "10": 710},
+    },
+    # sesli video (4K'da ses fiyatı değişmez)
+    "video_audio": {
+        "720p": {"5": 24, "7": 34, "10": 48},
+        "1080p": {"5": 53, "7": 75, "10": 106},
         "4k": {"5": 355, "7": 495, "10": 710},
     },
 }
@@ -87,8 +97,12 @@ def idea_cost(count: int) -> int:
     return max(1, math.ceil(count / 2)) * CREDIT_COSTS["idea_per_2"]
 
 
-def video_cost(duration: int, resolution: str = "720p") -> int:
-    return CREDIT_COSTS["video"][resolution][str(duration)]
+def video_cost(duration: int, resolution: str = "720p", audio: bool = False) -> int:
+    return CREDIT_COSTS["video_audio" if audio else "video"][resolution][str(duration)]
+
+
+def chat_cost(attachments: int) -> int:
+    return CREDIT_COSTS["chat_message"] + attachments * CREDIT_COSTS["chat_attachment"]
 
 
 def public_plan(plan_id: str) -> dict:
@@ -105,7 +119,7 @@ def public_plan(plan_id: str) -> dict:
         "ads_enabled": p["ads_enabled"],
         # "Bu krediyle yalnızca X yaparsan" örnekleri
         "examples": {
-            "ideas": c // CREDIT_COSTS["idea_per_2"] * 2,
+            "messages": c // CREDIT_COSTS["chat_message"],  # dosyasız fikir sohbeti mesajı
             "images": c // CREDIT_COSTS["image"],
             # 5 sn videolar, çözünürlüğe göre
             "videos": {

@@ -13,7 +13,7 @@ export type Plan = {
   video_enabled: boolean;
   ads_enabled: boolean;
   /** Bu krediyle yalnızca o işlem yapılırsa kaç tane yapılabileceği */
-  examples: { ideas: number; images: number; videos: Record<VideoResolution, number> };
+  examples: { messages: number; images: number; videos: Record<VideoResolution, number> };
 };
 
 export type Pricing = { plans: Record<string, Plan>; trial: Plan; costs: CreditCosts };
@@ -41,11 +41,19 @@ export function usePlans() {
 
 export const DEFAULT_COSTS: CreditCosts = {
   idea_per_2: 1,
+  chat_message: 1,
+  chat_attachment: 1,
+  describe: 1,
   image: 4,
   ads_draft: 0,
   video: {
     "720p": { "5": 12, "7": 17, "10": 24 },
     "1080p": { "5": 27, "7": 37, "10": 53 },
+    "4k": { "5": 355, "7": 495, "10": 710 },
+  },
+  video_audio: {
+    "720p": { "5": 24, "7": 34, "10": 48 },
+    "1080p": { "5": 53, "7": 75, "10": 106 },
     "4k": { "5": 355, "7": 495, "10": 710 },
   },
 };
@@ -60,8 +68,12 @@ export const VIDEO_RESOLUTIONS: { value: VideoResolution; label: string }[] = [
 export const ideaCredits = (count: number, costs: CreditCosts = DEFAULT_COSTS) =>
   Math.max(1, Math.ceil(count / 2)) * costs.idea_per_2;
 
-export const videoCredits = (duration: VideoDuration, resolution: VideoResolution = "720p", costs: CreditCosts = DEFAULT_COSTS) =>
-  costs.video[resolution][String(duration)];
+export const videoCredits = (
+  duration: VideoDuration,
+  resolution: VideoResolution = "720p",
+  costs: CreditCosts = DEFAULT_COSTS,
+  audio = false,
+) => (audio ? costs.video_audio ?? DEFAULT_COSTS.video_audio : costs.video)[resolution][String(duration)];
 
 export const tl = (n: number) => `₺${n.toLocaleString("tr-TR")}`;
 export const num = (n: number) => n.toLocaleString("tr-TR");

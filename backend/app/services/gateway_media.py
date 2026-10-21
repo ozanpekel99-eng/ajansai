@@ -67,15 +67,15 @@ def _sniff_mime(data: bytes) -> str:
     return "image/png"
 
 
-def generate_image(prompt: str, aspect_ratio: str) -> tuple[bytes, str]:
-    """(görsel baytları, mime) döndürür. aspect_ratio örn. "9:16"."""
-    data = _post(
-        "/image-model",
-        config.IMAGE_MODEL,
-        "image",
-        {"prompt": prompt, "n": 1, "aspectRatio": aspect_ratio},
-        timeout=150,
-    )
+def generate_image(prompt: str, aspect_ratio: str, reference_urls: list[str] | None = None) -> tuple[bytes, str]:
+    """(görsel baytları, mime) döndürür. aspect_ratio örn. "9:16".
+
+    reference_urls verilirse model bu görselleri örnek alır (ürün, stil, kompozisyon).
+    """
+    body = {"prompt": prompt, "n": 1, "aspectRatio": aspect_ratio}
+    if reference_urls:
+        body["files"] = [{"type": "url", "url": u} for u in reference_urls]
+    data = _post("/image-model", config.IMAGE_MODEL, "image", body, timeout=150)
     images = data.get("images") or []
     if not images:
         raise MediaError(f"Görsel dönmedi: {str(data)[:300]}")
@@ -86,18 +86,34 @@ def generate_image(prompt: str, aspect_ratio: str) -> tuple[bytes, str]:
     return payload, _sniff_mime(payload)
 
 
-def start_video(prompt: str, duration: int, resolution: str = "720p", image_url: str | None = None) -> dict:
-    """Video işini başlatır. Durum sorgusu için {"model", "operation"} döndürür."""
+def start_video(
+    prompt: str,
+    duration: int,
+    resolution: str = "720p",
+    image_url: str | None = None,
+    end_image_url: str | None = None,
+    audio: bool = False,
+    aspect_ratio: str = "9:16",
+) -> dict:
+    """Video işini başlatır. Durum sorgusu için {"model", "operation"} döndürür.
+
+    image_url başlangıç karesi (görselden video), end_image_url bitiş karesidir.
+    """
     model, size = config.VIDEO_MODELS[resolution]
     body = {
         "prompt": prompt,
         "n": 1,
-        "aspectRatio": "9:16",
+        "aspectRatio": aspect_ratio,
         "resolution": size,
         "duration": duration,
-        "generateAudio": False,
+        "generateAudio": audio,
     }
-    if image_url:
+    if image_url and end_image_url:
+        body["frameImages"] = [
+            {"image": {"type": "url", "url": image_url}, "frameType": "first_frame"},
+            {"image": {"type": "url", "url": end_image_url}, "frameType": "last_frame"},
+        ]
+    elif image_url:
         body["image"] = {"type": "url", "url": image_url}
     data = _post("/video-model/start", model, "video", body, timeout=60)
     if data.get("operation") is None:
