@@ -185,6 +185,10 @@ function AccountStep({ plan, planName, onBack, onDone }: { plan: string; planNam
           </button>
         </form>
 
+        <p className="faint" style={{ fontSize: 12.5, marginTop: 12 }}>
+          Hesap oluşturarak <Link href="/kosullar">Kullanım Koşulları</Link>'nı ve <Link href="/gizlilik">Gizlilik Politikası</Link>'nı kabul
+          etmiş olursun.
+        </p>
         <div className="switch-link">
           Zaten hesabın var mı? <Link href="/login">Giriş yap</Link>
         </div>

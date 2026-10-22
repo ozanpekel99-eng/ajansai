@@ -3282,3 +3282,27 @@ table.data td.num {
   color: var(--text-2);
   cursor: pointer;
 }
+
+/* ---------- Yasal sayfalar ---------- */
+.legal {
+  max-width: 760px;
+  line-height: 1.7;
+}
+
+.legal h1 {
+  margin-bottom: 4px;
+}
+
+.legal h2 {
+  margin: 28px 0 8px;
+  font-size: 19px;
+}
+
+.legal p,
+.legal li {
+  color: var(--text-2);
+}
+
+.legal a {
+  color: var(--text);
+}
