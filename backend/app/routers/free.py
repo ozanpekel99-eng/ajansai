@@ -57,7 +57,7 @@ class FreeMessage(BaseModel):
 class FreeChatRequest(BaseModel):
     messages: list[FreeMessage] = Field(..., min_length=1, max_length=40)
     # "image": kullanıcı + menüsünden "Görsel oluştur"u seçti
-    mode: Literal["chat", "image"] = "chat"
+    mode: Literal["chat", "image", "search"] = "chat"
 
 
 def make_free_image(subject: str, user: dict | None, prompt: str, refs: list[str], translate: bool) -> tuple[str | None, str | None, bool]:
@@ -109,7 +109,9 @@ def chat(payload: FreeChatRequest, request: Request, user: dict | None = Depends
     for m in history[:-1]:
         m["attachments"] = []  # eski eklerin yalnızca son mesajdaki hali kullanılır
     try:
-        text, image_prompt = free_tier.chat(subject, user is not None, history, files, force_image=payload.mode == "image")
+        text, image_prompt, sources = free_tier.chat(
+            subject, user is not None, history, files, force_image=payload.mode == "image", force_search=payload.mode == "search"
+        )
     except free_tier.FreeLimitError as e:
         raise HTTPException(status_code=429, detail=str(e))
     except free_tier.FreeServiceError as e:
@@ -128,6 +130,7 @@ def chat(payload: FreeChatRequest, request: Request, user: dict | None = Depends
         "images": images,
         "image_prompt": image_prompt,
         "image_error": image_error,
+        "sources": sources,
         "free": free_tier.status(subject, user is not None),
     }
 

@@ -5,6 +5,7 @@ const PATHS: Record<string, string> = {
   tag: "M3 12V4h8l10 10-8 8zM7.5 7.5h.01",
   megaphone: "M3 10v4h3l6 4V6L6 10zM16 8a5 5 0 0 1 0 8M19 5a9 9 0 0 1 0 14",
   video: "M3 6h12v12H3zM15 10l6-3v10l-6-3",
+  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z",
   mic: "M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3",
   wave: "M3 10v4M7 7v10M11 4v16M15 8v8M19 6v12M23 10v4",
   speaker: "M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 0 1 0 7",

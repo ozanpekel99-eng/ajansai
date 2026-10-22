@@ -235,7 +235,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(..., min_length=1, max_length=40)
-    mode: Literal["chat", "image"] = "chat"
+    mode: Literal["chat", "image", "search"] = "chat"
 
 
 @router.post("/chat")
@@ -265,13 +265,16 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
     credits = chat_cost(len(last.attachments), pages)
     event_id = _charge(user["id"], "chat", credits, last.content.strip()[:200] or "Dosya incelemesi")
     try:
-        text, model = assistant.reply([m.model_dump() for m in payload.messages[-20:]], force_image=payload.mode == "image")
+        text, model, image_prompt, sources = assistant.reply(
+            [m.model_dump() for m in payload.messages[-20:]],
+            force_image=payload.mode == "image",
+            force_search=payload.mode == "search",
+        )
     except (LLMError, storage.StorageError) as e:
         logger.error("Sohbet yanıtı alınamadı: %s", e)
         refund(event_id)
         raise HTTPException(status_code=503, detail="Yapay zeka şu an yanıt veremedi, kredin iade edildi. Birazdan tekrar dene.")
 
-    text, image_prompt = free_tier.split_image_request(text)
     images, image_error = [], None
     if image_prompt:
         refs = [a.url for a in last.attachments if storage.kind_of(a.content_type) == "image"][:4]
@@ -284,6 +287,7 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
         "model": model,
         "images": images,
         "image_error": image_error,
+        "sources": sources,
         "credits_spent": credits,
     }
 

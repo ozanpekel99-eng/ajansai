@@ -413,7 +413,7 @@ def test_chat_with_attachments(client, monkeypatch):
         headers=auth(token),
     )
     assert r.status_code == 200, r.text
-    assert r.json() == {"reply": "Harika bir video!", "model": config.CHAT_VIDEO_MODEL, "images": [], "image_error": None, "credits_spent": 3}
+    assert r.json() == {"reply": "Harika bir video!", "model": config.CHAT_VIDEO_MODEL, "images": [], "image_error": None, "sources": [], "credits_spent": 3}
     last = sent["messages"][-1]["content"]
     assert last[1]["type"] == "file" and last[1]["file"]["file_data"].startswith("data:video/mp4;base64,")
     assert last[2]["file"]["filename"] == "katalog.pdf"

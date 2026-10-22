@@ -106,7 +106,7 @@ def _trim_history(history: list[dict]) -> list[dict]:
     return kept
 
 
-def reply(history: list[dict], force_image: bool = False) -> tuple[str, str]:
+def reply(history: list[dict], force_image: bool = False, force_search: bool = False) -> tuple[str, str, str | None, list[dict]]:
     """Sohbet geçmişine yanıt verir. (metin, kullanılan_model) döndürür.
 
     Geçmişteki eski eklerin yalnızca adı gönderilir; dosyaların kendisi son mesajla gider.
@@ -114,7 +114,11 @@ def reply(history: list[dict], force_image: bool = False) -> tuple[str, str]:
     from app.services import free_tier  # döngüsel içe aktarmayı önlemek için burada
 
     history = _trim_history(history)
-    system = SYSTEM_PROMPT + free_tier.IMAGE_TOOL_NOTE + (free_tier.FORCE_IMAGE_NOTE if force_image else "")
+    from app.services import web_search
+
+    system = SYSTEM_PROMPT + web_search.today_line() + free_tier.IMAGE_TOOL_NOTE + (free_tier.FORCE_IMAGE_NOTE if force_image else "")
+    if web_search.enabled():
+        system += web_search.SEARCH_NOTE
     messages = [{"role": "system", "content": system}]
     has_video = False
     last = len(history) - 1
@@ -136,14 +140,19 @@ def reply(history: list[dict], force_image: bool = False) -> tuple[str, str]:
 
     model = config.CHAT_VIDEO_MODEL if has_video else config.CHAT_MODEL
     text_only = all(isinstance(m["content"], str) for m in messages)
-    try:
-        return chat_completion(model, messages, max_tokens=MAX_REPLY_TOKENS), model
-    except LLMError:
-        # AI Gateway'e ulaşılamazsa (ör. ödeme yöntemi yok) dosyasız mesajlar
-        # ücretsiz sağlayıcı zinciriyle yanıtlanır; dosyalı mesajlar hata verir.
-        if not text_only:
-            raise
-        return free_chat_completion(messages, max_tokens=MAX_REPLY_TOKENS)
+    if force_search and web_search.enabled():
+        text = f"[[ARA: {(history[-1].get('content') or '')[:300]}]]"
+    else:
+        try:
+            text = chat_completion(model, messages, max_tokens=MAX_REPLY_TOKENS)
+        except LLMError:
+            # AI Gateway'e ulaşılamazsa (ör. ödeme yöntemi yok) dosyasız mesajlar
+            # ücretsiz sağlayıcı zinciriyle yanıtlanır; dosyalı mesajlar hata verir.
+            if not text_only:
+                raise
+            text, model = free_chat_completion(messages, max_tokens=MAX_REPLY_TOKENS)
+    text, image_prompt, sources = free_tier.finish_reply(text, messages)
+    return text, (model if not sources else "web"), image_prompt, sources
 
 
 DESCRIBE_PROMPT = {

@@ -123,6 +123,10 @@ TTS_VOICE = _env("TTS_VOICE", "tr-TR-Chirp3-HD-Achernar")
 TTS_DAILY_CHARS = _int("TTS_DAILY_CHARS", 30000)
 TTS_CHARS_PER_DAY_SUBJECT = _int("TTS_CHARS_PER_DAY_SUBJECT", 6000)
 
+# Sohbette canlı web araması: Groq yerleşik araması (GROQ_API_KEY ile) ya da Tavily
+TAVILY_API_KEY = _env("TAVILY_API_KEY")
+SEARCH_MODEL = _env("SEARCH_MODEL", "openai/gpt-oss-120b")
+
 # Stok fotoğraf kütüphanesi: Pixabay (öncelikli) veya Pexels, ikisi de ücretsiz API anahtarı
 PIXABAY_API_KEY = _env("PIXABAY_API_KEY")
 PEXELS_API_KEY = _env("PEXELS_API_KEY")

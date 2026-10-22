@@ -15,6 +15,7 @@ export type Msg = {
   attachments?: PendingFile[];
   images?: string[];
   imageError?: string | null;
+  sources?: { title: string; url: string }[];
 };
 export type Conversation = { id: string; title: string; at: number; messages: Msg[] };
 
@@ -63,7 +64,8 @@ type Props = {
 
 export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, videoHref, tools, initial }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [imageMode, setImageMode] = useState(false);
+  const [mode, setMode] = useState<"chat" | "image" | "search">("chat");
+  const imageMode = mode === "image";
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -125,10 +127,10 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
     setError("");
     setSending(true);
     try {
-      const data = await api<{ reply: string; images?: string[]; image_error?: string | null }>(endpoint, {
+      const data = await api<{ reply: string; images?: string[]; image_error?: string | null; sources?: { title: string; url: string }[] }>(endpoint, {
         method: "POST",
         body: JSON.stringify({
-          mode: imageMode ? "image" : "chat",
+          mode,
           messages: next.map((m) => ({
             role: m.role,
             content: m.content,
@@ -136,8 +138,14 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
           })),
         }),
       });
-      const reply: Msg = { role: "assistant", content: data.reply, images: data.images || [], imageError: data.image_error };
-      setImageMode(false);
+      const reply: Msg = {
+        role: "assistant",
+        content: data.reply,
+        images: data.images || [],
+        imageError: data.image_error,
+        sources: data.sources || [],
+      };
+      setMode("chat");
       const done = [...next, reply];
       setMessages(done);
       messagesRef.current = done;
@@ -248,6 +256,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
   };
 
   const lastUserWithImages = [...messages].reverse().find((m) => m.role === "user");
+  const pendingSearch = sending && mode === "search";
   const pendingImage = sending && (imageMode || /görsel|resim|fotoğraf|afiş|post|çiz/i.test(lastUserWithImages?.content || ""));
 
   return (
@@ -287,6 +296,17 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                       </div>
                     )}
                     {m.imageError && <div className="notice">{m.imageError}</div>}
+                    {!!m.sources?.length && (
+                      <div className="sources">
+                        <span className="faint">Kaynaklar</span>
+                        {m.sources.map((src, k) => (
+                          <a key={src.url} href={src.url} target="_blank" rel="noreferrer" title={src.title}>
+                            <span className="n">{k + 1}</span>
+                            {hostOf(src.url)}
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     <div className="actions">
                       <button className="btn btn-ghost btn-sm" type="button" onClick={() => copy(m.content, i)}>
                         <Icon name="copy" size={14} /> {copied === i ? "Kopyalandı" : "Kopyala"}
@@ -316,6 +336,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                     <span />
                   </div>
                   {pendingImage && <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>Görsel hazırlanıyor…</div>}
+                  {pendingSearch && <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>İnternette aranıyor…</div>}
                 </div>
               </div>
             )}
@@ -340,10 +361,10 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
             </button>
           </div>
         )}
-        {imageMode && (
+        {mode !== "chat" && (
           <div className="mode-chip">
-            <Icon name="image" size={14} /> Görsel oluştur
-            <button type="button" aria-label="Görsel modunu kapat" onClick={() => setImageMode(false)}>
+            <Icon name={mode === "image" ? "image" : "globe"} size={14} /> {mode === "image" ? "Görsel oluştur" : "Web'de ara"}
+            <button type="button" aria-label="Modu kapat" onClick={() => setMode("chat")}>
               <Icon name="close" size={12} />
             </button>
           </div>
@@ -383,7 +404,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                   role="menuitem"
                   onClick={() => {
                     setMenuOpen(false);
-                    setImageMode(true);
+                    setMode("image");
                     boxRef.current?.focus();
                   }}
                 >
@@ -391,6 +412,21 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                   <span>
                     <strong>Görsel oluştur</strong>
                     <small>Tarif et ya da eklediğin görselden üret</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setMode("search");
+                    boxRef.current?.focus();
+                  }}
+                >
+                  <Icon name="globe" size={18} />
+                  <span>
+                    <strong>Web'de ara</strong>
+                    <small>Güncel haber ve bilgileri bul</small>
                   </span>
                 </button>
                 {tools?.video && <MenuLink icon="video" title="Video oluştur" desc="Reels ve hikâye için kısa video" tool={tools.video} />}
@@ -408,7 +444,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
               e.target.style.height = `${Math.min(e.target.scrollHeight, 220)}px`;
             }}
             onKeyDown={onKey}
-            placeholder={imageMode ? "Görseli tarif et…" : "Bir şey sor…"}
+            placeholder={mode === "image" ? "Görseli tarif et…" : mode === "search" ? "Ne aramak istiyorsun?" : "Bir şey sor…"}
             aria-label="Mesaj"
           />
           {voice.canListen && (
@@ -463,4 +499,12 @@ function MenuLink({ icon, title, desc, tool }: { icon: string; title: string; de
       </span>
     </Link>
   );
+}
+
+function hostOf(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }

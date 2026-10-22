@@ -25,8 +25,8 @@ from sqlalchemy import and_, delete, func, select
 
 from app import config
 from app.db import free_events, get_engine, stock_cache, utcnow
-from app.services import assistant
-from app.services.llm_service import free_chat_completion
+from app.services import assistant, web_search
+from app.services.llm_service import LLMError, free_chat_completion
 
 logger = logging.getLogger("ajansai.free")
 
@@ -175,8 +175,9 @@ def chat(
     history: list[dict],
     attachments: list[dict] | None = None,
     force_image: bool = False,
-) -> tuple[str, str | None]:
-    """(yanıt metni, görsel istemi veya None) döndürür.
+    force_search: bool = False,
+) -> tuple[str, str | None, list[dict]]:
+    """(yanıt metni, görsel istemi veya None, web kaynakları) döndürür.
 
     attachments: son mesajın ekleri; her biri {"kind", "name", "data"(bayt)}.
     Belgeler metne çevrilip mesaja eklenir; görseller görebilen ücretsiz modele (Qwen) gider.
@@ -187,7 +188,9 @@ def chat(
         + ("Yarın devam edebilir ya da bir paket seçebilirsin." if signed_in else "Üye olursan günde daha fazla mesaj yazabilirsin.")
     )
     event_id = _reserve(subject, "chat", lim, DAY, config.FREE_CHAT_PER_DAY_TOTAL, msg)
-    system = assistant.SYSTEM_PROMPT + FREE_NOTE + (IMAGE_TOOL_NOTE if image_enabled() else "")
+    system = assistant.SYSTEM_PROMPT + web_search.today_line() + FREE_NOTE + (IMAGE_TOOL_NOTE if image_enabled() else "")
+    if web_search.enabled():
+        system += web_search.SEARCH_NOTE
     if force_image and image_enabled():
         system += FORCE_IMAGE_NOTE
     messages = [{"role": "system", "content": system}]
@@ -215,11 +218,29 @@ def chat(
         else:
             messages.append({"role": "user", "content": content or "(dosya)"})
     try:
-        text, _ = free_chat_completion(messages, max_tokens=1200, vision=bool(images))
+        if force_search and web_search.enabled():
+            text = f"[[ARA: {(history[-1].get('content') or '')[:300]}]]"
+        else:
+            text, _ = free_chat_completion(messages, max_tokens=1200, vision=bool(images))
     except Exception:
         release(event_id)
         raise
-    return split_image_request(text)
+    return finish_reply(text, messages)
+
+
+def finish_reply(text: str, messages: list[dict]) -> tuple[str, str | None, list[dict]]:
+    """Yanıttaki arama ve görsel isteklerini işler: (metin, görsel istemi, kaynaklar)."""
+    sources: list[dict] = []
+    query = web_search.split_search_request(text)
+    if query:
+        try:
+            text, sources = web_search.answer(messages, query)
+        except LLMError as e:
+            logger.error("Web araması yapılamadı: %s", e)
+            rest = web_search.SEARCH_TAG.sub("", text).strip()
+            text = rest or "Şu an internette arama yapamadım. Biraz sonra tekrar dener misin?"
+    text, image_prompt = split_image_request(text)
+    return text, image_prompt, sources
 
 
 # ---------------- Ücretsiz AI görseli (Cloudflare Workers AI) ----------------
