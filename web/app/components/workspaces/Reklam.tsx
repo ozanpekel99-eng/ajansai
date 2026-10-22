@@ -93,9 +93,17 @@ export default function ReklamWorkspace(_: WorkspaceProps) {
       <div className="panel ws-panel" style={{ maxWidth: 560 }}>
         <h2>Meta hesabını bağla</h2>
         <p className="muted" style={{ marginTop: 0 }}>
-          Kendi Meta Business hesabını bağlarsın. Reklam bütçesi senin reklam hesabından harcanır; reklamlar yalnızca Instagram'da
+          Facebook hesabınla giriş yaparsın; reklam bütçesi kendi reklam hesabından harcanır. Reklamlar yalnızca Instagram'da
           gösterilir ve sen "Yayına al" demeden yayına girmez.
         </p>
+        <ol className="connect-tips">
+          <li>Açılan Meta ekranında devam et.</li>
+          <li>
+            İzin ekranında <strong>reklam hesabını, Facebook sayfanı ve Instagram hesabını</strong> işaretle (gerekirse &quot;Ayarları
+            düzenle&quot; ile tümünü seç).
+          </li>
+          <li>Eksik bir şey varsa (kart, sayfa, Instagram) burada adım adım gösteririz.</li>
+        </ol>
         {error && <div className="notice error">{error}</div>}
         <button className="btn btn-primary btn-block" onClick={connect}>
           Meta ile bağlan
@@ -119,8 +127,81 @@ export default function ReklamWorkspace(_: WorkspaceProps) {
           Meta bağlantısını kaldır
         </button>
       </div>
+      <SetupChecklist onReconnect={connect} />
       {view === "new" ? <NewAd onCreated={() => setView("list")} /> : <AdList />}
     </>
+  );
+}
+
+/* ---------------- Hazırlık kontrolü ---------------- */
+
+type SetupStep = { key: string; done: boolean; title: string; text: string; action: string; url: string };
+
+function SetupChecklist({ onReconnect }: { onReconnect: () => void }) {
+  const [data, setData] = useState<{ ready: boolean; steps: SetupStep[] } | null>(null);
+  const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
+
+  const check = async () => {
+    setChecking(true);
+    setError("");
+    try {
+      setData(await api("/api/ads/meta/setup"));
+    } catch (e) {
+      setError((e as ApiError).message);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    check();
+    // Kullanıcı Meta sekmesinden dönünce otomatik tekrar kontrol
+    const onFocus = () => document.visibilityState === "visible" && check();
+    document.addEventListener("visibilitychange", onFocus);
+    return () => document.removeEventListener("visibilitychange", onFocus);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (error) {
+    return (
+      <div className="notice error" style={{ marginBottom: 16 }}>
+        <span>Meta hesabın kontrol edilemedi: {error}</span>
+        <button type="button" className="btn btn-light btn-sm" onClick={onReconnect}>
+          Yeniden bağlan
+        </button>
+      </div>
+    );
+  }
+  if (!data || data.ready) return null;
+  const left = data.steps.filter((s) => !s.done).length;
+  return (
+    <section className="panel setup-list" aria-label="Reklam hazırlığı">
+      <div className="setup-head">
+        <div>
+          <h3>Reklam vermeden önce {left} adım kaldı</h3>
+          <p className="muted">Her adım Meta&apos;nın kendi sayfasında açılır; bitirip buraya dönünce otomatik kontrol ederiz.</p>
+        </div>
+        <button type="button" className="btn btn-light btn-sm" onClick={check} disabled={checking}>
+          {checking ? "Kontrol ediliyor…" : "Tekrar kontrol et"}
+        </button>
+      </div>
+      <ol>
+        {data.steps.map((s) => (
+          <li key={s.key} className={s.done ? "done" : ""}>
+            <span className="setup-mark" aria-hidden="true">{s.done ? "✓" : ""}</span>
+            <div>
+              <strong>{s.title}</strong>
+              <p>{s.text}</p>
+            </div>
+            {!s.done && (
+              <a className="btn btn-primary btn-sm" href={s.url} target="_blank" rel="noreferrer">
+                {s.action}
+              </a>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

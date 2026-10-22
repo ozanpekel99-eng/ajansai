@@ -3776,3 +3776,83 @@ table.data td.num {
 .library-actions .icon-btn {
   margin-left: auto;
 }
+
+/* ---------- Meta hazırlık listesi ---------- */
+.connect-tips {
+  margin: 0 0 16px;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.setup-list {
+  margin-bottom: 18px;
+  padding: 18px 20px;
+}
+
+.setup-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.setup-head h3 {
+  margin: 0 0 4px;
+}
+
+.setup-head p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.setup-list ol {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-list li {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.setup-list li p {
+  margin: 2px 0 0;
+  color: var(--muted, #8a8f98);
+  font-size: 13px;
+}
+
+.setup-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  font-size: 13px;
+}
+
+.setup-list li.done .setup-mark {
+  color: #fff;
+  border-color: #22a06b;
+  background: #22a06b;
+}
+
+@media (max-width: 640px) {
+  .setup-list li {
+    grid-template-columns: 26px 1fr;
+  }
+
+  .setup-list li .btn {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

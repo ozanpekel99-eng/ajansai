@@ -137,6 +137,13 @@ def _meta_call(fn, *args, **kwargs):
         raise HTTPException(status_code=502, detail=str(e))
 
 
+@router.get("/meta/setup")
+def meta_setup(user: dict = Depends(get_current_user)):
+    """Reklam öncesi hazırlık listesi: eksik adımlar ve tek tıklık çözüm bağlantıları."""
+    _require_ads(user)
+    return _meta_call(meta.setup_status, _get_token(user["id"]))
+
+
 @router.get("/meta/pages")
 def meta_pages(user: dict = Depends(get_current_user)):
     _require_ads(user)

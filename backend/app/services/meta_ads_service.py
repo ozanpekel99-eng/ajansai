@@ -418,3 +418,50 @@ def campaign_insights(token: str, campaign_id: str) -> dict:
 
 def object_status(token: str, campaign_id: str) -> str:
     return _graph("GET", campaign_id, token, fields="effective_status").get("effective_status", "UNKNOWN")
+
+
+def setup_status(token: str) -> dict:
+    """Reklam vermeye hazır mı? Reklam hesabı, ödeme yöntemi, Facebook sayfası ve Instagram kontrolü.
+
+    Eksik adımlar için Meta'nın ilgili sayfasına giden bağlantılar döndürülür (kart bilgisi
+    Meta'nın kendi sayfasında girilir; API ile kart eklenemez).
+    """
+    accounts = _graph(
+        "GET", "me/adaccounts", token,
+        fields="account_id,name,currency,account_status,disable_reason,funding_source,funding_source_details{display_string}",
+        limit=50,
+    ).get("data", [])
+    pages = _graph("GET", "me/accounts", token, fields="id,name,instagram_business_account{id,username}", limit=100).get("data", [])
+    active = [a for a in accounts if a.get("account_status") == 1]
+    paid = [a for a in active if a.get("funding_source") or (a.get("funding_source_details") or {}).get("display_string")]
+    instagram = [p for p in pages if p.get("instagram_business_account")]
+    first = (paid or active or accounts or [{}])[0].get("account_id")
+    steps = [
+        {
+            "key": "ad_account", "done": bool(active), "title": "Reklam hesabı",
+            "text": "Meta'da aktif bir reklam hesabın olmalı." if not accounts
+            else ("Reklam hesabın devre dışı; Meta'dan aktifleştirmen gerekiyor." if not active else f"{active[0].get('name')} hazır."),
+            "action": "Reklam hesabı oluştur", "url": "https://business.facebook.com/latest/settings/ad_accounts",
+        },
+        {
+            "key": "payment", "done": bool(paid), "title": "Ödeme yöntemi (kart)",
+            "text": "Reklam bütçesi kartından Meta tarafından çekilir. Kartını Meta'nın güvenli sayfasında eklersin."
+            if not paid else (paid[0].get("funding_source_details") or {}).get("display_string") or "Kart tanımlı.",
+            "action": "Kart ekle",
+            "url": f"https://business.facebook.com/billing_hub/payment_settings/?asset_id={first}" if first
+            else "https://business.facebook.com/billing_hub/payment_settings/",
+        },
+        {
+            "key": "page", "done": bool(pages), "title": "Facebook sayfası",
+            "text": "Meta, reklamın kimin adına gösterileceğini sayfadan alır (reklam yalnızca Instagram'da çıksa da). 1 dakikada açılır."
+            if not pages else f"{pages[0].get('name')} hazır.",
+            "action": "Sayfa oluştur", "url": "https://www.facebook.com/pages/create",
+        },
+        {
+            "key": "instagram", "done": bool(instagram), "title": "Instagram hesabı",
+            "text": "Instagram hesabını profesyonel hesaba çevirip Facebook sayfana bağla (Instagram > Ayarlar > Hesap Merkezi)."
+            if not instagram else f"@{instagram[0]['instagram_business_account'].get('username')} bağlı.",
+            "action": "Instagram'ı bağla", "url": "https://business.facebook.com/latest/settings/instagram_account",
+        },
+    ]
+    return {"ready": all(s["done"] for s in steps), "steps": steps}
