@@ -15,30 +15,16 @@ def test_split_video_request_and_image_aspect():
     assert free_tier.image_aspect("a latte") == ("1:1", "a latte")
 
 
-def test_paid_chat_starts_video_job(client, monkeypatch):
+def test_paid_chat_suggests_video_page_instead_of_generating(client, monkeypatch):
     _enable_media(monkeypatch)
-    monkeypatch.setattr(assistant, "chat_completion", lambda model, messages, max_tokens=0: "Videon geliyor.\n[[VIDEO: 9:16 | 5 | iced coffee pouring, slow motion]]")
-    started = {}
-
-    def fake_start(prompt, duration, resolution, image_url, end_image_url, audio, aspect):
-        started.update(prompt=prompt, duration=duration, resolution=resolution, audio=audio, aspect=aspect)
-        return {"model": "bytedance/seedance-v1.5-pro", "operation": {"id": "op1"}}
-
-    monkeypatch.setattr(gateway_media, "start_video", fake_start)
+    monkeypatch.setattr(assistant, "chat_completion", lambda model, messages, max_tokens=0: "Video sayfasında oluşturabilirsin.\n[[VIDEO: 9:16 | 5 | iced coffee pouring, slow motion]]")
+    monkeypatch.setattr(gateway_media, "start_video", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sohbette video başlamamalı")))
     token = register_paid(client, plan="pro")
     r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Buzlu kahve videosu yap"}]}, headers=auth(token))
     data = r.json()
     assert r.status_code == 200, r.text
-    assert data["reply"] == "Videon geliyor." and len(data["videos"]) == 1 and data["videos"][0]["job_id"]
-    assert started == {"prompt": "iced coffee pouring, slow motion", "duration": 5, "resolution": "720p", "audio": True, "aspect": "9:16"}
-    assert data["credits_spent"] == 1 + 24
-
-
-def test_video_mode_requires_video_plan(client, monkeypatch):
-    _enable_media(monkeypatch)
-    token = register(client)  # ücretsiz paket
-    r = client.post("/api/content/chat", json={"mode": "video", "messages": [{"role": "user", "content": "video"}]}, headers=auth(token))
-    assert r.status_code == 402 and "Video" in r.json()["detail"]
+    assert data["reply"] == "Video sayfasında oluşturabilirsin." and data["credits_spent"] == 1
+    assert data["video"] == {"concept": "iced coffee pouring, slow motion", "aspect": "9:16", "duration": 5, "image_url": None, "enabled": True}
 
 
 def test_paid_chat_remembers_generated_image_for_video(client, monkeypatch):
@@ -53,8 +39,6 @@ def test_paid_chat_remembers_generated_image_for_video(client, monkeypatch):
         return "Tamam.\n[[VIDEO: 9:16 | 5 | ref=görsel-1 | milk slowly pours into the iced latte]]"
 
     monkeypatch.setattr(assistant, "chat_completion", fake_chat)
-    started = {}
-    monkeypatch.setattr(gateway_media, "start_video", lambda prompt, d, r, image_url, e, a, asp: started.update(image=image_url, prompt=prompt) or {"model": "m", "operation": {}})
     token = register_paid(client, plan="pro")
     old = BLOB_URL + "latte.png"
     body = {"messages": [
@@ -64,7 +48,7 @@ def test_paid_chat_remembers_generated_image_for_video(client, monkeypatch):
     ]}
     r = client.post("/api/content/chat", json=body, headers=auth(token))
     assert r.status_code == 200, r.text
-    assert started == {"image": old, "prompt": "milk slowly pours into the iced latte"}
+    assert r.json()["video"]["image_url"] == old and r.json()["video"]["concept"] == "milk slowly pours into the iced latte"
     assert "görsel-1" in seen["messages"][2]["content"] and "baska.com" not in str(seen["messages"])
     assert "ref=görsel-N" in seen["messages"][0]["content"]
 

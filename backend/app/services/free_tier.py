@@ -211,13 +211,13 @@ def extract_ref(prompt: str, labels: dict[str, str]) -> tuple[str | None, str]:
 
 # Sohbetten video üretimi (yalnızca ücretli paketler)
 VIDEO_TOOL_NOTE = (
-    "\n- Video da üretebilirsin. Kullanıcı açıkça bir video, reels veya animasyon üretmeni isterse yanıtını kısa tut "
-    "(1-2 cümle) ve en sona tek satır ekle: [[VIDEO: <oran> | <süre> | <İngilizce, 40-80 kelimelik video istemi: sahne, "
-    "özne ve hareketi, kamera hareketi, ışık, atmosfer, stil>]]. <oran>: 9:16 (varsayılan, reels/story), 1:1 veya 16:9. "
-    "<süre>: 5 veya 10 (saniye, varsayılan 5). Kullanıcı görsel eklediyse video o görselden başlar. Video istenmedikçe "
-    "bu satırı ekleme; video üretemeyeceğini söyleme, satırı eklemen yeterli."
+    "\n- Video sohbette üretilmez; ajansAI'ın Video sayfasında (süre, çözünürlük, ses ve başlangıç karesi seçilerek) "
+    "üretilir. Kullanıcı video, reels veya animasyon isterse 1-2 cümleyle kısa bir video konsepti öner, Video sayfasında "
+    "oluşturabileceğini söyle ve en sona tek satır ekle: [[VIDEO: <oran> | <süre> | <İngilizce, 40-80 kelimelik video "
+    "istemi: sahne, özne ve hareketi, kamera hareketi, ışık, atmosfer, stil>]]. <oran>: 9:16 (varsayılan), 1:1 veya 16:9; "
+    "<süre>: 5 veya 10. Önceki bir görselden yapılacaksa ref=görsel-N ekle. Sistem bu satırla Video sayfasını hazır "
+    "doldurulmuş açan bir buton gösterir. Videoyu kendin üretemeyeceğini uzun uzun anlatma."
 )
-FORCE_VIDEO_NOTE = "\n- Kullanıcı bu mesajda 'Video oluştur' seçeneğini kullandı: mutlaka en sona [[VIDEO: ...]] satırını ekle."
 SYSTEM_NOTE = re.compile(r"\[Sistem notu:[^\]]*\]", re.IGNORECASE)
 VIDEO_TAG = re.compile(r"\[\[\s*V[İI]DEO\s*:\s*(.+?)\]\]", re.IGNORECASE | re.DOTALL)
 

@@ -112,7 +112,7 @@ def _trim_history(history: list[dict]) -> list[dict]:
 
 
 def reply(history: list[dict], force_image: bool = False, force_search: bool = False, force_file: bool = False,
-          force_video: bool = False, video_enabled: bool = False):
+          video_enabled: bool = False):
     """Sohbet geçmişine yanıt verir.
 
     (metin, model, görsel istemi, kaynaklar, dosya isteği, model mesajları, video isteği) döndürür.
@@ -130,10 +130,9 @@ def reply(history: list[dict], force_image: bool = False, force_search: bool = F
     if web_search.enabled():
         system += web_search.SEARCH_NOTE
     system += documents.FILE_NOTE + (documents.FORCE_FILE_NOTE if force_file else "")
-    if video_enabled:
-        system += free_tier.VIDEO_TOOL_NOTE + (free_tier.FORCE_VIDEO_NOTE if force_video else "")
-    else:
-        system += "\n- Video üretimi kullanıcının paketinde yok; video isterse bir pakete geçebileceğini söyle."
+    system += free_tier.VIDEO_TOOL_NOTE
+    if not video_enabled:
+        system += " Kullanıcının paketinde video yok; video için paketini yükseltebileceğini de belirt."
     messages = [{"role": "system", "content": system}]
     has_video = False
     last = len(history) - 1
@@ -167,8 +166,6 @@ def reply(history: list[dict], force_image: bool = False, force_search: bool = F
             logger.warning("%s olmadı, yedeğe geçiliyor: %s", model, e)
             text, model = smart_chat_completion(messages, max_tokens=MAX_REPLY_TOKENS, paid=True, skip=(model,))
     text, video_request = free_tier.split_video_request(text)
-    if not video_enabled:
-        video_request = None
     text, image_prompt, sources, file_request = free_tier.finish_reply(text, messages, paid=True)
     return text, (model if not sources else "web"), image_prompt, sources, file_request, messages, video_request
 

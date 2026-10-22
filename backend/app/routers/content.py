@@ -243,7 +243,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(..., min_length=1, max_length=40)
-    mode: Literal["chat", "image", "search", "file", "video"] = "chat"
+    mode: Literal["chat", "image", "search", "file"] = "chat"
 
 
 @router.post("/chat")
@@ -271,9 +271,7 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
                 )
             pages.append(n)
     credits = chat_cost(len(last.attachments), pages)
-    video_enabled = bool(get_usage(user["id"]).get("video_enabled")) and gateway_media.is_enabled()
-    if payload.mode == "video" and not video_enabled:
-        raise HTTPException(status_code=402, detail="Video üretimi ücretli paketlerde açık.")
+    video_enabled = bool(get_usage(user["id"]).get("video_enabled"))
     event_id = _charge(user["id"], "chat", credits, last.content.strip()[:200] or "Dosya incelemesi")
     try:
         history = [m.model_dump() for m in payload.messages[-20:]]
@@ -283,7 +281,6 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
             force_image=payload.mode == "image",
             force_search=payload.mode == "search",
             force_file=payload.mode == "file",
-            force_video=payload.mode == "video",
             video_enabled=video_enabled,
         )
     except (LLMError, storage.StorageError) as e:
@@ -316,31 +313,24 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
                 credits += cost
             else:
                 refund(file_event)
-    videos, video_error = [], None
+    # Video sohbette üretilmez: Video sayfasını hazır dolduracak öneri döndürülür.
+    video = None
     if video_request:
         start = next((a.url for a in last.attachments if storage.kind_of(a.content_type) == "image"), None)
         if video_request.get("ref") and labels.get(video_request["ref"]):
             start = labels[video_request["ref"]]
-        if images and storage.is_own_blob_url(images[0]):  # aynı yanıtta üretilen görsel önceliklidir
+        if images and storage.is_own_blob_url(images[0]):
             start = images[0]
-        try:
-            job_id, video_error, video_credits = _start_video_job(
-                user, video_request["prompt"], video_request["duration"], "720p", start, None,
-                True, video_request["aspect"],
-            )
-        except HTTPException as e:  # kredi yetmedi
-            job_id, video_error, video_credits = None, str(e.detail), 0
-        if job_id:
-            videos.append({"job_id": job_id, "aspect": video_request["aspect"]})
-            credits += video_credits
+        video = {"concept": video_request["prompt"], "aspect": video_request["aspect"],
+                 "duration": video_request["duration"], "image_url": start, "enabled": video_enabled}
     return {
-        "reply": text or ("İşte görselin." if images else "Dosyan hazır." if out_files else "Videon hazırlanıyor." if videos else ""),
+        "reply": text or ("İşte görselin." if images else "Dosyan hazır." if out_files else ""),
         "model": model,
         "images": images,
-        "image_error": image_error or file_error or video_error,
+        "image_error": image_error or file_error,
         "sources": sources,
         "files": out_files,
-        "videos": videos,
+        "video": video,
         "credits_spent": credits,
     }
 

@@ -90,8 +90,7 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
       initial={open}
       endpoint="/api/content/chat"
       attach="all"
-      videoInChat={usage.video_enabled}
-      videoHref={usage.video_enabled ? undefined : videoHref}
+      videoHref={videoHref}
       tools={{
         video: usage.video_enabled ? { href: "/araclar/video" } : { href: "/paketler", locked: "Paketle açılır" },
         ads: usage.ads_enabled ? { href: "/araclar/reklam" } : { href: "/paketler", locked: "Pro paketle açılır" },
