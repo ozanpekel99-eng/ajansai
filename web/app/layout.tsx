@@ -2,8 +2,8 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "ajansAI — KOBİ'ler için içerik ve reklam asistanı",
-  description: "İşletmen için sosyal medya içerik fikirleri üret, görsel ve video hazırla, Meta reklamlarını yönet.",
+  title: "ajansAI",
+  description: "Her şeyi sorabileceğin yapay zeka asistanı: sohbet et, görsel ve video üret, Instagram reklamını yayınla.",
   icons: { icon: "/icon.png", apple: "/icon.png" },
 };
 
