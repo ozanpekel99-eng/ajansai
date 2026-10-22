@@ -11,7 +11,7 @@ from sqlalchemy import and_, select, update
 
 from app.db import get_engine, utcnow, video_tasks
 from app.security import get_current_user
-from app.services import assistant, free_tier, gateway_media, storage
+from app.services import assistant, chat_files, free_tier, gateway_media, storage
 from app.services.claude_service import generate_content_ideas
 from app.services.llm_service import LLMError
 from app.services.plans import CREDIT_COSTS, chat_cost, idea_cost, video_cost
@@ -235,7 +235,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(..., min_length=1, max_length=40)
-    mode: Literal["chat", "image", "search"] = "chat"
+    mode: Literal["chat", "image", "search", "file"] = "chat"
 
 
 @router.post("/chat")
@@ -265,10 +265,11 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
     credits = chat_cost(len(last.attachments), pages)
     event_id = _charge(user["id"], "chat", credits, last.content.strip()[:200] or "Dosya incelemesi")
     try:
-        text, model, image_prompt, sources = assistant.reply(
+        text, model, image_prompt, sources, file_request, model_messages = assistant.reply(
             [m.model_dump() for m in payload.messages[-20:]],
             force_image=payload.mode == "image",
             force_search=payload.mode == "search",
+            force_file=payload.mode == "file",
         )
     except (LLMError, storage.StorageError) as e:
         logger.error("Sohbet yanıtı alınamadı: %s", e)
@@ -282,12 +283,28 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
         if url:
             images.append(url)
         credits += image_credits
+    out_files, file_error = [], None
+    if file_request:
+        cost = CREDIT_COSTS["file"]
+        try:
+            file_event = consume(user["id"], "file", cost, f"Dosya: {file_request['brief'][:200]}")
+        except QuotaExceededError as e:
+            file_event, file_error = None, str(e)
+        if file_event:
+            conversation = model_messages + [{"role": "assistant", "content": text}]
+            made, file_error = chat_files.make(file_request, conversation, f"dosya/{user['id']}")
+            if made:
+                out_files.append(made)
+                credits += cost
+            else:
+                refund(file_event)
     return {
-        "reply": text or ("İşte görselin." if images else ""),
+        "reply": text or ("İşte görselin." if images else "Dosyan hazır." if out_files else ""),
         "model": model,
         "images": images,
-        "image_error": image_error,
+        "image_error": image_error or file_error,
         "sources": sources,
+        "files": out_files,
         "credits_spent": credits,
     }
 

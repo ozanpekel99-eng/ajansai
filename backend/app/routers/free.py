@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.security import get_current_user, get_optional_user
-from app.services import free_tier, storage
+from app.services import chat_files, free_tier, storage
 from app.services.llm_service import LLMError
 
 router = APIRouter()
@@ -57,7 +57,7 @@ class FreeMessage(BaseModel):
 class FreeChatRequest(BaseModel):
     messages: list[FreeMessage] = Field(..., min_length=1, max_length=40)
     # "image": kullanıcı + menüsünden "Görsel oluştur"u seçti
-    mode: Literal["chat", "image", "search"] = "chat"
+    mode: Literal["chat", "image", "search", "file"] = "chat"
 
 
 def make_free_image(subject: str, user: dict | None, prompt: str, refs: list[str], translate: bool) -> tuple[str | None, str | None, bool]:
@@ -109,8 +109,14 @@ def chat(payload: FreeChatRequest, request: Request, user: dict | None = Depends
     for m in history[:-1]:
         m["attachments"] = []  # eski eklerin yalnızca son mesajdaki hali kullanılır
     try:
-        text, image_prompt, sources = free_tier.chat(
-            subject, user is not None, history, files, force_image=payload.mode == "image", force_search=payload.mode == "search"
+        text, image_prompt, sources, file_request, model_messages = free_tier.chat(
+            subject,
+            user is not None,
+            history,
+            files,
+            force_image=payload.mode == "image",
+            force_search=payload.mode == "search",
+            force_file=payload.mode == "file",
         )
     except free_tier.FreeLimitError as e:
         raise HTTPException(status_code=429, detail=str(e))
@@ -125,12 +131,27 @@ def chat(payload: FreeChatRequest, request: Request, user: dict | None = Depends
         url, image_error, _ = make_free_image(subject, user, image_prompt, refs, translate=False)
         if url:
             images.append(url)
+    out_files, file_error = [], None
+    if file_request:
+        try:
+            file_event = free_tier.reserve_file(subject)
+        except free_tier.FreeLimitError as e:
+            file_event, file_error = None, str(e)
+        if file_event:
+            conversation = model_messages + [{"role": "assistant", "content": text}]
+            folder = f"dosya/{user['id']}" if user else "dosya/ucretsiz"
+            made, file_error = chat_files.make(file_request, conversation, folder)
+            if made:
+                out_files.append(made)
+            else:
+                free_tier.release(file_event)
     return {
-        "reply": text or ("İşte görselin." if images else ""),
+        "reply": text or ("İşte görselin." if images else "Dosyan hazır." if out_files else ""),
         "images": images,
         "image_prompt": image_prompt,
-        "image_error": image_error,
+        "image_error": image_error or file_error,
         "sources": sources,
+        "files": out_files,
         "free": free_tier.status(subject, user is not None),
     }
 

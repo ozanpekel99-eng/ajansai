@@ -29,6 +29,7 @@ CREDIT_COSTS = {
     "chat_pdf_pages": 10,  # PDF ekinde her 10 sayfa 1 kredi (ilk 10 sayfa eke dahil)
     "describe": 1,  # örnek görsel/videodan konsept çıkarma
     "image": 4,
+    "file": 2,  # sohbetten sunum / belge / tablo dosyası
     "ads_draft": 0,
     # çözünürlük → süre (sn) → kredi
     "video": {

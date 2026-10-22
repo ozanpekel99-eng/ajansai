@@ -16,6 +16,7 @@ export type Msg = {
   images?: string[];
   imageError?: string | null;
   sources?: { title: string; url: string }[];
+  files?: { name: string; url: string; format: string; size: number; title: string }[];
 };
 export type Conversation = { id: string; title: string; at: number; messages: Msg[] };
 
@@ -64,7 +65,7 @@ type Props = {
 
 export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, videoHref, tools, initial }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [mode, setMode] = useState<"chat" | "image" | "search">("chat");
+  const [mode, setMode] = useState<"chat" | "image" | "search" | "file">("chat");
   const imageMode = mode === "image";
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -127,7 +128,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
     setError("");
     setSending(true);
     try {
-      const data = await api<{ reply: string; images?: string[]; image_error?: string | null; sources?: { title: string; url: string }[] }>(endpoint, {
+      const data = await api<{ reply: string; images?: string[]; image_error?: string | null; sources?: { title: string; url: string }[]; files?: Msg["files"] }>(endpoint, {
         method: "POST",
         body: JSON.stringify({
           mode,
@@ -144,6 +145,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
         images: data.images || [],
         imageError: data.image_error,
         sources: data.sources || [],
+        files: data.files || [],
       };
       setMode("chat");
       const done = [...next, reply];
@@ -257,6 +259,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
 
   const lastUserWithImages = [...messages].reverse().find((m) => m.role === "user");
   const pendingSearch = sending && mode === "search";
+  const pendingFile = sending && (mode === "file" || /sunum|slayt|pdf|word|excel|rapor|belge|tablo/i.test(lastUserWithImages?.content || ""));
   const pendingImage = sending && (imageMode || /görsel|resim|fotoğraf|afiş|post|çiz/i.test(lastUserWithImages?.content || ""));
 
   return (
@@ -292,6 +295,22 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                               İndir
                             </a>
                           </figure>
+                        ))}
+                      </div>
+                    )}
+                    {!!m.files?.length && (
+                      <div className="msg-files">
+                        {m.files.map((f) => (
+                          <a key={f.url} className="file-card" href={f.url} target="_blank" rel="noreferrer" download={f.name}>
+                            <span className={`file-badge ${f.format}`}>{f.format.toUpperCase()}</span>
+                            <span className="file-meta">
+                              <strong>{f.title}</strong>
+                              <small>
+                                {f.name} · {f.size > 1024 * 1024 ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(f.size / 1024))} KB`}
+                              </small>
+                            </span>
+                            <span className="btn btn-light btn-sm">İndir</span>
+                          </a>
                         ))}
                       </div>
                     )}
@@ -337,6 +356,9 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                   </div>
                   {pendingImage && <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>Görsel hazırlanıyor…</div>}
                   {pendingSearch && <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>İnternette aranıyor…</div>}
+                  {pendingFile && !pendingImage && !pendingSearch && (
+                    <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>Dosya istendiyse hazırlanıyor, 20–40 saniye sürebilir…</div>
+                  )}
                 </div>
               </div>
             )}
@@ -363,7 +385,8 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
         )}
         {mode !== "chat" && (
           <div className="mode-chip">
-            <Icon name={mode === "image" ? "image" : "globe"} size={14} /> {mode === "image" ? "Görsel oluştur" : "Web'de ara"}
+            <Icon name={mode === "image" ? "image" : mode === "file" ? "file" : "globe"} size={14} />{" "}
+            {mode === "image" ? "Görsel oluştur" : mode === "file" ? "Dosya oluştur" : "Web'de ara"}
             <button type="button" aria-label="Modu kapat" onClick={() => setMode("chat")}>
               <Icon name="close" size={12} />
             </button>
@@ -419,6 +442,21 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                   role="menuitem"
                   onClick={() => {
                     setMenuOpen(false);
+                    setMode("file");
+                    boxRef.current?.focus();
+                  }}
+                >
+                  <Icon name="file" size={18} />
+                  <span>
+                    <strong>Dosya oluştur</strong>
+                    <small>Görselli sunum, PDF, Word veya Excel</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
                     setMode("search");
                     boxRef.current?.focus();
                   }}
@@ -444,7 +482,15 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
               e.target.style.height = `${Math.min(e.target.scrollHeight, 220)}px`;
             }}
             onKeyDown={onKey}
-            placeholder={mode === "image" ? "Görseli tarif et…" : mode === "search" ? "Ne aramak istiyorsun?" : "Bir şey sor…"}
+            placeholder={
+              mode === "image"
+                ? "Görseli tarif et…"
+                : mode === "search"
+                  ? "Ne aramak istiyorsun?"
+                  : mode === "file"
+                    ? "Ne hazırlayayım? Örn. kafem için 8 slaytlık görselli sunum (PDF)"
+                    : "Bir şey sor…"
+            }
             aria-label="Mesaj"
           />
           {voice.canListen && (

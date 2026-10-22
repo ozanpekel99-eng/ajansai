@@ -106,7 +106,7 @@ def _trim_history(history: list[dict]) -> list[dict]:
     return kept
 
 
-def reply(history: list[dict], force_image: bool = False, force_search: bool = False) -> tuple[str, str, str | None, list[dict]]:
+def reply(history: list[dict], force_image: bool = False, force_search: bool = False, force_file: bool = False):
     """Sohbet geçmişine yanıt verir. (metin, kullanılan_model) döndürür.
 
     Geçmişteki eski eklerin yalnızca adı gönderilir; dosyaların kendisi son mesajla gider.
@@ -117,8 +117,11 @@ def reply(history: list[dict], force_image: bool = False, force_search: bool = F
     from app.services import web_search
 
     system = SYSTEM_PROMPT + web_search.today_line() + free_tier.IMAGE_TOOL_NOTE + (free_tier.FORCE_IMAGE_NOTE if force_image else "")
+    from app.services import documents
+
     if web_search.enabled():
         system += web_search.SEARCH_NOTE
+    system += documents.FILE_NOTE + (documents.FORCE_FILE_NOTE if force_file else "")
     messages = [{"role": "system", "content": system}]
     has_video = False
     last = len(history) - 1
@@ -151,8 +154,8 @@ def reply(history: list[dict], force_image: bool = False, force_search: bool = F
             if not text_only:
                 raise
             text, model = free_chat_completion(messages, max_tokens=MAX_REPLY_TOKENS)
-    text, image_prompt, sources = free_tier.finish_reply(text, messages)
-    return text, (model if not sources else "web"), image_prompt, sources
+    text, image_prompt, sources, file_request = free_tier.finish_reply(text, messages)
+    return text, (model if not sources else "web"), image_prompt, sources, file_request, messages
 
 
 DESCRIBE_PROMPT = {

@@ -32,11 +32,14 @@ def is_enabled() -> bool:
     return bool(config.BLOB_READ_WRITE_TOKEN)
 
 
-def save(data: bytes, mime: str, folder: str) -> str:
+def save(data: bytes, mime: str, folder: str, filename: str | None = None) -> str:
     """Dosyayı herkese açık Blob deposuna yükler ve kalıcı URL'sini döndürür."""
     if not is_enabled():
         raise StorageError("Blob deposu bağlı değil (BLOB_READ_WRITE_TOKEN).")
-    pathname = f"{folder}/{uuid.uuid4().hex}.{EXTENSIONS.get(mime, 'bin')}"
+    if filename:  # okunur dosya adı; çakışmayı önlemek için benzersiz klasör
+        pathname = f"{folder}/{uuid.uuid4().hex[:12]}/{filename}"
+    else:
+        pathname = f"{folder}/{uuid.uuid4().hex}.{EXTENSIONS.get(mime, 'bin')}"
     try:
         response = requests.put(
             f"{BLOB_API_URL}/",

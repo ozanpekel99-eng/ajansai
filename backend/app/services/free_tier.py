@@ -25,7 +25,7 @@ from sqlalchemy import and_, delete, func, select
 
 from app import config
 from app.db import free_events, get_engine, stock_cache, utcnow
-from app.services import assistant, web_search
+from app.services import assistant, documents, web_search
 from app.services.llm_service import LLMError, free_chat_completion
 
 logger = logging.getLogger("ajansai.free")
@@ -141,6 +141,7 @@ IMAGE_TOOL_NOTE = (
 )
 IMAGE_TAG = re.compile(r"\[\[\s*G[ÖO]RSEL\s*:\s*(.+?)\]\]", re.IGNORECASE | re.DOTALL)
 HISTORY_MESSAGES = 8
+FREE_FILES_PER_DAY = 3
 MESSAGE_CHARS = 3000
 
 
@@ -176,8 +177,9 @@ def chat(
     attachments: list[dict] | None = None,
     force_image: bool = False,
     force_search: bool = False,
-) -> tuple[str, str | None, list[dict]]:
-    """(yanıt metni, görsel istemi veya None, web kaynakları) döndürür.
+    force_file: bool = False,
+) -> tuple[str, str | None, list[dict], dict | None, list[dict]]:
+    """(yanıt metni, görsel istemi, web kaynakları, dosya isteği, model mesajları) döndürür.
 
     attachments: son mesajın ekleri; her biri {"kind", "name", "data"(bayt)}.
     Belgeler metne çevrilip mesaja eklenir; görseller görebilen ücretsiz modele (Qwen) gider.
@@ -193,6 +195,7 @@ def chat(
         system += web_search.SEARCH_NOTE
     if force_image and image_enabled():
         system += FORCE_IMAGE_NOTE
+    system += documents.FILE_NOTE + (documents.FORCE_FILE_NOTE if force_file else "")
     messages = [{"role": "system", "content": system}]
     recent = history[-HISTORY_MESSAGES:]
     attachments = attachments or []
@@ -225,11 +228,11 @@ def chat(
     except Exception:
         release(event_id)
         raise
-    return finish_reply(text, messages)
+    return (*finish_reply(text, messages), messages)
 
 
-def finish_reply(text: str, messages: list[dict]) -> tuple[str, str | None, list[dict]]:
-    """Yanıttaki arama ve görsel isteklerini işler: (metin, görsel istemi, kaynaklar)."""
+def finish_reply(text: str, messages: list[dict]) -> tuple[str, str | None, list[dict], dict | None]:
+    """Yanıttaki arama, görsel ve dosya isteklerini ayırır: (metin, görsel istemi, kaynaklar, dosya isteği)."""
     sources: list[dict] = []
     query = web_search.split_search_request(text)
     if query:
@@ -239,8 +242,14 @@ def finish_reply(text: str, messages: list[dict]) -> tuple[str, str | None, list
             logger.error("Web araması yapılamadı: %s", e)
             rest = web_search.SEARCH_TAG.sub("", text).strip()
             text = rest or "Şu an internette arama yapamadım. Biraz sonra tekrar dener misin?"
+    text, file_request = documents.split_file_request(text)
     text, image_prompt = split_image_request(text)
-    return text, image_prompt, sources
+    return text, image_prompt, sources, file_request
+
+
+def reserve_file(subject: str) -> str:
+    lim = FREE_FILES_PER_DAY
+    return _reserve(subject, "file", lim, DAY, None, f"Ücretsiz pakette günde {lim} dosya oluşturabilirsin; bugünkü hakkın doldu.")
 
 
 # ---------------- Ücretsiz AI görseli (Cloudflare Workers AI) ----------------

@@ -21,6 +21,7 @@ ACTION_LABELS = {
     "chat": "Sohbet",
     "describe": "Örnekten konsept",
     "image": "Görsel",
+    "file": "Dosya",
     "video": "Video",
     "ads_draft": "Reklam taslağı",
 }
