@@ -10,8 +10,7 @@ import { onboardingSteps, useSession } from "../lib/session";
 import Icon from "./Icon";
 
 const MAIN = [
-  { href: "/araclar/fikir", label: "Sohbet", icon: "sparkle" },
-  { href: "/", label: "Ana sayfa", icon: "home" },
+  { href: "/", label: "Sohbet", icon: "sparkle" },
   { href: "/araclar", label: "Araçlar", icon: "grid" },
   { href: "/paketler", label: "Paketler", icon: "tag" },
 ];
@@ -23,7 +22,7 @@ const WORKSPACE = [
 ];
 
 function isActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
+  if (href === "/") return pathname === "/" || pathname === "/araclar/fikir";
   if (href === "/araclar") return pathname === "/araclar" || (pathname.startsWith("/araclar/") && pathname !== "/araclar/reklam" && pathname !== "/araclar/fikir");
   return pathname === href || pathname.startsWith(href + "/");
 }

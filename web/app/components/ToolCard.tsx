@@ -19,7 +19,7 @@ export default function ToolCard({ tool }: { tool: Tool }) {
   );
 
   return (
-    <Link href={`/araclar/${tool.slug}`} className="tool-card">
+    <Link href={tool.slug === "fikir" ? "/" : `/araclar/${tool.slug}`} className="tool-card">
       {inner}
     </Link>
   );

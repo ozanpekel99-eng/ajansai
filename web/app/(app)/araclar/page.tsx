@@ -41,7 +41,7 @@ export default function Tools() {
           <h1>{hero.name}</h1>
           <p>{hero.long}</p>
           <div className="row">
-            <Link href={`/araclar/${hero.slug}`} className="btn btn-light">
+            <Link href={hero.slug === "fikir" ? "/" : `/araclar/${hero.slug}`} className="btn btn-light">
               Aracı aç
             </Link>
             <span className="muted">{hero.costLabel}</span>

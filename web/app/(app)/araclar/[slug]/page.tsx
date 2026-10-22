@@ -42,8 +42,9 @@ export default function ToolPage() {
 
   const Workspace = WORKSPACES[tool.slug];
 
-  // Sohbet: ChatGPT gibi sade, tam ekran; yalnızca geçmiş/yeni sohbet düğmesi
+  // Sohbet artık ana sayfada
   if (tool.slug === "fikir") {
+    if (typeof window !== "undefined") window.location.replace("/" + window.location.search);
     return (
       <div className="page chat-page">
         <div className="chat-page-bar">
