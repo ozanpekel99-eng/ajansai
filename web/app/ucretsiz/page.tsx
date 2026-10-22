@@ -33,7 +33,9 @@ function Guest() {
   const tab = (params.get("arac") as Tab) || "fikir";
   const concept = params.get("konsept") || "";
 
-  useEffect(() => setSignedIn(!!getToken()), []);
+  useEffect(() => {
+    setSignedIn(!!getToken());
+  }, []);
 
   const go = (t: Tab, extra = "") => router.push(`/ucretsiz?arac=${t}${extra}`);
 

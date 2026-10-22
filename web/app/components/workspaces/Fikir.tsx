@@ -14,7 +14,9 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
   const [chats, setChats] = useState<Conversation[]>([]);
   const [open, setOpen] = useState<Conversation | null>(null);
 
-  useEffect(() => setChats(loadChats()), [tab]);
+  useEffect(() => {
+    setChats(loadChats());
+  }, [tab]);
 
   if (tab === "history") {
     const items: HistoryEntry<Conversation>[] = chats.map((c) => ({ id: c.id, title: c.title, at: c.at, data: c }));

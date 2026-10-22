@@ -63,7 +63,9 @@ export default function ChatPanel({ endpoint, allowFiles, footer, blocker, onSen
 
   const uploader = useUploader(["image", "video", "document"], MAX_FILES, files.length, (f) => setFiles((x) => [...x, f]));
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [messages, sending]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, sending]);
 
   const canSend = !blocker && !sending && !uploader.busy.length && (text.trim().length > 0 || files.length > 0);
 

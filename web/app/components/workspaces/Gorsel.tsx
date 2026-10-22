@@ -45,7 +45,9 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
   const [error, setError] = useState("");
   const [history, setHistory] = useState<HistoryEntry<Result>[]>([]);
 
-  useEffect(() => setHistory(readHistory<Result>("gorsel")), []);
+  useEffect(() => {
+    setHistory(readHistory<Result>("gorsel"));
+  }, []);
   useEffect(() => {
     if (usage && mode === null) setMode(usage.plan === "deneme" ? "ucretsiz" : "pro");
   }, [usage, mode]);
