@@ -11,27 +11,43 @@ import { API_URL, getToken } from "./api";
 const SILENT =
   "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//NwwAAAAAAAAAAAAEluZm8AAAAPAAAABgAAAykAWlpaWlpaWlpaWlpaWlpaWnt7e3t7e3t7e3t7e3t7e3t7nJycnJycnJycnJycnJycnL29vb29vb29vb29vb29vb293t7e3t7e3t7e3t7e3t7e3t7/////////////////////AAAAAExhdmM2MC4zMQAAAAAAAAAAAAAAACQCowAAAAAAAAMpso+sIAAAAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NCxKMAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NAxKQAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/80LEowAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
 
-/** Metni, sesli okumada beklemeyi kısaltmak için cümle sınırlarından parçalara böler. */
-function chunks(text: string, max = 600): string[] {
-  const parts = text.match(/[^.!?…]+[.!?…]*\s*/g) || [text];
+/** Metni parçalara böler: ilk parça çok kısa (ses hemen başlasın), sonrakiler giderek uzar.
+ * Parçalar paralel üretildiği için bir parça çalarken sonrakiler hazır olur. */
+const LIMITS = [70, 160, 360, 600];
+function chunks(text: string): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
   const out: string[] = [];
   let cur = "";
-  for (const p of parts) {
-    if ((cur + p).length > max && cur) {
-      out.push(cur.trim());
-      cur = "";
+  for (const w of words) {
+    const limit = LIMITS[Math.min(out.length, LIMITS.length - 1)];
+    const next = cur ? `${cur} ${w}` : w;
+    // Sınıra yaklaşınca cümle sonunda ya da sınırı aşınca kelime sınırında böl
+    if (cur && (next.length > limit || (cur.length > limit * 0.6 && /[.!?…:;]$/.test(cur)))) {
+      out.push(cur);
+      cur = w;
+    } else {
+      cur = next;
     }
-    cur += p;
   }
-  if (cur.trim()) out.push(cur.trim());
-  // İlk parça kısa olsun ki ses hızlı başlasın
-  // İlk parça kısa olsun ki ses ~1-2 sn'de başlasın; sonrakiler çalarken hazırlanır
-  if (out[0] && out[0].length > 130) {
-    const first = out[0];
-    const cut = first.lastIndexOf(" ", 130);
-    if (cut > 40) out.splice(0, 1, first.slice(0, cut), first.slice(cut + 1));
-  }
+  if (cur) out.push(cur);
   return out;
+}
+
+/** Tek parçayı PCM (24 kHz, 16-bit) olarak alır; olmazsa null. */
+async function fetchPcm(text: string): Promise<Uint8Array | null> {
+  try {
+    const token = getToken();
+    const res = await fetch(`${API_URL}/api/voice/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return null;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    return buf.length >= 2 ? buf : null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchSpeech(text: string): Promise<string | null> {
@@ -89,64 +105,6 @@ class PcmPlayer {
     this.sources = [];
     this.next = 0;
   }
-}
-
-/** Metni akışla seslendirir; ilk parçalar geldikçe çalar. Akış yoksa false döner. */
-async function streamSpeech(text: string, player: PcmPlayer, alive: () => boolean): Promise<boolean> {
-  let res: Response;
-  try {
-    const token = getToken();
-    res = await fetch(`${API_URL}/api/voice/stream`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ text }),
-    });
-  } catch {
-    return false;
-  }
-  if (!res.ok || !res.body) return false;
-  const reader = res.body.getReader();
-  let carry = new Uint8Array(0);
-  let pending: Uint8Array[] = [];
-  let pendingLen = 0;
-  const MIN = RATE * 2 * 0.2; // ~0,2 sn biriktirip çal (tıkırtı olmasın)
-  const flush = () => {
-    if (!pendingLen) return;
-    const all = new Uint8Array(pendingLen);
-    let o = 0;
-    for (const p of pending) {
-      all.set(p, o);
-      o += p.length;
-    }
-    pending = [];
-    pendingLen = 0;
-    player.push(all);
-  };
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (!alive()) {
-      reader.cancel().catch(() => {});
-      return true;
-    }
-    if (done) break;
-    let chunk = value;
-    if (carry.length) {
-      const merged = new Uint8Array(carry.length + chunk.length);
-      merged.set(carry);
-      merged.set(chunk, carry.length);
-      chunk = merged;
-      carry = new Uint8Array(0);
-    }
-    if (chunk.length % 2) {
-      carry = chunk.slice(chunk.length - 1);
-      chunk = chunk.slice(0, chunk.length - 1);
-    }
-    pending.push(chunk);
-    pendingLen += chunk.length;
-    if (pendingLen >= MIN) flush();
-  }
-  flush();
-  return true;
 }
 
 type Recognition = any;
@@ -310,25 +268,31 @@ export function useVoice() {
       setSpeaking(true);
 
       (async () => {
-        // 1) Akışlı doğal ses: ilk ses ~1 sn'de başlar, parçalar arası boşluk olmaz
+        // 1) Doğal ses (PCM): parçalar 3'erli paralel üretilir, sırayla kesintisiz çalınır
         const ctx = streamOk.current ? audioCtx() : null;
         if (ctx) {
           const player = new PcmPlayer(ctx);
           playerRef.current = player;
           const alive = () => speakId.current === id;
+          const jobs: Promise<Uint8Array | null>[] = [];
+          const ensure = (k: number) => {
+            for (let j = jobs.length; j < Math.min(list.length, k + 3); j++) jobs.push(fetchPcm(list[j]));
+          };
           for (let i = 0; i < list.length; i++) {
-            const ok = await streamSpeech(list[i], player, alive);
+            ensure(i);
+            const pcm = await jobs[i];
             if (!alive()) return;
-            if (!ok) {
+            if (!pcm) {
               if (i === 0) {
-                streamOk.current = false; // bu oturumda akış yok: dosya yoluna geç
+                streamOk.current = false; // bu oturumda doğal ses yok: dosya yoluna geç
                 break;
               }
-              // Kota bitti ya da hata: kalan metni tarayıcı sesiyle, mevcut ses bitince
+              // Hak bitti ya da hata: kalan metni tarayıcı sesiyle, mevcut ses bitince
               await new Promise((r) => setTimeout(r, player.remaining()));
               if (!alive()) return;
               return browserSpeak(list.slice(i).join(" "), onEnd);
             }
+            player.push(pcm);
           }
           if (streamOk.current) {
             await new Promise((r) => setTimeout(r, player.remaining() + 50));
