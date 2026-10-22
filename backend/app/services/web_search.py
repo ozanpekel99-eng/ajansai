@@ -52,12 +52,15 @@ def split_search_request(text: str) -> str | None:
 
 
 def _text_messages(messages: list[dict]) -> list[dict]:
-    """Görsel/dosya parçaları olan mesajları düz metne indirger."""
+    """Görsel/dosya parçaları olan mesajları düz metne indirger; arama/araç talimatlarını çıkarır
+    (yoksa model yanıt yerine yeniden [[ARA: ...]] yazabilir)."""
     out = []
     for m in messages:
         c = m["content"]
         if isinstance(c, list):
             c = "\n".join(p.get("text", "") for p in c if p.get("type") == "text")
+        if m["role"] == "system":
+            c = c.replace(SEARCH_NOTE, "")
         out.append({"role": m["role"], "content": c})
     return out
 
@@ -92,7 +95,7 @@ def _answer_from_results(messages: list[dict], query: str, results: list[dict], 
         {
             "role": "system",
             "content": f"'{query}' için web arama sonuçları:\n\n{context}\n\n"
-            "Kullanıcının son sorusunu bu sonuçlara dayanarak, kullanıcının dilinde yanıtla. Bilgiyi aldığın sonucu [1] gibi "
+            "Arama yapıldı; tekrar arama isteme ve [[ARA: ...]] yazma. Kullanıcının son sorusunu bu sonuçlara dayanarak, kullanıcının dilinde yanıtla. Bilgiyi aldığın sonucu [1] gibi "
             "numarayla belirt. Sonuçlarda olmayan şeyi uydurma; emin değilsen söyle.",
         }
     ]
@@ -165,7 +168,9 @@ def answer(messages: list[dict], query: str, paid: bool = False) -> tuple[str, l
             unique = unique[:8]
             if gateway_ready() and (paid or free_budget_left()) and any(x["content"] for x in unique):
                 try:
-                    text = _answer_from_results(messages, query, unique, paid)
+                    better = _clean(_answer_from_results(messages, query, unique, paid))
+                    if better:
+                        text = better
                 except LLMError as e:
                     logger.warning("Arama yanıtı Claude ile yazılamadı: %s", e)
             return _clean(text), [{"title": x["title"], "url": x["url"]} for x in unique]

@@ -82,3 +82,9 @@ def test_paid_chat_searches_web(client, monkeypatch):
     token = register_paid(client)
     r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Gram altın kaç TL?"}]}, headers=auth(token))
     assert r.status_code == 200 and r.json()["model"] == "web" and r.json()["sources"]
+
+
+def test_search_answer_prompt_has_no_search_instruction():
+    msgs = [{"role": "system", "content": "Asistan." + web_search.SEARCH_NOTE}, {"role": "user", "content": "dolar?"}]
+    out = web_search._text_messages(msgs)
+    assert "[[ARA" not in out[0]["content"] and out[1]["content"] == "dolar?"
