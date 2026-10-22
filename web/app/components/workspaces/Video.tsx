@@ -260,7 +260,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
             </div>
             {note && <p className="revise-note">{note}</p>}
             {result.jobId && (
-              <form className="revise-box" onSubmit={revise}>
+              <form className="revise-box field" onSubmit={revise}>
                 <label htmlFor="v-revise">Revize et</label>
                 <div className="inline-row">
                   <input

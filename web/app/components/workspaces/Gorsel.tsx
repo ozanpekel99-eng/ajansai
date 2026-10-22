@@ -208,7 +208,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
                 ))}
               </div>
             )}
-            <form className="revise-box" onSubmit={revise}>
+            <form className="revise-box field" onSubmit={revise}>
               <label htmlFor="g-revise">Revize et</label>
               <div className="inline-row">
                 <input
