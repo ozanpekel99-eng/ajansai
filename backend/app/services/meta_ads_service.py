@@ -33,7 +33,7 @@ def get_oauth_url(redirect_uri: str, state: str) -> str:
         params["response_type"] = "code"
         params["override_default_response_type"] = "true"
     else:
-        params["scope"] = "ads_management,ads_read,business_management,pages_show_list,pages_read_engagement,pages_manage_ads"
+        params["scope"] = "ads_management,ads_read,business_management,pages_show_list,pages_read_engagement,pages_manage_ads,instagram_basic"
     query = urlencode(params)
     return f"https://www.facebook.com/{META_API_VERSION}/dialog/oauth?{query}"
 
