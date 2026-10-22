@@ -16,6 +16,10 @@ type Page = { id: string; name: string; instagram_id?: string | null; instagram_
 type IgAccount = { id: string; username: string; page_id?: string | null };
 type Loc = { key: string; name: string; type: "country" | "region" | "city"; country_code?: string | null; region?: string | null };
 type Media = { url: string; kind: "image" | "video" };
+type ContentMode = "single" | "carousel" | "post";
+type Card = { id: string; media: Media | null; headline: string; link: string };
+type Post = { platform: "instagram" | "facebook"; id: string; caption: string; type: string; thumbnail: string | null; permalink?: string; time?: string; count: number };
+const newCard = (): Card => ({ id: Math.random().toString(36).slice(2), media: null, headline: "", link: "" });
 type Objective = "profile" | "traffic" | "whatsapp" | "instagram_dm" | "awareness";
 type Goal = "traffic" | "message" | "awareness";
 type Insights = { spend: number; impressions: number; reach: number; clicks: number; ctr: number; cpc: number; conversations: number };
@@ -263,7 +267,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
   const [pageId, setPageId] = useState("");
   const [igId, setIgId] = useState("");
   const [objective, setObjective] = useState<Objective>("profile");
-  const [wa, setWa] = useState<{ number: string | null; connect_url: string; help: string } | null>(null);
+  const [wa, setWa] = useState<{ number: string | null; known?: boolean; connect_url: string; help: string } | null>(null);
   const [waLoading, setWaLoading] = useState(false);
   const [name, setName] = useState("");
   const [budget, setBudget] = useState("250");
@@ -275,6 +279,9 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
   const [gender, setGender] = useState<"all" | "male" | "female">("all");
   const [media, setMedia] = useState<Media | null>(null);
   const [storyMedia, setStoryMedia] = useState<Media | null>(null);
+  const [mode, setMode] = useState<ContentMode>("single");
+  const [cards, setCards] = useState<Card[]>([newCard(), newCard()]);
+  const [post, setPost] = useState<Post | null>(null);
   const [placements, setPlacements] = useState<Placement[]>(DEFAULT_PLACEMENTS);
   const [previewAt, setPreviewAt] = useState<Placement>("instagram_feed");
   const [primaryText, setPrimaryText] = useState("");
@@ -463,15 +470,28 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!media) {
-      setError("Gönderi için bir görsel veya video seç.");
+    const readyCards = cards.filter((c) => c.media);
+    if (mode === "single" && !media) {
+      setError("Reklam için bir görsel veya video seç.");
+      return;
+    }
+    if (mode === "carousel" && readyCards.length < 2) {
+      setError("Karusel için en az 2 kartta görsel veya video olmalı.");
+      return;
+    }
+    if (mode === "post" && !post) {
+      setError("Reklam yapılacak gönderiyi seç.");
+      return;
+    }
+    if (mode !== "post" && !primaryText.trim()) {
+      setError("Reklam metnini yaz.");
       return;
     }
     if (!activePlacements.length) {
       setError("En az bir reklam alanı işaretle.");
       return;
     }
-    if (storyMedia && storyMedia.kind !== media.kind) {
+    if (mode === "single" && media && storyMedia && storyMedia.kind !== media.kind) {
       setError("Gönderi ve hikâye dosyası aynı türde olmalı: ikisi de görsel ya da ikisi de video.");
       return;
     }
@@ -494,8 +514,13 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
           age_min: ageMin,
           age_max: ageMax,
           gender,
-          media,
-          story_media: storyMedia && activePlacements.some(isVertical) ? storyMedia : null,
+          media: mode === "single" ? media : null,
+          story_media: mode === "single" && storyMedia && activePlacements.some(isVertical) ? storyMedia : null,
+          carousel:
+            mode === "carousel"
+              ? readyCards.map((c) => ({ media: c.media, headline: c.headline, link: needsLink(objective) && c.link ? c.link : null }))
+              : [],
+          source_post: mode === "post" && post ? { platform: post.platform, id: post.id, thumbnail: post.thumbnail } : null,
           placements: activePlacements,
           primary_text: primaryText,
           headline,
@@ -515,7 +540,9 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
   if (loadError) return <div className="notice error">{loadError}</div>;
 
   // Hedefe uymayan alanlar (ör. profil ziyaretinde Facebook) gönderilmez
-  const activePlacements = placements.filter((p) => !(igOnly(objective) && p.startsWith("facebook")));
+  const activePlacements = placements.filter(
+    (p) => !(igOnly(objective) && p.startsWith("facebook")) && !(mode === "post" && post && !p.startsWith(post.platform)),
+  );
   const togglePlacement = (p: Placement) =>
     setPlacements((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]));
   const shownPreview: Placement = activePlacements.includes(previewAt) ? previewAt : activePlacements[0] || "instagram_feed";
@@ -699,17 +726,14 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
                     Bağlı WhatsApp numarası: <strong>{wa.number}</strong>
                   </span>
                 ) : wa ? (
-                  <div className="notice" style={{ marginTop: 8 }}>
-                    <span>Bu Facebook sayfasına bağlı WhatsApp numarası bulunamadı. {wa.help}</span>
-                    <span style={{ display: "flex", gap: 6 }}>
-                      <a className="btn btn-primary btn-sm" href={wa.connect_url} target="_blank" rel="noreferrer">
-                        WhatsApp&apos;ı bağla
-                      </a>
-                      <button type="button" className="btn btn-light btn-sm" onClick={checkWa}>
-                        Tekrar kontrol et
-                      </button>
-                    </span>
-                  </div>
+                  <span className="hint">
+                    Mesajlar Facebook sayfana bağlı WhatsApp numarasına gelir. Meta numarayı uygulamalarla paylaşmadığı için burada
+                    gösteremiyoruz; sayfana bağlıysa devam edebilirsin. Bağlı değilse{" "}
+                    <a href={wa.connect_url} target="_blank" rel="noreferrer">
+                      bu sayfanın WhatsApp ayarlarından bağla
+                    </a>
+                    ; bağlanmamışsa reklam oluşturulurken Meta bunu bildirir.
+                  </span>
                 ) : null)}
               {objective === "instagram_dm" && !igId && <span className="error-text">Instagram DM için yukarıdan bir Instagram hesabı seç.</span>}
             </div>
@@ -808,30 +832,44 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
               );
             })}
           </div>
-          <MediaPicker
-            title="Gönderi görseli · akış ve keşfet"
-            hint="Kare (1:1) veya dikdörtgen (4:5) en iyisi."
-            value={media}
-            onChange={setMedia}
-            library={lib.items}
-            onDelete={(m) => {
-              if (storyMedia?.url === m.url) setStoryMedia(null);
-              lib.remove(m);
-            }}
-          />
-          {activePlacements.some(isVertical) && (
-            <MediaPicker
-              title="Hikâye ve Reels görseli · isteğe bağlı"
-              hint="Dikey (9:16) yükle; hikâye ve Reels'te bu, akışta gönderi görseli gösterilir. Boş bırakırsan her yerde gönderi görseli kullanılır."
-              value={storyMedia}
-              onChange={setStoryMedia}
-              library={lib.items}
-              onDelete={(m) => {
-                if (media?.url === m.url) setMedia(null);
-                lib.remove(m);
-              }}
-            />
+          <div className="field">
+            <label>Reklam içeriği</label>
+            <div className="segmented small content-mode" role="tablist" aria-label="Reklam içeriği">
+              {(
+                [
+                  ["single", "Yeni görsel / video"],
+                  ["carousel", "Karusel (kaydırmalı)"],
+                  ["post", "Mevcut gönderi"],
+                ] as [ContentMode, string][]
+              ).map(([v, l]) => (
+                <button key={v} type="button" role="tab" aria-selected={mode === v} className={mode === v ? "active" : ""} onClick={() => setMode(v)}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          {mode === "single" && (
+            <>
+              <MediaPicker
+                title="Gönderi görseli · akış ve keşfet"
+                hint="Kare (1:1) veya dikdörtgen (4:5) en iyisi."
+                value={media}
+                onChange={setMedia}
+                lib={lib}
+              />
+              {activePlacements.some(isVertical) && (
+                <MediaPicker
+                  title="Hikâye ve Reels görseli · isteğe bağlı"
+                  hint="Dikey (9:16) yükle; hikâye ve Reels'te bu, akışta gönderi görseli gösterilir. Boş bırakırsan her yerde gönderi görseli kullanılır."
+                  value={storyMedia}
+                  onChange={setStoryMedia}
+                  lib={lib}
+                />
+              )}
+            </>
           )}
+          {mode === "carousel" && <CarouselEditor cards={cards} onChange={setCards} lib={lib} withLink={needsLink(objective)} />}
+          {mode === "post" && <PostPicker pageId={pageId} igId={igId} value={post} onChange={setPost} />}
         </section>
 
         <section className="panel ws-panel">
@@ -852,7 +890,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
           </div>
           <div className="field">
             <label htmlFor="ad-text">Ana metin</label>
-            <textarea id="ad-text" required rows={4} value={primaryText} onChange={(e) => setPrimaryText(e.target.value)} maxLength={2000} />
+            <textarea id="ad-text" required={mode !== "post"} rows={4} value={primaryText} onChange={(e) => setPrimaryText(e.target.value)} maxLength={2000} />
           </div>
           <div className="field-row">
             <div className="field">
@@ -902,7 +940,9 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
           </div>
           <AdPreview
             placement={shownPreview}
-            media={isVertical(shownPreview) && storyMedia ? storyMedia : media}
+            cards={mode === "carousel" ? cards.filter((c) => c.media) : undefined}
+            post={mode === "post" ? post : undefined}
+            media={mode === "single" ? (isVertical(shownPreview) && storyMedia ? storyMedia : media) : null}
             name={shownPreview.startsWith("facebook") ? pageName : igName}
             text={primaryText}
             headline={headline}
@@ -981,12 +1021,15 @@ function LocationPicker({ value, onChange }: { value: Loc[]; onChange: (v: Loc[]
 }
 
 type LibMedia = Media & { id: string; local?: string };
+type AdLibrary = { items: LibMedia[]; loaded: boolean; load: () => void; remove: (m: LibMedia) => void };
 
-// Reklamda kullanılabilecek görsel/videolar: ajansAI kütüphanesi + bu tarayıcıdaki eski üretimler.
-// Silinen öğe kütüphaneden de kaldırılır.
-function useAdLibrary() {
+// ajansAI kütüphanesi (+ bu tarayıcıdaki eski üretimler). Yalnızca "Kütüphaneden seç" açılınca yüklenir.
+function useAdLibrary(): AdLibrary {
   const [items, setItems] = useState<LibMedia[]>([]);
-  useEffect(() => {
+  const [loaded, setLoaded] = useState(false);
+  const load = () => {
+    if (loaded) return;
+    setLoaded(true);
     const local: LibMedia[] = [
       ...readHistory<{ url: string }>("gorsel").map((h) => ({ id: `l-gorsel-${h.id}`, local: "gorsel", url: h.data.url, kind: "image" as const })),
       ...readHistory<{ url: string }>("video").map((h) => ({ id: `l-video-${h.id}`, local: "video", url: h.data.url, kind: "video" as const })),
@@ -998,7 +1041,7 @@ function useAdLibrary() {
         const seen = new Set(server.map((m) => m.url));
         setItems([...server, ...local.filter((m) => !seen.has(m.url))].slice(0, 40));
       });
-  }, []);
+  };
   const remove = async (m: LibMedia) => {
     setItems((cur) => cur.filter((x) => x.url !== m.url));
     if (m.local) {
@@ -1013,84 +1056,245 @@ function useAdLibrary() {
       await api(`/api/content/library/${m.id}`, { method: "DELETE" }).catch(() => undefined);
     }
   };
-  return { items, remove };
+  return { items, loaded, load, remove };
 }
 
-function MediaPicker({
-  value, onChange, title, hint, library, onDelete,
-}: {
-  value: Media | null;
-  onChange: (m: Media | null) => void;
-  title: string;
-  hint: string;
-  library: LibMedia[];
-  onDelete: (m: LibMedia) => void;
-}) {
-  const up = useUploader(["image", "video"], 1, 0, (f) => onChange({ url: f.url, kind: f.kind === "video" ? "video" : "image" }));
+// Kütüphaneden seçim penceresi (silme dahil)
+function LibraryChooser({ lib, onPick, onClose }: { lib: AdLibrary; onPick: (m: Media) => void; onClose: () => void }) {
   const [confirm, setConfirm] = useState<string | null>(null);
-
+  useEffect(() => lib.load(), []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className="field">
-      <label>{title}</label>
-      {up.field}
-      <div className="media-grid">
-        <button type="button" className="media-upload" onClick={up.pick} disabled={up.busy.length > 0}>
-          <Icon name="plus" size={20} />
-          <span>{up.busy.length ? `Yükleniyor %${up.busy[0].pct}` : "Görsel veya video yükle"}</span>
-          <small>JPG, PNG, MP4, MOV</small>
+    <div className="lib-chooser">
+      <div className="lib-chooser-head">
+        <strong>Kütüphaneden seç</strong>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
+          Kapat
         </button>
-        {value && !library.some((m) => m.url === value.url) && (
-          <MediaTile media={value} selected onClick={() => onChange(null)} />
-        )}
-        {library.map((m) => (
-          <div key={m.id} className="media-tile-wrap">
-            <MediaTile media={m} selected={value?.url === m.url} onClick={() => onChange(value?.url === m.url ? null : m)} />
-            {confirm === m.id ? (
-              <div className="media-confirm">
-                <span>Silinsin mi?</span>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm"
-                  onClick={() => {
-                    if (value?.url === m.url) onChange(null);
-                    onDelete(m);
-                    setConfirm(null);
-                  }}
-                >
-                  Sil
-                </button>
-                <button type="button" className="btn btn-light btn-sm" onClick={() => setConfirm(null)}>
-                  Vazgeç
-                </button>
-              </div>
-            ) : (
-              <button type="button" className="media-del" aria-label="Bu dosyayı sil" title="Sil" onClick={() => setConfirm(m.id)}>
-                <Icon name="close" size={12} />
-              </button>
-            )}
-          </div>
-        ))}
       </div>
-      <UploadProgress busy={up.busy} />
-      {up.error && <small className="error-text">{up.error}</small>}
-      <span className="hint">{hint} Kendi dosyanı yükle ya da ajansAI&apos;da ürettiklerinden seç; sildiğin dosya kütüphanenden de kalkar.</span>
+      {!lib.items.length ? (
+        <p className="hint">{lib.loaded ? "Kütüphanen boş. Görsel veya Video aracında ürettiklerin burada görünür." : "Yükleniyor…"}</p>
+      ) : (
+        <div className="media-grid">
+          {lib.items.map((m) => (
+            <div key={m.id} className="media-tile-wrap">
+              <MediaTile media={m} selected={false} onClick={() => onPick({ url: m.url, kind: m.kind })} />
+              {confirm === m.id ? (
+                <div className="media-confirm">
+                  <span>Silinsin mi?</span>
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => { lib.remove(m); setConfirm(null); }}>
+                    Sil
+                  </button>
+                  <button type="button" className="btn btn-light btn-sm" onClick={() => setConfirm(null)}>
+                    Vazgeç
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="media-del" aria-label="Bu dosyayı sil" title="Sil" onClick={() => setConfirm(m.id)}>
+                  <Icon name="close" size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function AdPreview({ placement, media, name, text, headline, cta }: { placement: Placement; media: Media | null; name: string; text: string; headline: string; cta: string }) {
-  const visual = media ? (
-    media.kind === "image" ? <img src={media.url} alt="" /> : <video src={media.url} muted playsInline autoPlay loop />
-  ) : (
-    <span>Görsel veya video seç</span>
+// Tek dosya alanı: bilgisayardan yükle ya da kütüphaneden seç
+function MediaPicker({ value, onChange, title, hint, lib, compact }: {
+  value: Media | null;
+  onChange: (m: Media | null) => void;
+  title: string;
+  hint?: string;
+  lib: AdLibrary;
+  compact?: boolean;
+}) {
+  const up = useUploader(["image", "video"], 1, 0, (f) => onChange({ url: f.url, kind: f.kind === "video" ? "video" : "image" }));
+  const [choosing, setChoosing] = useState(false);
+  return (
+    <div className={`field ${compact ? "compact" : ""}`}>
+      {title && <label>{title}</label>}
+      {up.field}
+      <div className="media-slot">
+        {value ? (
+          <div className="media-tile-wrap slot-preview">
+            <MediaTile media={value} selected onClick={() => undefined} />
+            <button type="button" className="media-del" aria-label="Kaldır" title="Kaldır" onClick={() => onChange(null)} style={{ opacity: 1 }}>
+              <Icon name="close" size={12} />
+            </button>
+          </div>
+        ) : null}
+        <div className="slot-actions">
+          <button type="button" className="btn btn-light btn-sm" onClick={up.pick} disabled={up.busy.length > 0}>
+            <Icon name="plus" size={14} /> {up.busy.length ? `Yükleniyor %${up.busy[0].pct}` : value ? "Değiştir" : "Bilgisayardan yükle"}
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setChoosing((x) => !x)}>
+            Kütüphaneden seç
+          </button>
+        </div>
+      </div>
+      {choosing && (
+        <LibraryChooser
+          lib={lib}
+          onClose={() => setChoosing(false)}
+          onPick={(m) => {
+            onChange(m);
+            setChoosing(false);
+          }}
+        />
+      )}
+      <UploadProgress busy={up.busy} />
+      {up.error && <small className="error-text">{up.error}</small>}
+      {hint && <span className="hint">{hint} JPG, PNG, MP4 veya MOV.</span>}
+    </div>
   );
-  const body = text || "Ana metin burada görünür.";
+}
+
+function CarouselEditor({ cards, onChange, lib, withLink }: { cards: Card[]; onChange: (c: Card[]) => void; lib: AdLibrary; withLink: boolean }) {
+  const set = (id: string, patch: Partial<Card>) => onChange(cards.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  return (
+    <div className="field">
+      <label>Karusel kartları ({cards.length}/10)</label>
+      <div className="carousel-cards">
+        {cards.map((c, i) => (
+          <div key={c.id} className="carousel-card">
+            <div className="carousel-card-head">
+              <strong>{i + 1}. kart</strong>
+              {cards.length > 2 && (
+                <button type="button" className="link-btn" onClick={() => onChange(cards.filter((x) => x.id !== c.id))}>
+                  Kaldır
+                </button>
+              )}
+            </div>
+            <MediaPicker title="" value={c.media} onChange={(m) => set(c.id, { media: m })} lib={lib} compact />
+            <input value={c.headline} maxLength={80} onChange={(e) => set(c.id, { headline: e.target.value })} placeholder="Kart başlığı (ör. ürün adı, fiyat)" />
+            {withLink && (
+              <input value={c.link} inputMode="url" onChange={(e) => set(c.id, { link: e.target.value })} placeholder="Kart bağlantısı (boşsa ana bağlantı)" />
+            )}
+          </div>
+        ))}
+      </div>
+      {cards.length < 10 && (
+        <button type="button" className="add-file" onClick={() => onChange([...cards, newCard()])}>
+          <Icon name="plus" size={16} /> Kart ekle
+        </button>
+      )}
+      <span className="hint">2–10 kart. Kartlar aynı oranda olmalı; kare (1:1) en iyisi. Ana metin bütün karuselin altında görünür.</span>
+    </div>
+  );
+}
+
+// Mevcut Instagram / Facebook gönderisi seçimi
+function PostPicker({ pageId, igId, value, onChange }: { pageId: string; igId: string; value: Post | null; onChange: (p: Post | null) => void }) {
+  const [posts, setPosts] = useState<Post[] | null>(null);
+  const [error, setError] = useState("");
+  const [platform, setPlatform] = useState<"instagram" | "facebook">(igId ? "instagram" : "facebook");
+  useEffect(() => {
+    if (!pageId) return;
+    setPosts(null);
+    setError("");
+    api<{ posts: Post[] }>(`/api/ads/meta/posts?page_id=${pageId}${igId ? `&instagram_user_id=${igId}` : ""}`)
+      .then((d) => setPosts(d.posts))
+      .catch((e) => setError((e as ApiError).message));
+  }, [pageId, igId]);
+  const list = (posts || []).filter((p) => p.platform === platform);
+  const typeLabel = (t: string, n: number) => (t === "carousel" ? `Karusel · ${n}` : t === "reel" ? "Reels" : t === "video" ? "Video" : "");
+  return (
+    <div className="field">
+      <div className="segmented small" role="tablist">
+        <button type="button" className={platform === "instagram" ? "active" : ""} onClick={() => setPlatform("instagram")} disabled={!igId}>
+          Instagram gönderileri
+        </button>
+        <button type="button" className={platform === "facebook" ? "active" : ""} onClick={() => setPlatform("facebook")}>
+          Facebook gönderileri
+        </button>
+      </div>
+      {error && <div className="notice error">{error}</div>}
+      {posts === null && !error ? (
+        <p className="hint">Gönderiler yükleniyor…</p>
+      ) : !list.length ? (
+        <p className="hint">
+          {platform === "instagram" ? "Bu Instagram hesabında reklama uygun gönderi bulunamadı." : "Bu Facebook sayfasında görselli gönderi bulunamadı."}
+        </p>
+      ) : (
+        <div className="media-grid post-grid">
+          {list.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={`media-tile post-tile ${value?.id === p.id ? "selected" : ""}`}
+              onClick={() => onChange(value?.id === p.id ? null : p)}
+              aria-pressed={value?.id === p.id}
+              title={p.caption}
+            >
+              {p.thumbnail ? <img src={p.thumbnail} alt="" loading="lazy" /> : <span className="faint">Önizleme yok</span>}
+              {typeLabel(p.type, p.count) && <span className="badge">{typeLabel(p.type, p.count)}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      <span className="hint">
+        Gönderi, beğeni ve yorumlarıyla reklam olarak yayınlanır; karusel ve Reels gönderileri de seçilebilir. Instagram gönderisi
+        Instagram alanlarında, Facebook gönderisi Facebook alanlarında gösterilir. Telif hakkı olan müzik içeren gönderileri Meta kabul etmeyebilir.
+      </span>
+    </div>
+  );
+}
+
+function AdPreview({ placement, media, name, text, headline, cta, cards, post }: {
+  placement: Placement;
+  media: Media | null;
+  name: string;
+  text: string;
+  headline: string;
+  cta: string;
+  cards?: Card[];
+  post?: Post | null;
+}) {
+  const visualOf = (m: Media | null) =>
+    m ? m.kind === "image" ? <img src={m.url} alt="" /> : <video src={m.url} muted playsInline autoPlay loop /> : <span>Görsel veya video seç</span>;
+  const visual = post ? (post.thumbnail ? <img src={post.thumbnail} alt="" /> : <span>Gönderi</span>) : visualOf(media);
+  const body = post ? post.caption || "Gönderinin açıklaması" : text || "Ana metin burada görünür.";
+
+  if (cards && !isVertical(placement)) {
+    return (
+      <div className={`ig-card ${placement === "facebook_feed" ? "fb-card" : ""}`}>
+        <div className="ig-head">
+          <span className={`ig-avatar ${placement === "facebook_feed" ? "fb" : ""}`} aria-hidden="true" />
+          <div>
+            <strong>{name}</strong>
+            <small>Sponsorlu</small>
+          </div>
+        </div>
+        {placement === "facebook_feed" && <p className="fb-text">{body}</p>}
+        <div className="carousel-preview">
+          {(cards.length ? cards : [newCard(), newCard()]).map((c) => (
+            <div key={c.id} className="carousel-preview-card">
+              <div className="ig-media square">{visualOf(c.media)}</div>
+              <div className="carousel-preview-cta">
+                <span>{c.headline || "Kart başlığı"}</span>
+                <small>{cta}</small>
+              </div>
+            </div>
+          ))}
+        </div>
+        {placement !== "facebook_feed" && (
+          <p className="ig-text">
+            <strong>{name}</strong> {body}
+          </p>
+        )}
+      </div>
+    );
+  }
+  const firstCard = cards?.[0]?.media ?? null;
+  const shown = cards ? visualOf(firstCard) : visual;
 
   if (isVertical(placement)) {
     const reels = placement.endsWith("reels");
     return (
       <div className={`ad-phone ${reels ? "reels" : "story"}`}>
-        <div className="ad-phone-media">{visual}</div>
+        <div className="ad-phone-media">{shown}</div>
         {!reels && <div className="story-bars" aria-hidden="true"><span /></div>}
         <div className="ad-phone-head">
           <span className="ig-avatar" aria-hidden="true" />
@@ -1116,7 +1320,7 @@ function AdPreview({ placement, media, name, text, headline, cta }: { placement:
           </div>
         </div>
         <p className="fb-text">{body}</p>
-        <div className="ig-media square">{visual}</div>
+        <div className="ig-media square">{shown}</div>
         <div className="fb-cta">
           <div>
             <small>{name}</small>
@@ -1137,7 +1341,7 @@ function AdPreview({ placement, media, name, text, headline, cta }: { placement:
           <small>Sponsorlu</small>
         </div>
       </div>
-      <div className="ig-media">{visual}</div>
+      <div className="ig-media">{shown}</div>
       <div className="ig-cta">
         <span>{cta}</span>
         <Icon name="arrowLeft" size={14} />

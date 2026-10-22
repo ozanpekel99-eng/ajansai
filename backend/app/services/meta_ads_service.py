@@ -416,6 +416,47 @@ def list_instagram_accounts(ad_account_id: str, token: str) -> list[dict]:
     return out
 
 
+def recent_posts(token: str, page_id: str, instagram_user_id: str | None, limit: int = 18) -> list[dict]:
+    """Reklamda kullanılabilecek son gönderiler: seçili Instagram hesabı ve Facebook sayfası."""
+    out: list[dict] = []
+    if instagram_user_id:
+        try:
+            data = _graph(
+                "GET", f"{instagram_user_id}/media", token, limit=limit,
+                fields="id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,"
+                       "children{media_type,media_url,thumbnail_url}",
+            ).get("data", [])
+            for m in data:
+                kids = (m.get("children") or {}).get("data") or []
+                thumb = m.get("thumbnail_url") or m.get("media_url") or (
+                    (kids[0].get("thumbnail_url") or kids[0].get("media_url")) if kids else None)
+                kind = ("carousel" if m.get("media_type") == "CAROUSEL_ALBUM" else
+                        "reel" if m.get("media_product_type") == "REELS" else (m.get("media_type") or "IMAGE").lower())
+                out.append({"platform": "instagram", "id": m["id"], "caption": (m.get("caption") or "")[:300],
+                            "type": kind, "thumbnail": thumb, "permalink": m.get("permalink"),
+                            "time": m.get("timestamp"), "count": len(kids) or 1})
+        except MetaError as e:
+            logger.info("Instagram gönderileri alınamadı: %s", e)
+    try:
+        page_token = _graph("GET", page_id, token, fields="access_token").get("access_token") or token
+        data = _graph("GET", f"{page_id}/published_posts", page_token, limit=limit,
+                      fields="id,message,full_picture,created_time,permalink_url,"
+                             "attachments{media_type,subattachments}").get("data", [])
+        for post in data:
+            if not post.get("full_picture"):
+                continue  # yalnızca görselli/videolu gönderiler
+            att = ((post.get("attachments") or {}).get("data") or [{}])[0]
+            subs = (att.get("subattachments") or {}).get("data") or []
+            kind = "carousel" if len(subs) > 1 else ("video" if "video" in (att.get("media_type") or "") else "image")
+            out.append({"platform": "facebook", "id": post["id"], "caption": (post.get("message") or "")[:300],
+                        "type": kind, "thumbnail": post.get("full_picture"), "permalink": post.get("permalink_url"),
+                        "time": post.get("created_time"), "count": len(subs) or 1})
+    except MetaError as e:
+        logger.info("Facebook gönderileri alınamadı: %s", e)
+    out.sort(key=lambda x: x.get("time") or "", reverse=True)
+    return out
+
+
 def search_locations(query: str, token: str) -> list[dict]:
     data = _graph(
         "GET",
@@ -529,6 +570,8 @@ def create_instagram_ad(
     fetch_bytes,
     placements: list[str] | None = None,
     story_media: dict | None = None,
+    source_post: dict | None = None,
+    carousel: list[dict] | None = None,
 ) -> dict:
     """Seçilen yerleşimlerde (varsayılan Instagram) duraklatılmış bir reklam oluşturur.
 
@@ -570,8 +613,6 @@ def create_instagram_ad(
             adset_body["end_time"] = end_time
         adset = _graph("POST", f"act_{act}/adsets", token, **adset_body)
 
-        uploaded = _upload_media(act, token, media, fetch_bytes)
-
         if objective == "whatsapp":
             cta = {"type": "WHATSAPP_MESSAGE", "value": {"app_destination": "WHATSAPP"}}
             target_link = "https://api.whatsapp.com/send"
@@ -585,38 +626,14 @@ def create_instagram_ad(
             target_link = link
             cta = {"type": call_to_action, "value": {"link": target_link}}
 
-        if "image_hash" in uploaded:
-            story = {
-                "page_id": page_id,
-                "link_data": {
-                    "image_hash": uploaded["image_hash"],
-                    "link": target_link,
-                    "message": primary_text,
-                    "name": headline,
-                    "call_to_action": cta,
-                },
-            }
+        if source_post:
+            creative_body = _post_creative(name, page_id, instagram_user_id, source_post, cta, objective)
+        elif carousel:
+            creative_body = _carousel_creative(act, token, name, page_id, instagram_user_id, carousel,
+                                               primary_text, target_link, cta, fetch_bytes)
         else:
-            story = {
-                "page_id": page_id,
-                "video_data": {
-                    "video_id": uploaded["video_id"],
-                    "image_url": uploaded["thumbnail"],
-                    "message": primary_text,
-                    "title": headline,
-                    "call_to_action": cta,
-                },
-            }
-        if instagram_user_id:
-            story["instagram_user_id"] = instagram_user_id
-        creative_body = {"name": f"{name} - kreatif", "object_story_spec": story}
-        pos = _positions(placements)
-        vertical = [p for p in pos.get("instagram_positions", []) + pos.get("facebook_positions", []) if p in VERTICAL]
-        if story_media and vertical and story_media.get("kind") == media.get("kind"):
-            creative_body = _customized_creative(
-                act, token, name, page_id, instagram_user_id, uploaded, _upload_media(act, token, story_media, fetch_bytes),
-                pos, primary_text, headline, target_link, cta,
-            )
+            creative_body = _single_creative(act, token, name, page_id, instagram_user_id, media, story_media,
+                                             placements, primary_text, headline, target_link, cta, fetch_bytes)
         creative = _graph("POST", f"act_{act}/adcreatives", token, **creative_body)
         ad = _graph(
             "POST",
@@ -634,6 +651,80 @@ def create_instagram_ad(
             logger.warning("Yarım kalan kampanya silinemedi: %s", campaign_id)
         raise
     return {"campaign_id": campaign_id, "adset_id": adset["id"], "ad_id": ad["id"]}
+
+
+def _single_creative(act, token, name, page_id, instagram_user_id, media, story_media, placements,
+                     primary_text, headline, target_link, cta, fetch_bytes) -> dict:
+    """Tek görsel/video (isteğe bağlı hikâye görseliyle) kreatifi."""
+    uploaded = _upload_media(act, token, media, fetch_bytes)
+    if "image_hash" in uploaded:
+        story = {
+            "page_id": page_id,
+            "link_data": {
+                "image_hash": uploaded["image_hash"],
+                "link": target_link,
+                "message": primary_text,
+                "name": headline,
+                "call_to_action": cta,
+            },
+        }
+    else:
+        story = {
+            "page_id": page_id,
+            "video_data": {
+                "video_id": uploaded["video_id"],
+                "image_url": uploaded["thumbnail"],
+                "message": primary_text,
+                "title": headline,
+                "call_to_action": cta,
+            },
+        }
+    if instagram_user_id:
+        story["instagram_user_id"] = instagram_user_id
+    creative_body = {"name": f"{name} - kreatif", "object_story_spec": story}
+    pos = _positions(placements)
+    vertical = [p for p in pos.get("instagram_positions", []) + pos.get("facebook_positions", []) if p in VERTICAL]
+    if story_media and vertical and story_media.get("kind") == media.get("kind"):
+        creative_body = _customized_creative(
+            act, token, name, page_id, instagram_user_id, uploaded, _upload_media(act, token, story_media, fetch_bytes),
+            pos, primary_text, headline, target_link, cta,
+        )
+    return creative_body
+
+
+def _carousel_creative(act, token, name, page_id, ig_id, cards, primary_text, target_link, cta, fetch_bytes) -> dict:
+    """Kaydırmalı karusel: 2-10 kart, her kartta görsel/video, başlık ve bağlantı."""
+    children = []
+    for card in cards[:10]:
+        up = _upload_media(act, token, card["media"], fetch_bytes)
+        item = {"link": card.get("link") or target_link, "name": (card.get("headline") or "")[:80], "call_to_action": cta}
+        if "image_hash" in up:
+            item["image_hash"] = up["image_hash"]
+        else:
+            item.update(video_id=up["video_id"], picture=up["thumbnail"])
+        children.append(item)
+    story = {"page_id": page_id, "link_data": {
+        "link": target_link, "message": primary_text, "child_attachments": children,
+        "multi_share_optimized": True, "multi_share_end_card": False, "call_to_action": cta,
+    }}
+    if ig_id:
+        story["instagram_user_id"] = ig_id
+    return {"name": f"{name} - karusel", "object_story_spec": story}
+
+
+def _post_creative(name, page_id, ig_id, source_post, cta, objective) -> dict:
+    """Mevcut bir gönderiyi (Instagram veya Facebook) reklam olarak kullanan kreatif."""
+    if source_post["platform"] == "instagram":
+        body = {"name": f"{name} - gönderi", "object_id": page_id, "instagram_user_id": ig_id,
+                "source_instagram_media_id": source_post["id"]}
+        if objective != "awareness":
+            body["call_to_action"] = cta
+        return body
+    post_id = source_post["id"] if "_" in source_post["id"] else f"{page_id}_{source_post['id']}"
+    body = {"name": f"{name} - gönderi", "object_story_id": post_id}
+    if ig_id:
+        body["instagram_user_id"] = ig_id
+    return body
 
 
 def _customized_creative(act, token, name, page_id, ig_id, feed, story, pos, text, headline, link, cta) -> dict:
@@ -783,15 +874,28 @@ def _setup_status(token: str) -> dict:
 
 
 def page_whatsapp(token: str, page_id: str) -> dict:
-    """Sayfaya bağlı WhatsApp numarası (yoksa bağlama bağlantısı)."""
+    """Sayfaya bağlı WhatsApp numarası.
+
+    Meta bu alanı çoğu uygulamaya göstermez (numara bağlı olsa da boş döner). Numara okunamazsa
+    known=False döner; arayüz uyarı yerine bilgi gösterir ve devam etmeye izin verir.
+    """
     number = None
-    try:
-        page = _graph("GET", page_id, token, fields="whatsapp_number")
-        number = page.get("whatsapp_number") or None
-    except MetaError as e:
-        logger.info("WhatsApp numarası okunamadı (%s): %s", page_id, e)
+    for use_page_token in (False, True):
+        try:
+            tok = token
+            if use_page_token:
+                tok = _graph("GET", page_id, token, fields="access_token").get("access_token") or ""
+                if not tok:
+                    break
+            number = _graph("GET", page_id, tok, fields="whatsapp_number").get("whatsapp_number") or None
+        except MetaError as e:
+            logger.info("WhatsApp numarası okunamadı (%s): %s", page_id, e)
+        if number:
+            break
     return {
         "number": number,
-        "connect_url": "https://business.facebook.com/latest/settings/whatsapp_account",
-        "help": "Facebook sayfanın ayarlarında Bağlı hesaplar > WhatsApp bölümünden numaranı bağla; doğrulama kodu WhatsApp'a gelir.",
+        "known": bool(number),
+        # asset_id ile Business Suite, sayfanın kendi portföyünde açılır
+        "connect_url": f"https://business.facebook.com/latest/settings/whatsapp_account?asset_id={page_id}",
+        "help": "Sayfanın ayarlarında Bağlı hesaplar > WhatsApp bölümünden numaranı bağlayabilirsin; doğrulama kodu WhatsApp'a gelir.",
     }

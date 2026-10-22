@@ -3914,3 +3914,22 @@ table.data td.num {
 .revise-box label { font-weight: 600; font-size: 14px; }
 .revise-box .chip-row { flex-wrap: wrap; }
 .revise-box .chip { cursor: pointer; border: 0; }
+
+/* Reklam içeriği: dosya alanı, kütüphane, karusel, mevcut gönderi */
+.content-mode { flex-wrap: wrap; }
+.media-slot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.media-slot .slot-preview { width: 96px; }
+.slot-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.lib-chooser { margin-top: 10px; padding: 12px; border: 1px solid var(--line-strong); border-radius: var(--r-md); }
+.lib-chooser-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.lib-chooser .media-grid { max-height: 360px; overflow-y: auto; }
+.carousel-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.carousel-card { border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px; display: grid; gap: 8px; }
+.carousel-card .field { margin: 0; }
+.carousel-card-head { display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; }
+.post-grid .post-tile { aspect-ratio: 1 / 1; }
+.post-tile .faint { font-size: 12px; }
+.carousel-preview { display: flex; gap: 6px; overflow-x: auto; padding: 0 10px 10px; scroll-snap-type: x mandatory; }
+.carousel-preview-card { flex: 0 0 78%; scroll-snap-align: start; border: 1px solid #e5e5e5; border-radius: 8px; overflow: hidden; }
+.carousel-preview-cta { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 8px; font-size: 12.5px; font-weight: 600; }
+.carousel-preview-cta small { color: #0a58ca; font-weight: 600; white-space: nowrap; }

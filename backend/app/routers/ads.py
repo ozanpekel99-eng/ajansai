@@ -151,6 +151,13 @@ def meta_whatsapp(page_id: str, user: dict = Depends(get_current_user)):
     return _meta_call(meta.page_whatsapp, _get_token(user["id"]), page_id)
 
 
+@router.get("/meta/posts")
+def meta_posts(page_id: str, instagram_user_id: str | None = None, user: dict = Depends(get_current_user)):
+    """Reklamda kullanılabilecek son Instagram ve Facebook gönderileri."""
+    _require_ads(user)
+    return {"posts": _meta_call(meta.recent_posts, _get_token(user["id"]), page_id, instagram_user_id)}
+
+
 @router.get("/meta/pages")
 def meta_pages(ad_account_id: str | None = None, fresh: bool = False, user: dict = Depends(get_current_user)):
     _require_ads(user)
@@ -190,6 +197,18 @@ class AdMedia(BaseModel):
     kind: Literal["image", "video"]
 
 
+class SourcePost(BaseModel):
+    platform: Literal["instagram", "facebook"]
+    id: str = Field(..., max_length=100)
+    thumbnail: str | None = Field(None, max_length=3000)
+
+
+class CarouselCard(BaseModel):
+    media: AdMedia
+    headline: str = Field("", max_length=80)
+    link: str | None = Field(None, max_length=1000)
+
+
 CTA_TYPES = ("LEARN_MORE", "SHOP_NOW", "ORDER_NOW", "BOOK_NOW", "CONTACT_US", "SIGN_UP", "GET_OFFER")
 
 
@@ -207,11 +226,14 @@ class CreateAdRequest(BaseModel):
     age_min: int = Field(18, ge=18, le=65)
     age_max: int = Field(65, ge=18, le=65)
     gender: Literal["all", "male", "female"] = "all"
-    media: AdMedia
+    # Reklam içeriği: yeni görsel/video (media), karusel (2-10 kart) ya da mevcut gönderi
+    media: AdMedia | None = None
+    carousel: list[CarouselCard] = Field(default_factory=list, max_length=10)
+    source_post: SourcePost | None = None
     # Hikâye ve Reels için dikey (9:16) görsel/video; verilmezse ana medya her yerde kullanılır
     story_media: AdMedia | None = None
     placements: list[str] = Field(default_factory=lambda: list(meta.DEFAULT_PLACEMENTS), max_length=10)
-    primary_text: str = Field(..., min_length=1, max_length=2000)
+    primary_text: str = Field("", max_length=2000)
     headline: str = Field("", max_length=120)
     link: str | None = Field(None, max_length=1000)
     call_to_action: str = "LEARN_MORE"
@@ -239,10 +261,25 @@ def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_us
     bad = [p for p in payload.placements if p not in meta.PLACEMENTS]
     if bad or not payload.placements:
         raise HTTPException(status_code=400, detail="En az bir geçerli reklam alanı seç.")
-    if payload.story_media and not storage.is_own_blob_url(payload.story_media.url):
-        raise HTTPException(status_code=400, detail="Hikâye görseli ajansAI'a yüklenmiş olmalı.")
-    if not storage.is_own_blob_url(payload.media.url):
-        raise HTTPException(status_code=400, detail="Reklam görseli/videosu ajansAI'a yüklenmiş olmalı.")
+    modes = [bool(payload.media), bool(payload.carousel), bool(payload.source_post)]
+    if sum(modes) != 1:
+        raise HTTPException(status_code=400, detail="Reklam için bir görsel/video, karusel ya da mevcut bir gönderi seç.")
+    if payload.carousel and not 2 <= len(payload.carousel) <= 10:
+        raise HTTPException(status_code=400, detail="Karusel 2 ile 10 kart arasında olmalı.")
+    own = [m.url for m in [payload.media, payload.story_media] if m] + [c.media.url for c in payload.carousel]
+    if any(not storage.is_own_blob_url(u) for u in own):
+        raise HTTPException(status_code=400, detail="Reklam görselleri ajansAI'a yüklenmiş olmalı.")
+    if payload.source_post and payload.source_post.platform == "instagram" and not payload.instagram_user_id:
+        raise HTTPException(status_code=400, detail="Instagram gönderisi için Instagram hesabı seçmelisin.")
+    if not payload.source_post and not payload.primary_text.strip():
+        raise HTTPException(status_code=400, detail="Reklam metnini yaz.")
+    placements = payload.placements
+    if payload.source_post:
+        # Mevcut gönderi yalnızca kendi platformunun alanlarında yayınlanır
+        own_platform = [p for p in placements if p.startswith(payload.source_post.platform)]
+        defaults = (["instagram_feed", "instagram_story", "instagram_reels", "instagram_explore"]
+                    if payload.source_post.platform == "instagram" else ["facebook_feed"])
+        placements = own_platform or defaults
     if payload.end_date and payload.start_date and payload.end_date <= payload.start_date:
         raise HTTPException(status_code=400, detail="Bitiş tarihi başlangıçtan sonra olmalı.")
 
@@ -263,14 +300,16 @@ def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_us
         age_min=payload.age_min,
         age_max=payload.age_max,
         gender=payload.gender,
-        media=payload.media.model_dump(),
+        media=payload.media.model_dump() if payload.media else None,
         primary_text=payload.primary_text,
         headline=payload.headline,
         link=payload.link,
         call_to_action=payload.call_to_action,
         fetch_bytes=storage.fetch,
-        placements=payload.placements,
+        placements=placements,
         story_media=payload.story_media.model_dump() if payload.story_media else None,
+        source_post=payload.source_post.model_dump() if payload.source_post else None,
+        carousel=[c.model_dump() for c in payload.carousel] or None,
     )
     record_id = str(uuid.uuid4())
     with get_engine().begin() as conn:
@@ -286,7 +325,8 @@ def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_us
                 objective=payload.objective,
                 daily_budget=payload.daily_budget,
                 currency=payload.currency[:3].upper(),
-                media_url=payload.media.url,
+                media_url=(payload.media.url if payload.media else payload.carousel[0].media.url if payload.carousel
+                           else (payload.source_post.thumbnail or "")),
                 created_at=utcnow(),
             )
         )
