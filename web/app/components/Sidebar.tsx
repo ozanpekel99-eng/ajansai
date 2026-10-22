@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { logout } from "../lib/api";
+import { CHATS_EVENT, ChatSummary, deleteChat, listChats } from "../lib/chats";
 import { useFreeStatus } from "../lib/free";
 import { onboardingSteps, useSession } from "../lib/session";
 import Icon from "./Icon";
@@ -74,7 +75,7 @@ export default function Sidebar({ open, onNavigate }: { open: boolean; onNavigat
         </a>
       </nav>
 
-      <div className="sidebar-spacer" />
+      <ChatList pathname={pathname} onNavigate={onNavigate} signedIn={!!user} />
 
       {usage && <QuotaCard onUpgrade={() => openCheckout()} />}
 
@@ -155,6 +156,74 @@ function QuotaCard({ onUpgrade }: { onUpgrade: () => void }) {
           Kredi kullanımı
         </Link>
       )}
+    </div>
+  );
+}
+
+function activeFromUrl(): string | null {
+  if (typeof window === "undefined" || window.location.pathname !== "/") return null;
+  return new URLSearchParams(window.location.search).get("c");
+}
+
+/** Claude gibi: son sohbetler sol menüde; tıklayınca açılır. */
+function ChatList({ pathname, onNavigate, signedIn }: { pathname: string; onNavigate: () => void; signedIn: boolean }) {
+  const [chats, setChats] = useState<ChatSummary[] | null>(null);
+  const [active, setActive] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      listChats()
+        .then((list) => alive && setChats(list))
+        .catch(() => alive && setChats([]));
+    load();
+    setActive(activeFromUrl());
+    const onChange = (e: Event) => {
+      const id = (e as CustomEvent).detail?.activeId;
+      setActive(id === undefined ? activeFromUrl() : id);
+      load();
+    };
+    window.addEventListener(CHATS_EVENT, onChange);
+    return () => {
+      alive = false;
+      window.removeEventListener(CHATS_EVENT, onChange);
+    };
+  }, [signedIn]);
+
+  useEffect(() => {
+    setActive(activeFromUrl());
+  }, [pathname]);
+
+  const remove = async (id: string) => {
+    if (!window.confirm("Bu sohbet silinsin mi?")) return;
+    await deleteChat(id);
+    if (active === id) window.location.href = "/";
+  };
+
+  return (
+    <div className="chat-list">
+      <div className="chat-list-head">
+        <span className="nav-heading">Sohbetler</span>
+        <Link href={`/?yeni=${Date.now()}`} className="icon-btn" aria-label="Yeni sohbet" title="Yeni sohbet" onClick={() => { setActive(null); onNavigate(); }}>
+          <Icon name="plus" size={16} />
+        </Link>
+      </div>
+      <div className="chat-list-items">
+        {chats === null ? null : chats.length === 0 ? (
+          <p className="chat-list-empty">Sohbetlerin burada listelenir.</p>
+        ) : (
+          chats.map((c) => (
+            <div key={c.id} className={`chat-item ${active === c.id && pathname === "/" ? "active" : ""}`}>
+              <Link href={`/?c=${encodeURIComponent(c.id)}`} title={c.title} onClick={() => { setActive(c.id); onNavigate(); }}>
+                {c.title}
+              </Link>
+              <button type="button" aria-label={`${c.title} sohbetini sil`} onClick={() => remove(c.id)}>
+                <Icon name="close" size={12} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

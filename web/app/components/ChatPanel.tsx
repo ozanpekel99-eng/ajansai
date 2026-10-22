@@ -5,6 +5,7 @@ import { FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from
 import Link from "next/link";
 
 import { ApiError, api } from "../lib/api";
+import { saveChat } from "../lib/chats";
 import { renderMarkdown } from "../lib/markdown";
 import { useVoice } from "../lib/voice";
 import { FileChips, PendingFile, UploadProgress, useUploader } from "./Attachments";
@@ -34,24 +35,6 @@ export type AttachMode = "all" | "basic";
 
 /** + menüsündeki ek araçlar: href yoksa kilitli (locked açıklamasıyla). */
 export type MenuTool = { href: string; locked?: string };
-
-const CHATS_KEY = "ajansai_chats";
-
-export function loadChats(): Conversation[] {
-  try {
-    return JSON.parse(localStorage.getItem(CHATS_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function saveChats(list: Conversation[]) {
-  try {
-    localStorage.setItem(CHATS_KEY, JSON.stringify(list.slice(0, 30)));
-  } catch {
-    // depolama kapalıysa sohbet yalnızca bu sekmede kalır
-  }
-}
 
 type Props = {
   endpoint: string;
@@ -117,7 +100,13 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
 
   const persist = (msgs: Msg[]) => {
     const title = (msgs.find((m) => m.role === "user")?.content || "Görsel").slice(0, 70);
-    saveChats([{ id: chatId, title, at: Date.now(), messages: msgs }, ...loadChats().filter((c) => c.id !== chatId)]);
+    // Eklerin yalnızca adres bilgisi saklanır
+    const clean = msgs.map((m) => ({ ...m, attachments: (m.attachments || []).map(({ id, url, content_type, name, kind }) => ({ id, url, content_type, name, kind })) }));
+    void saveChat({ id: chatId, title, at: Date.now(), messages: clean });
+    // Ana sayfadaysa adres çubuğu bu sohbeti gösterir (yenileyince kaybolmaz)
+    if (typeof window !== "undefined" && window.location.pathname === "/" && !window.location.search.includes(`c=${chatId}`)) {
+      window.history.replaceState(null, "", `/?c=${encodeURIComponent(chatId)}`);
+    }
   };
 
   const send = async (e?: FormEvent, preset?: string) => {
@@ -250,7 +239,10 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
   const newChat = () => {
     setChatId(`${Date.now()}`);
     setMessages([]);
+    messagesRef.current = [];
     setError("");
+    if (window.location.pathname === "/") window.history.replaceState(null, "", "/");
+    window.dispatchEvent(new CustomEvent("ajansai:chats", { detail: { activeId: null } }));
     boxRef.current?.focus();
   };
 

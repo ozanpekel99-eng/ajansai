@@ -149,6 +149,17 @@ tts_usage = Table(
     Column("chars", Integer, nullable=False, default=0),
 )
 
+# Sohbet geçmişi (giriş yapmış kullanıcılar; her cihazdan görünür)
+conversations = Table(
+    "conversations",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("user_id", String(36), nullable=False, index=True),
+    Column("title", String(200), nullable=False),
+    Column("messages", Text, nullable=False),  # JSON
+    Column("updated_at", DateTime, nullable=False, index=True),
+)
+
 # Yapay zeka harcaması (AI Gateway), milyonda bir dolar cinsinden. Anahtar: "<gün>" veya "<gün>:free".
 ai_spend = Table(
     "ai_spend",

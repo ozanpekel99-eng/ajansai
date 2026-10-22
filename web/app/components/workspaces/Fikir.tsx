@@ -1,53 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { HistoryEntry } from "../../lib/history";
 import { useFreeStatus } from "../../lib/free";
 import { extractConcept } from "../../lib/markdown";
 import { useSession } from "../../lib/session";
-import ChatPanel, { Conversation, loadChats } from "../ChatPanel";
+import ChatPanel, { Conversation } from "../ChatPanel";
 import { LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
 
-export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
+export default function FikirWorkspace({ initial = null }: { initial?: Conversation | null } & Partial<WorkspaceProps>) {
   const { usage, refresh } = useSession();
   const { status, setStatus } = useFreeStatus();
-  const [chats, setChats] = useState<Conversation[]>([]);
-  const [open, setOpen] = useState<Conversation | null>(null);
-
-  useEffect(() => {
-    setChats(loadChats());
-  }, [tab]);
-
-  if (tab === "history") {
-    const items: HistoryEntry<Conversation>[] = chats.map((c) => ({ id: c.id, title: c.title, at: c.at, data: c }));
-    if (!items.length) {
-      return (
-        <div className="panel empty">
-          <h3>Henüz sohbet yok</h3>
-          <p>Sohbet sekmesinden ilk mesajını yaz; sohbetlerin burada listelenir. Geçmiş bu tarayıcıda saklanır.</p>
-        </div>
-      );
-    }
-    return (
-      <div className="history">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            className="history-item"
-            style={{ textAlign: "left", cursor: "pointer", color: "inherit" }}
-            onClick={() => {
-              setOpen(item.data);
-              showCreate();
-            }}
-          >
-            <span>{item.title}</span>
-            <span className="when">{new Date(item.at).toLocaleDateString("tr-TR")}</span>
-          </button>
-        ))}
-      </div>
-    );
-  }
+  const open = initial;
 
   if (!usage) return null;
 
