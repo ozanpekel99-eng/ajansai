@@ -33,7 +33,7 @@ def get_oauth_url(redirect_uri: str, state: str) -> str:
         params["response_type"] = "code"
         params["override_default_response_type"] = "true"
     else:
-        params["scope"] = "ads_management,ads_read,business_management,pages_show_list,pages_read_engagement,instagram_basic,pages_manage_ads"
+        params["scope"] = "ads_management,ads_read,business_management,pages_show_list,pages_read_engagement,pages_manage_ads"
     query = urlencode(params)
     return f"https://www.facebook.com/{META_API_VERSION}/dialog/oauth?{query}"
 
@@ -283,6 +283,14 @@ def list_pages(token: str, ad_account_id: str | None = None) -> list[dict]:
             ig = p.get("instagram_business_account") or p.get("connected_instagram_account") or {}
             if ig.get("id"):
                 row.update(instagram_id=ig["id"], instagram_username=ig.get("username"))
+                continue
+        except MetaError:
+            pass
+        # Reklam için kullanılabilen, sayfaya bağlı Instagram hesapları (Marketing API kenarı)
+        try:
+            igs = _graph("GET", f"{pid}/instagram_accounts", tokens[pid], fields="id,username").get("data", [])
+            if igs:
+                row.update(instagram_id=igs[0]["id"], instagram_username=igs[0].get("username"))
         except MetaError:
             pass
     if not found and errors:
