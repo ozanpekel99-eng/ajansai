@@ -1,6 +1,6 @@
 "use client";
 
-import { downloadHref } from "../../lib/download";
+import { downloadHref, onDownload } from "../../lib/download";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -206,7 +206,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
         <h2>
           Sonuç
           {result && (
-            <a className="btn btn-ghost btn-sm" href={downloadHref(result.url)} download>
+            <a className="btn btn-ghost btn-sm" href={downloadHref(result.url)} download onClick={onDownload(result.url)}>
               İndir
             </a>
           )}

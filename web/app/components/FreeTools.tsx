@@ -1,6 +1,6 @@
 "use client";
 
-import { downloadHref } from "../lib/download";
+import { downloadHref, onDownload } from "../lib/download";
 import { FormEvent, ReactNode, useState } from "react";
 
 import { ApiError, api } from "../lib/api";
@@ -96,7 +96,7 @@ export function FreeImagePanel({
           Sonuç
           {result && (
             <span style={{ display: "flex", gap: 6 }}>
-              <a className="btn btn-ghost btn-sm" href={downloadHref(result.url)} download>
+              <a className="btn btn-ghost btn-sm" href={downloadHref(result.url)} download onClick={onDownload(result.url)}>
                 İndir
               </a>
               {resultActions?.(result.url, result.concept)}

@@ -1,5 +1,6 @@
 "use client";
 
+import { onDownload } from "../../lib/download";
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -222,7 +223,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
           Sonuç
           {result && (
             <span style={{ display: "flex", gap: 6 }}>
-              <a className="btn btn-ghost btn-sm" href={result.url} target="_blank" rel="noreferrer">
+              <a className="btn btn-ghost btn-sm" href={result.url} download onClick={onDownload(result.url)}>
                 İndir
               </a>
               <Link
