@@ -7,12 +7,15 @@ görsel → image_url, PDF/video → file (data URL), DOCX/TXT/CSV → düz meti
 
 import base64
 import io
+import logging
 import re
 import zipfile
 
 from app import config
 from app.services import storage
-from app.services.llm_service import LLMError, chat_completion, free_chat_completion
+from app.services.llm_service import LLMError, chat_completion, smart_chat_completion
+
+logger = logging.getLogger("ajansai.assistant")
 
 SYSTEM_PROMPT = """Sen ajansAI'sın: her konuda sohbet edebilen, yardımsever ve zeki bir yapay zeka asistanı.
 - Kullanıcı hangi dilde yazıyorsa o dilde yanıt ver (çoğunlukla Türkçe). Net ve doğal yaz; gereksiz giriş cümleleri kurma.
@@ -106,8 +109,11 @@ def _trim_history(history: list[dict]) -> list[dict]:
     return kept
 
 
-def reply(history: list[dict], force_image: bool = False, force_search: bool = False, force_file: bool = False):
-    """Sohbet geçmişine yanıt verir. (metin, kullanılan_model) döndürür.
+def reply(history: list[dict], force_image: bool = False, force_search: bool = False, force_file: bool = False,
+          force_video: bool = False, video_enabled: bool = False):
+    """Sohbet geçmişine yanıt verir.
+
+    (metin, model, görsel istemi, kaynaklar, dosya isteği, model mesajları, video isteği) döndürür.
 
     Geçmişteki eski eklerin yalnızca adı gönderilir; dosyaların kendisi son mesajla gider.
     """
@@ -122,6 +128,10 @@ def reply(history: list[dict], force_image: bool = False, force_search: bool = F
     if web_search.enabled():
         system += web_search.SEARCH_NOTE
     system += documents.FILE_NOTE + (documents.FORCE_FILE_NOTE if force_file else "")
+    if video_enabled:
+        system += free_tier.VIDEO_TOOL_NOTE + (free_tier.FORCE_VIDEO_NOTE if force_video else "")
+    else:
+        system += "\n- Video üretimi kullanıcının paketinde yok; video isterse bir pakete geçebileceğini söyle."
     messages = [{"role": "system", "content": system}]
     has_video = False
     last = len(history) - 1
@@ -141,21 +151,24 @@ def reply(history: list[dict], force_image: bool = False, force_search: bool = F
             has_video = has_video or is_video
         messages.append({"role": "user", "content": parts})
 
-    model = config.CHAT_VIDEO_MODEL if has_video else config.CHAT_MODEL
-    text_only = all(isinstance(m["content"], str) for m in messages)
     if force_search and web_search.enabled():
-        text = f"[[ARA: {(history[-1].get('content') or '')[:300]}]]"
+        text, model = f"[[ARA: {(history[-1].get('content') or '')[:300]}]]", "web"
+    elif has_video:
+        model = config.CHAT_VIDEO_MODEL
+        text = chat_completion(model, messages, max_tokens=MAX_REPLY_TOKENS)
     else:
+        model = config.CHAT_MODEL
         try:
             text = chat_completion(model, messages, max_tokens=MAX_REPLY_TOKENS)
-        except LLMError:
-            # AI Gateway'e ulaşılamazsa (ör. ödeme yöntemi yok) dosyasız mesajlar
-            # ücretsiz sağlayıcı zinciriyle yanıtlanır; dosyalı mesajlar hata verir.
-            if not text_only:
-                raise
-            text, model = free_chat_completion(messages, max_tokens=MAX_REPLY_TOKENS)
-    text, image_prompt, sources, file_request = free_tier.finish_reply(text, messages)
-    return text, (model if not sources else "web"), image_prompt, sources, file_request, messages
+        except LLMError as e:
+            # Sonnet olmazsa Haiku, o da olmazsa ücretsiz zincir (yalnızca metin mesajlarında işe yarar)
+            logger.warning("%s olmadı, yedeğe geçiliyor: %s", model, e)
+            text, model = smart_chat_completion(messages, max_tokens=MAX_REPLY_TOKENS, paid=True, skip=(model,))
+    text, video_request = free_tier.split_video_request(text)
+    if not video_enabled:
+        video_request = None
+    text, image_prompt, sources, file_request = free_tier.finish_reply(text, messages, paid=True)
+    return text, (model if not sources else "web"), image_prompt, sources, file_request, messages, video_request
 
 
 DESCRIBE_PROMPT = {

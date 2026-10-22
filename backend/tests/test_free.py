@@ -33,7 +33,7 @@ def test_guest_chat_uses_haiku_and_daily_limit_per_ip(client, monkeypatch):
         assert r.status_code == 200, r.text
     assert r.json()["reply"] == "Ücretsiz fikir"
     assert r.json()["free"]["chat"] == {"used": 2, "limit": 2, "remaining": 0}
-    assert seen[0]["max_tokens"] <= 1200
+    assert seen[0]["max_tokens"] <= 1500
 
     r = client.post("/api/free/chat", json=_msg(), headers=IP_A)
     assert r.status_code == 429 and "Üye olursan" in r.json()["detail"]
@@ -85,8 +85,8 @@ def _enable_free_images(monkeypatch, calls):
     monkeypatch.setattr(config, "CLOUDFLARE_AI_TOKEN", "cf-token")
     monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0, vision=False: ("a fridge in a white kitchen", "groq:x"))
 
-    def fake_post(url, headers=None, json=None, timeout=None):
-        calls.append({"url": url, "headers": headers, "json": json})
+    def fake_post(url, headers=None, json=None, data=None, files=None, timeout=None):
+        calls.append({"url": url, "headers": headers, "json": json or data, "files": files})
         return FakeResponse(200, {"success": True, "result": {"image": base64.b64encode(b"\xff\xd8\xffjpg").decode()}})
 
     monkeypatch.setattr(free_tier.requests, "post", fake_post)
@@ -101,7 +101,8 @@ def test_free_images_monthly_limit_and_cloudflare_request(client, monkeypatch):
         assert r.status_code == 200, r.text
         assert r.json()["image_url"].startswith("data:image/jpeg;base64,")
     assert r.json()["free"]["images"]["remaining"] == 0
-    assert calls[0]["url"].endswith("/accounts/acc123/ai/run/@cf/black-forest-labs/flux-1-schnell")
+    assert calls[0]["url"].endswith("/accounts/acc123/ai/run/@cf/black-forest-labs/flux-2-klein-4b")
+    assert calls[0]["json"]["width"] == "1024" and calls[0]["files"] == {}
     assert calls[0]["headers"]["Authorization"] == "Bearer cf-token"
     assert calls[0]["json"]["prompt"] == "a fridge in a white kitchen"  # İngilizceye çevrilmiş istem
 
@@ -265,11 +266,45 @@ def test_free_chain_falls_through_to_haiku(monkeypatch):
     assert calls[0] == ("https://api.cerebras.ai/v1/chat/completions", "gpt-oss-120b", "Bearer ck", "low")
     assert calls[1][0] == "https://api.groq.com/openai/v1/chat/completions"
 
-    # Hepsi doluysa Haiku'ya düşer
-    monkeypatch.setattr(ls.requests, "post", lambda url, **k: FakeResponse(429, {}))
-    monkeypatch.setattr(ls, "chat_completion", lambda model, messages, max_tokens=0: f"{model} yanıtı")
-    text, used = ls.free_chat_completion([{"role": "user", "content": "selam"}])
-    assert used == config.FREE_CHAT_MODEL == "anthropic/claude-haiku-5.5"
+
+
+def test_free_chat_prefers_haiku_within_daily_budget(monkeypatch):
+    from app.services import llm_service as ls
+
+    monkeypatch.setattr(config, "GROQ_API_KEY", "gk")
+    monkeypatch.setattr(config, "FREE_CHAT_CHAIN", "groq:openai/gpt-oss-120b")
+    monkeypatch.setattr(ls, "gateway_ready", lambda: True)
+    monkeypatch.setattr(config, "FREE_GATEWAY_DAILY_USD", 0.001)
+    monkeypatch.setattr(ls, "_free_provider_call", lambda p, m, msgs, mt: "Groq yanıtı")
+
+    def fake_gateway(model, messages, max_tokens=0, free=False):
+        assert free is True
+        ls.record_spend(model, {"prompt_tokens": 4000, "completion_tokens": 1000}, free=True)  # $0,0009
+        return f"{model} yanıtı"
+
+    monkeypatch.setattr(ls, "chat_completion", fake_gateway)
+    assert ls.free_chat_completion([{"role": "user", "content": "selam"}])[1] == "anthropic/claude-haiku-5.5"
+    assert ls.free_chat_completion([{"role": "user", "content": "selam"}])[1] == "anthropic/claude-haiku-5.5"
+    # Günlük ücretsiz bütçe ($0,001) aşıldı: ücretsiz zincire geçilir
+    assert ls.free_chat_completion([{"role": "user", "content": "selam"}]) == ("Groq yanıtı", "groq:openai/gpt-oss-120b")
+    assert ls.spent_today(free=True) > 0.001 and ls.spent_today() == ls.spent_today(free=True)
+
+
+def test_paid_smart_chat_uses_sonnet_then_haiku(monkeypatch):
+    from app.services import llm_service as ls
+
+    monkeypatch.setattr(ls, "gateway_ready", lambda: True)
+    tried = []
+
+    def fake_gateway(model, messages, max_tokens=0, free=False):
+        tried.append((model, free))
+        if "sonnet" in model:
+            raise LLMError("yoğun")
+        return "ok"
+
+    monkeypatch.setattr(ls, "chat_completion", fake_gateway)
+    assert ls.smart_chat_completion([{"role": "user", "content": "x"}], paid=True) == ("ok", "anthropic/claude-haiku-5.5")
+    assert tried == [("anthropic/claude-sonnet-5.5", False), ("anthropic/claude-haiku-5.5", False)]
 
 
 def test_free_chain_skips_providers_without_keys(monkeypatch):
@@ -280,8 +315,8 @@ def test_free_chain_skips_providers_without_keys(monkeypatch):
     assert ls.free_chain() == [("cerebras", "gpt-oss-120b"), ("cerebras", "qwen-3.8-27b")]
 
 
-def test_paid_chat_uses_haiku():
-    assert config.CHAT_MODEL == "anthropic/claude-haiku-5.5"
+def test_paid_chat_uses_sonnet():
+    assert config.CHAT_MODEL == "anthropic/claude-sonnet-5.5"
 
 
 PIXABAY_HIT = {
@@ -333,7 +368,7 @@ def test_paid_text_chat_falls_back_to_free_chain(client, monkeypatch):
         raise LLMError("ödeme yöntemi yok")
 
     monkeypatch.setattr(assistant, "chat_completion", gateway_down)
-    monkeypatch.setattr(assistant, "free_chat_completion", lambda messages, max_tokens=0, vision=False: ("Groq yanıtı", "groq:openai/gpt-oss-120b"))
+    monkeypatch.setattr(assistant, "smart_chat_completion", lambda messages, max_tokens=0, paid=False, skip=(): ("Groq yanıtı", "groq:openai/gpt-oss-120b"))
     token = register_paid(client)
     r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Fikir ver"}]}, headers=auth(token))
     assert r.status_code == 200 and r.json()["reply"] == "Groq yanıtı"

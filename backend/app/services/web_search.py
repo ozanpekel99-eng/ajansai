@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from app import config
-from app.services.llm_service import LLMError, free_chat_completion
+from app.services.llm_service import LLMError, free_budget_left, gateway_ready, smart_chat_completion
 
 logger = logging.getLogger("ajansai.search")
 
@@ -86,7 +86,7 @@ def _tavily(query: str) -> list[dict]:
     ]
 
 
-def _answer_from_results(messages: list[dict], query: str, results: list[dict]) -> str:
+def _answer_from_results(messages: list[dict], query: str, results: list[dict], paid: bool = False) -> str:
     context = "\n\n".join(f"[{i + 1}] {r['title']} ({r['url']})\n{r['content']}" for i, r in enumerate(results))
     msgs = _text_messages(messages) + [
         {
@@ -96,13 +96,14 @@ def _answer_from_results(messages: list[dict], query: str, results: list[dict]) 
             "numarayla belirt. Sonuçlarda olmayan şeyi uydurma; emin değilsen söyle.",
         }
     ]
-    text, _ = free_chat_completion(msgs, max_tokens=1500)
+    text, _ = smart_chat_completion(msgs, max_tokens=1800, paid=paid)
     return text
 
 
 # ---------------- Groq yerleşik web araması ----------------
 
 def _groq_search(messages: list[dict], query: str) -> tuple[str, list[dict]]:
+    """(yanıt, [{"title","url","content"}]) döndürür."""
     msgs = _text_messages(messages) + [
         {
             "role": "system",
@@ -133,18 +134,22 @@ def _groq_search(messages: list[dict], query: str) -> tuple[str, list[dict]]:
         results = (tool.get("search_results") or {}).get("results") or []
         for x in results:
             if x.get("url"):
-                sources.append({"title": x.get("title") or x["url"], "url": x["url"]})
+                sources.append({"title": x.get("title") or x["url"], "url": x["url"], "content": (x.get("content") or "")[:1200]})
     return text, sources
 
 
-def answer(messages: list[dict], query: str) -> tuple[str, list[dict]]:
-    """Web'de arayıp yanıtlar. (metin, [{"title","url"}]) döndürür."""
+def answer(messages: list[dict], query: str, paid: bool = False) -> tuple[str, list[dict]]:
+    """Web'de arayıp yanıtlar. (metin, [{"title","url"}]) döndürür.
+
+    Claude kullanılabiliyorsa (ücretli paket ya da günlük ücretsiz bütçe içinde) yanıtı
+    arama sonuçlarından Claude yazar; yoksa Groq'un kendi yanıtı kullanılır.
+    """
     errors = []
     if config.TAVILY_API_KEY:
         try:
             results = _tavily(query)
             if results:
-                text = _answer_from_results(messages, query, results)
+                text = _answer_from_results(messages, query, results, paid)
                 return _clean(text), [{"title": x["title"], "url": x["url"]} for x in results]
         except (LLMError, requests.RequestException) as e:
             errors.append(str(e))
@@ -157,7 +162,13 @@ def answer(messages: list[dict], query: str) -> tuple[str, list[dict]]:
                 if s["url"] not in seen:
                     seen.add(s["url"])
                     unique.append(s)
-            return _clean(text), unique[:8]
+            unique = unique[:8]
+            if gateway_ready() and (paid or free_budget_left()) and any(x["content"] for x in unique):
+                try:
+                    text = _answer_from_results(messages, query, unique, paid)
+                except LLMError as e:
+                    logger.warning("Arama yanıtı Claude ile yazılamadı: %s", e)
+            return _clean(text), [{"title": x["title"], "url": x["url"]} for x in unique]
         except (LLMError, requests.RequestException) as e:
             errors.append(str(e))
             logger.warning("Groq araması olmadı: %s", e)

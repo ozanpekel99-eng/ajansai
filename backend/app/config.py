@@ -83,9 +83,9 @@ ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 
 # --- Görsel / video (Vercel AI Gateway üzerinden, ayrı anahtar gerekmez) ---
 IMAGE_MODEL = _env("IMAGE_MODEL", "bytedance/seedream-5.0-pro")
-# Fikir sohbeti (ücretli paketler): metin, görsel ve belge Claude Haiku 5.5 ile
-# (mesaj başı ~$0,0007); video eki varsa Gemini ile anlaşılır.
-CHAT_MODEL = _env("CHAT_MODEL", "anthropic/claude-haiku-5.5")
+# Sohbet (ücretli paketler): Claude Sonnet 5.5 (mesaj başı ~$0,01-0,02); olmazsa Haiku 5.5.
+# Video eki varsa Gemini ile anlaşılır.
+CHAT_MODEL = _env("CHAT_MODEL", "anthropic/claude-sonnet-5.5")
 CHAT_VIDEO_MODEL = _env("CHAT_VIDEO_MODEL", "google/gemini-3.6-flash")
 # Çözünürlüğe göre video modeli ve sağlayıcıya gönderilen çözünürlük. Videolar
 # dikey (9:16) üretilir; çözünürlük sağlayıcının kademe adıyla verilir.
@@ -95,8 +95,7 @@ VIDEO_MODELS = {
     "4k": (_env("VIDEO_MODEL_4K", "bytedance/seedance-2.0"), "3840x2160"),
 }
 # --- Ücretsiz paket (üyelik gerektirmez; maliyeti sıfıra yakın) ---
-# Fikir sohbeti önce Groq / Cerebras ücretsiz katmanlarıyla ($0); kotalar dolarsa
-# Claude Haiku 5.5 ile (mesaj başı ~$0,0007). Zincir: "sağlayıcı:model" listesi.
+# Ücretsiz sağlayıcı zinciri (Groq / Cerebras, $0): Claude bütçesi dolunca. "sağlayıcı:model" listesi.
 GROQ_API_KEY = _env("GROQ_API_KEY")
 CEREBRAS_API_KEY = _env("CEREBRAS_API_KEY")
 FREE_CHAT_CHAIN = _env(
@@ -104,18 +103,21 @@ FREE_CHAT_CHAIN = _env(
     "cerebras:gpt-oss-120b,groq:openai/gpt-oss-120b,cerebras:qwen-3.8-27b,groq:qwen/qwen3.8-27b",
 )
 FREE_CHAT_MODEL = _env("FREE_CHAT_MODEL", "anthropic/claude-haiku-5.5")
+# Ücretsiz paket önce Claude Haiku 5.5 ile yanıtlanır (mesaj başı ~$0,0006); günlük bu bütçe
+# dolunca ücretsiz katmanlara (Groq / Cerebras) geçilir.
+FREE_GATEWAY_DAILY_USD = float(_env("FREE_GATEWAY_DAILY_USD", "1.0"))
 FREE_CHAT_PER_DAY_USER = _int("FREE_CHAT_PER_DAY_USER", 20)
 FREE_CHAT_PER_DAY_ANON = _int("FREE_CHAT_PER_DAY_ANON", 10)
 FREE_CHAT_PER_DAY_TOTAL = _int("FREE_CHAT_PER_DAY_TOTAL", 5000)  # tüm site, günlük tavan
-# Ücretsiz görsel: Cloudflare Workers AI (FLUX.1 schnell). Günlük 10.000 neuron ücretsiz;
-# 1024px görsel ~58 neuron → tavan 150/gün ile ücretsiz kotanın içinde kalırız.
+# Ücretsiz görsel: Cloudflare Workers AI (FLUX.2 klein). Günlük 10.000 neuron ücretsiz;
+# 1024px görsel ~110 neuron → tavan 80/gün ile ücretsiz kotanın içinde kalırız.
 CLOUDFLARE_ACCOUNT_ID = _env("CLOUDFLARE_ACCOUNT_ID")
 CLOUDFLARE_AI_TOKEN = _env("CLOUDFLARE_AI_TOKEN")
-FREE_IMAGE_MODEL = _env("FREE_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnell")
+FREE_IMAGE_MODEL = _env("FREE_IMAGE_MODEL", "@cf/black-forest-labs/flux-2-klein-4b")
 # Görselden görsel (örnek görselle üretim): FLUX.2 klein 4B, ~110 neuron → günlük tavanda 2 sayılır
 FREE_IMAGE_REF_MODEL = _env("FREE_IMAGE_REF_MODEL", "@cf/black-forest-labs/flux-2-klein-4b")
 FREE_IMAGES_PER_MONTH = _int("FREE_IMAGES_PER_MONTH", 6)
-FREE_IMAGES_PER_DAY_TOTAL = _int("FREE_IMAGES_PER_DAY_TOTAL", 150)
+FREE_IMAGES_PER_DAY_TOTAL = _int("FREE_IMAGES_PER_DAY_TOTAL", 80)
 # Doğal sesli okuma: Google Cloud Text-to-Speech (Chirp 3 HD). Ayda 1M karakter ücretsiz;
 # günlük tavan bunun altında tutulur, aşılırsa tarayıcının kendi sesine düşülür.
 GOOGLE_TTS_API_KEY = _env("GOOGLE_TTS_API_KEY")

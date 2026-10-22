@@ -17,7 +17,10 @@ export type Msg = {
   imageError?: string | null;
   sources?: { title: string; url: string }[];
   files?: { name: string; url: string; format: string; size: number; title: string }[];
+  videos?: ChatVideo[];
 };
+export type ChatVideo = { job_id: string; aspect: string; url?: string | null; error?: string | null };
+type Mode = "chat" | "image" | "search" | "file" | "video";
 export type Conversation = { id: string; title: string; at: number; messages: Msg[] };
 
 /**
@@ -60,12 +63,14 @@ type Props = {
   videoHref?: (text: string) => string | null;
   /** + menüsünde gösterilecek video / reklam araçları */
   tools?: { video?: MenuTool; ads?: MenuTool };
+  /** Video sohbetin içinde üretilir (+ menüsünde "Video oluştur" modu). */
+  videoInChat?: boolean;
   initial?: Conversation | null;
 };
 
-export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, videoHref, tools, initial }: Props) {
+export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, videoHref, tools, videoInChat, initial }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [mode, setMode] = useState<"chat" | "image" | "search" | "file">("chat");
+  const [mode, setMode] = useState<Mode>("chat");
   const imageMode = mode === "image";
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -128,7 +133,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
     setError("");
     setSending(true);
     try {
-      const data = await api<{ reply: string; images?: string[]; image_error?: string | null; sources?: { title: string; url: string }[]; files?: Msg["files"] }>(endpoint, {
+      const data = await api<{ reply: string; images?: string[]; image_error?: string | null; sources?: { title: string; url: string }[]; files?: Msg["files"]; videos?: ChatVideo[] }>(endpoint, {
         method: "POST",
         body: JSON.stringify({
           mode,
@@ -146,6 +151,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
         imageError: data.image_error,
         sources: data.sources || [],
         files: data.files || [],
+        videos: data.videos || [],
       };
       setMode("chat");
       const done = [...next, reply];
@@ -257,10 +263,21 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
     }
   };
 
+  const updateVideo = (idx: number, v: ChatVideo) => {
+    const list = messagesRef.current.map((m, k) =>
+      k === idx ? { ...m, videos: (m.videos || []).map((x) => (x.job_id === v.job_id ? v : x)) } : m,
+    );
+    messagesRef.current = list;
+    setMessages(list);
+    persist(list);
+    if (v.url) onSent?.(null);
+  };
+
   const lastUserWithImages = [...messages].reverse().find((m) => m.role === "user");
   const pendingSearch = sending && mode === "search";
   const pendingFile = sending && (mode === "file" || /sunum|slayt|pdf|word|excel|rapor|belge|tablo/i.test(lastUserWithImages?.content || ""));
-  const pendingImage = sending && (imageMode || /görsel|resim|fotoğraf|afiş|post|çiz/i.test(lastUserWithImages?.content || ""));
+  const pendingVideo = sending && (mode === "video" || (!!videoInChat && /video|reels|animasyon/i.test(lastUserWithImages?.content || "")));
+  const pendingImage = sending && !pendingVideo && (imageMode || /görsel|resim|fotoğraf|afiş|post|çiz/i.test(lastUserWithImages?.content || ""));
 
   return (
     <div className={`chat ${messages.length === 0 ? "is-empty" : ""}`}>
@@ -314,6 +331,13 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                         ))}
                       </div>
                     )}
+                    {!!m.videos?.length && (
+                      <div className="msg-images">
+                        {m.videos.map((v) => (
+                          <VideoCard key={v.job_id} video={v} onUpdate={(nv) => updateVideo(i, nv)} />
+                        ))}
+                      </div>
+                    )}
                     {m.imageError && <div className="notice">{m.imageError}</div>}
                     {!!m.sources?.length && (
                       <div className="sources">
@@ -355,6 +379,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                     <span />
                   </div>
                   {pendingImage && <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>Görsel hazırlanıyor…</div>}
+                  {pendingVideo && <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>Video başlatılıyor…</div>}
                   {pendingSearch && <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>İnternette aranıyor…</div>}
                   {pendingFile && !pendingImage && !pendingSearch && (
                     <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>Dosya istendiyse hazırlanıyor, 20–40 saniye sürebilir…</div>
@@ -385,8 +410,8 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
         )}
         {mode !== "chat" && (
           <div className="mode-chip">
-            <Icon name={mode === "image" ? "image" : mode === "file" ? "file" : "globe"} size={14} />{" "}
-            {mode === "image" ? "Görsel oluştur" : mode === "file" ? "Dosya oluştur" : "Web'de ara"}
+            <Icon name={mode === "image" ? "image" : mode === "file" ? "file" : mode === "video" ? "video" : "globe"} size={14} />{" "}
+            {mode === "image" ? "Görsel oluştur" : mode === "file" ? "Dosya oluştur" : mode === "video" ? "Video oluştur" : "Web'de ara"}
             <button type="button" aria-label="Modu kapat" onClick={() => setMode("chat")}>
               <Icon name="close" size={12} />
             </button>
@@ -467,7 +492,25 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                     <small>Güncel haber ve bilgileri bul</small>
                   </span>
                 </button>
-                {tools?.video && <MenuLink icon="video" title="Video oluştur" desc="Reels ve hikâye için kısa video" tool={tools.video} />}
+                {videoInChat ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setMode("video");
+                      boxRef.current?.focus();
+                    }}
+                  >
+                    <Icon name="video" size={18} />
+                    <span>
+                      <strong>Video oluştur</strong>
+                      <small>Tarif et ya da eklediğin görselden canlandır</small>
+                    </span>
+                  </button>
+                ) : (
+                  tools?.video && <MenuLink icon="video" title="Video oluştur" desc="Reels ve hikâye için kısa video" tool={tools.video} />
+                )}
                 {tools?.ads && <MenuLink icon="megaphone" title="Reklam oluştur" desc="Instagram reklamını kur ve yayınla" tool={tools.ads} />}
               </div>
             )}
@@ -485,6 +528,8 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
             placeholder={
               mode === "image"
                 ? "Görseli tarif et…"
+                : mode === "video"
+                  ? "Videoyu tarif et… Örn. buzlu kahve bardağa dökülüyor, ağır çekim"
                 : mode === "search"
                   ? "Ne aramak istiyorsun?"
                   : mode === "file"
@@ -553,4 +598,60 @@ function hostOf(url: string) {
   } catch {
     return url;
   }
+}
+
+/** Sohbette başlatılan video: hazır olana kadar 5 sn'de bir durumu sorar. */
+function VideoCard({ video, onUpdate }: { video: ChatVideo; onUpdate: (v: ChatVideo) => void }) {
+  const [elapsed, setElapsed] = useState(0);
+  const done = !!video.url || !!video.error;
+  const updateRef = useRef(onUpdate);
+  updateRef.current = onUpdate;
+
+  useEffect(() => {
+    if (done) return;
+    let stop = false;
+    const started = Date.now();
+    const tick = async () => {
+      if (stop) return;
+      setElapsed(Math.round((Date.now() - started) / 1000));
+      try {
+        const r = await api<{ status: string; video_url: string | null; error: string | null }>(`/api/content/video/${video.job_id}`);
+        if (stop) return;
+        if (r.status === "SUCCEEDED" && r.video_url) return updateRef.current({ ...video, url: r.video_url });
+        if (r.status === "FAILED") return updateRef.current({ ...video, error: r.error || "Video üretilemedi, kredin iade edildi." });
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return updateRef.current({ ...video, error: "Video bulunamadı." });
+      }
+      timer = window.setTimeout(tick, 5000);
+    };
+    let timer = window.setTimeout(tick, 4000);
+    return () => {
+      stop = true;
+      window.clearTimeout(timer);
+    };
+  }, [video.job_id, done]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ratio = video.aspect === "16:9" ? "16 / 9" : video.aspect === "1:1" ? "1 / 1" : "9 / 16";
+  if (video.error) return <div className="notice">{video.error}</div>;
+  if (!video.url) {
+    return (
+      <figure className="video-pending" style={{ aspectRatio: ratio }}>
+        <div className="typing">
+          <span />
+          <span />
+          <span />
+        </div>
+        <small>Video hazırlanıyor{elapsed ? ` · ${elapsed} sn` : ""}</small>
+        <small className="faint">Genelde 1–3 dakika sürer, bu sayfadan ayrılabilirsin.</small>
+      </figure>
+    );
+  }
+  return (
+    <figure>
+      <video src={video.url} controls playsInline style={{ aspectRatio: ratio }} />
+      <a className="btn btn-light btn-sm" href={video.url} target="_blank" rel="noreferrer" download>
+        İndir
+      </a>
+    </figure>
+  );
 }

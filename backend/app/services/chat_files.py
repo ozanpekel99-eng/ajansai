@@ -9,10 +9,10 @@ from app.services.llm_service import LLMError
 logger = logging.getLogger("ajansai.chat_files")
 
 
-def make(request: dict, conversation: list[dict], folder: str) -> tuple[dict | None, str | None]:
+def make(request: dict, conversation: list[dict], folder: str, paid: bool = False) -> tuple[dict | None, str | None]:
     """({"name","url","mime","size","title","format"} veya None, hata mesajı) döndürür."""
     try:
-        data, mime, name, title = documents.create(request, conversation)
+        data, mime, name, title = documents.create(request, conversation, paid)
     except (documents.DocumentError, LLMError) as e:
         logger.error("Dosya oluşturulamadı: %s", e)
         return None, "Dosya oluşturulamadı, tekrar dener misin?"

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import requests
 
-from app.services.llm_service import LLMError, free_chat_completion
+from app.services.llm_service import LLMError, smart_chat_completion
 
 logger = logging.getLogger("ajansai.documents")
 
@@ -104,7 +104,7 @@ def _parse_json(text: str) -> dict:
     return json.loads(text[start : end + 1])
 
 
-def build_spec(request: dict, conversation: list[dict]) -> dict:
+def build_spec(request: dict, conversation: list[dict], paid: bool = False) -> dict:
     """Sohbet bağlamından dosya içeriğini JSON olarak hazırlatır."""
     schema, guide = SCHEMAS[request["kind"]]
     context = "\n".join(
@@ -119,7 +119,7 @@ def build_spec(request: dict, conversation: list[dict]) -> dict:
     )
     last_error = None
     for _ in range(2):
-        text, _ = free_chat_completion([{"role": "user", "content": prompt}], max_tokens=4000)
+        text, _ = smart_chat_completion([{"role": "user", "content": prompt}], max_tokens=6000, paid=paid)
         try:
             spec = _parse_json(text)
             if spec.get("title"):
@@ -459,9 +459,9 @@ def _filename(title: str, fmt: str) -> str:
     return f"{slug}.{fmt}"
 
 
-def create(request: dict, conversation: list[dict]) -> tuple[bytes, str, str, str]:
+def create(request: dict, conversation: list[dict], paid: bool = False) -> tuple[bytes, str, str, str]:
     """(dosya baytları, mime, dosya adı, başlık) döndürür."""
-    spec = build_spec(request, conversation)
+    spec = build_spec(request, conversation, paid)
     try:
         data = BUILDERS[(request["kind"], request["format"])](spec)
     except LLMError:

@@ -68,7 +68,7 @@ def test_free_chat_creates_presentation_file(client, monkeypatch):
     _no_photos(monkeypatch)
     monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", BLOB_TOKEN)
     monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0, vision=False: ("Sunumunu hazırladım.\n[[DOSYA: sunum|pdf|Kafe yaz kampanyası]]", "groq:x"))
-    monkeypatch.setattr(documents, "free_chat_completion", lambda messages, max_tokens=0: ("```json\n" + json.dumps(PRES) + "\n```", "groq:x"))
+    monkeypatch.setattr(documents, "smart_chat_completion", lambda *a, **k: ("```json\n" + json.dumps(PRES) + "\n```", "groq:x"))
     saved = {}
     monkeypatch.setattr(storage, "save", lambda d, m, f, filename=None: saved.update(data=d, mime=m, name=filename) or BLOB_URL + filename)
     r = client.post("/api/free/chat", json={"mode": "file", "messages": [{"role": "user", "content": "Kafem için sunum hazırla"}]}, headers={"x-forwarded-for": "7.7.7.7"})
@@ -82,7 +82,7 @@ def test_free_file_daily_limit(client, monkeypatch):
     _no_photos(monkeypatch)
     monkeypatch.setattr(free_tier, "FREE_FILES_PER_DAY", 1)
     monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0, vision=False: ("Tamam.\n[[DOSYA: tablo|xlsx|bütçe]]", "groq:x"))
-    monkeypatch.setattr(documents, "free_chat_completion", lambda messages, max_tokens=0: (json.dumps(SHEET), "groq:x"))
+    monkeypatch.setattr(documents, "smart_chat_completion", lambda *a, **k: (json.dumps(SHEET), "groq:x"))
     ip = {"x-forwarded-for": "8.8.8.1"}
     body = {"messages": [{"role": "user", "content": "Bütçe tablosu"}]}
     assert client.post("/api/free/chat", json=body, headers=ip).json()["files"][0]["url"].startswith("data:application/vnd.openxml")
@@ -96,13 +96,13 @@ def test_paid_chat_file_costs_two_credits_and_refunds_on_failure(client, monkeyp
     from app.services import assistant
 
     monkeypatch.setattr(assistant, "chat_completion", lambda model, messages, max_tokens=0: "Hazır.\n[[DOSYA: belge|docx|teklif]]")
-    monkeypatch.setattr(documents, "free_chat_completion", lambda messages, max_tokens=0: (json.dumps(DOC), "groq:x"))
+    monkeypatch.setattr(documents, "smart_chat_completion", lambda *a, **k: (json.dumps(DOC), "groq:x"))
     monkeypatch.setattr(storage, "save", lambda d, m, f, filename=None: BLOB_URL + filename)
     token = register_paid(client)
     r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Teklif yaz"}]}, headers=auth(token))
     assert r.json()["credits_spent"] == 3 and r.json()["files"][0]["name"] == "teklif.docx"
 
-    monkeypatch.setattr(documents, "free_chat_completion", lambda messages, max_tokens=0: ("bozuk", "groq:x"))
+    monkeypatch.setattr(documents, "smart_chat_completion", lambda *a, **k: ("bozuk", "groq:x"))
     r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Teklif yaz"}]}, headers=auth(token))
     assert r.json()["files"] == [] and r.json()["credits_spent"] == 1 and r.json()["image_error"]
     used = client.get("/api/plans/usage", headers=auth(token)).json()["credits"]["used"]

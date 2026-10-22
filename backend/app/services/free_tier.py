@@ -128,14 +128,19 @@ def status(subject: str, signed_in: bool) -> dict:
 
 # ---------------- Sohbet ----------------
 
-FREE_NOTE = "\n- Yanıtları derli toplu tut."
+FREE_NOTE = (
+    "\n- Yanıtları derli toplu tut.\n- Video üretimi yalnızca ücretli paketlerde var; kullanıcı video isterse bunu kısaca "
+    "söyle ve paket seçebileceğini belirt."
+)
 
 # Sohbetten görsel üretimi (ChatGPT gibi): model görsel istendiğini bu satırla bildirir.
 IMAGE_TOOL_NOTE = (
     "\n- Görsel üretebilirsin. Kullanıcı açıkça bir görsel, fotoğraf, afiş veya gönderi görseli üretmeni/çizmeni "
     "isterse (ör. 'bunun görselini üret', 'bir post görseli yap'), yanıtını kısa tut (1-2 cümle, gerekirse caption) ve "
-    "en sona tek satır olarak şunu ekle: [[GORSEL: <İngilizce, en fazla 60 kelimelik görüntü istemi: konu, ortam, ışık, "
-    "stil>]]. Kullanıcı görsel eklediyse ve onu kullanmak/değiştirmek istiyorsa istemde 'the product in image 0' gibi "
+    "en sona tek satır olarak şunu ekle: [[GORSEL: <oran> | <İngilizce, 40-90 kelimelik ayrıntılı görüntü istemi: konu, "
+    "kompozisyon ve kamera açısı, ortam, ışık, renk paleti, atmosfer, stil (ör. photorealistic product photography, "
+    "35mm, soft natural light)>]]. <oran> şunlardan biri: 1:1 (varsayılan, gönderi), 4:5, 9:16 (story/reels), 16:9 "
+    "(yatay/kapak). Kullanıcı görsel eklediyse ve onu kullanmak/değiştirmek istiyorsa istemde 'the product in image 0' gibi "
     "ona atıf yap. Görsel istenmedikçe bu satırı ekleme. Görsel üretemeyeceğini asla söyleme; satırı eklemen yeterli, "
     "görseli sistem üretip mesajının altında gösterir. Satırda yazı/logo isteme; görselde metin olmasın."
 )
@@ -151,6 +156,49 @@ def split_image_request(text: str) -> tuple[str, str | None]:
     if not m:
         return text, None
     return IMAGE_TAG.sub("", text).strip(), m.group(1).strip()[:1500]
+
+
+IMAGE_ASPECTS = {"1:1": (1024, 1024), "4:5": (896, 1120), "9:16": (768, 1360), "16:9": (1360, 768)}
+ASPECT_PREFIX = re.compile(r"^\s*\(?\s*(1:1|4:5|9:16|16:9)\s*\)?\s*[|,;:-]?\s*")
+
+
+def image_aspect(prompt: str) -> tuple[str, str]:
+    """İstemin başındaki oranı ayırır: ("9:16", "a cup of coffee ...")."""
+    m = ASPECT_PREFIX.match(prompt or "")
+    if not m:
+        return "1:1", (prompt or "").strip()
+    return m.group(1), prompt[m.end():].strip()
+
+
+# Sohbetten video üretimi (yalnızca ücretli paketler)
+VIDEO_TOOL_NOTE = (
+    "\n- Video da üretebilirsin. Kullanıcı açıkça bir video, reels veya animasyon üretmeni isterse yanıtını kısa tut "
+    "(1-2 cümle) ve en sona tek satır ekle: [[VIDEO: <oran> | <süre> | <İngilizce, 40-80 kelimelik video istemi: sahne, "
+    "özne ve hareketi, kamera hareketi, ışık, atmosfer, stil>]]. <oran>: 9:16 (varsayılan, reels/story), 1:1 veya 16:9. "
+    "<süre>: 5 veya 10 (saniye, varsayılan 5). Kullanıcı görsel eklediyse video o görselden başlar. Video istenmedikçe "
+    "bu satırı ekleme; video üretemeyeceğini söyleme, satırı eklemen yeterli."
+)
+FORCE_VIDEO_NOTE = "\n- Kullanıcı bu mesajda 'Video oluştur' seçeneğini kullandı: mutlaka en sona [[VIDEO: ...]] satırını ekle."
+VIDEO_TAG = re.compile(r"\[\[\s*V[İI]DEO\s*:\s*(.+?)\]\]", re.IGNORECASE | re.DOTALL)
+
+
+def split_video_request(text: str) -> tuple[str, dict | None]:
+    """[[VIDEO: oran | süre | istem]] satırını ayırır."""
+    m = VIDEO_TAG.search(text or "")
+    if not m:
+        return text, None
+    parts = [p.strip() for p in m.group(1).split("|")]
+    aspect, duration = "9:16", 5
+    while len(parts) > 1 and parts[0] in ("9:16", "1:1", "16:9", "5", "10", "7"):
+        head = parts.pop(0)
+        if ":" in head:
+            aspect = head
+        else:
+            duration = int(head)
+    if duration not in (5, 7, 10):
+        duration = 5
+    prompt = " ".join(parts).strip()[:1500]
+    return VIDEO_TAG.sub("", text).strip(), ({"aspect": aspect, "duration": duration, "prompt": prompt} if prompt else None)
 
 
 FORCE_IMAGE_NOTE = (
@@ -224,24 +272,25 @@ def chat(
         if force_search and web_search.enabled():
             text = f"[[ARA: {(history[-1].get('content') or '')[:300]}]]"
         else:
-            text, _ = free_chat_completion(messages, max_tokens=1200, vision=bool(images))
+            text, _ = free_chat_completion(messages, max_tokens=1500, vision=bool(images))
     except Exception:
         release(event_id)
         raise
     return (*finish_reply(text, messages), messages)
 
 
-def finish_reply(text: str, messages: list[dict]) -> tuple[str, str | None, list[dict], dict | None]:
+def finish_reply(text: str, messages: list[dict], paid: bool = False) -> tuple[str, str | None, list[dict], dict | None]:
     """Yanıttaki arama, görsel ve dosya isteklerini ayırır: (metin, görsel istemi, kaynaklar, dosya isteği)."""
     sources: list[dict] = []
     query = web_search.split_search_request(text)
     if query:
         try:
-            text, sources = web_search.answer(messages, query)
+            text, sources = web_search.answer(messages, query, paid)
         except LLMError as e:
             logger.error("Web araması yapılamadı: %s", e)
             rest = web_search.SEARCH_TAG.sub("", text).strip()
             text = rest or "Şu an internette arama yapamadım. Biraz sonra tekrar dener misin?"
+    text = VIDEO_TAG.sub("", text).strip()
     text, file_request = documents.split_file_request(text)
     text, image_prompt = split_image_request(text)
     return text, image_prompt, sources, file_request
@@ -258,6 +307,14 @@ def image_enabled() -> bool:
     return bool(config.CLOUDFLARE_ACCOUNT_ID and config.CLOUDFLARE_AI_TOKEN)
 
 
+ENHANCE_PROMPT = (
+    "Rewrite this image idea as one vivid English image-generation prompt (40-80 words). Describe the subject, "
+    "composition and camera angle, setting, lighting, colour palette, mood and style (e.g. photorealistic product "
+    "photography, 35mm, soft natural light). Keep any reference to the uploaded/reference image or product (e.g. "
+    "'the product from image 0'). No text, letters or logos in the image. Reply with the prompt only.\n\n"
+)
+
+
 def _english_prompt(concept: str) -> str:
     """FLUX İngilizce istemlerde daha iyi sonuç verir; ücretsiz zincirle kısa bir çeviri."""
     try:
@@ -265,10 +322,7 @@ def _english_prompt(concept: str) -> str:
             [
                 {
                     "role": "user",
-                    "content": "Translate this social media image idea into one concise English image-generation "
-                    "prompt (max 60 words, describe subject, setting, light, style). If it mentions the uploaded/reference "
-                    "image or product, keep that reference (e.g. 'the product from image 0'). Reply with the prompt only.\n\n"
-                    + concept,
+                    "content": ENHANCE_PROMPT + concept,
                 }
             ],
             max_tokens=300,
@@ -279,16 +333,16 @@ def _english_prompt(concept: str) -> str:
         return concept
 
 
-def _cloudflare_image(prompt: str) -> bytes:
+def _cloudflare_image(prompt: str, model: str | None = None, size: tuple[int, int] = (1024, 1024)) -> bytes:
     url = (
         f"https://api.cloudflare.com/client/v4/accounts/{config.CLOUDFLARE_ACCOUNT_ID}"
-        f"/ai/run/{config.FREE_IMAGE_MODEL}"
+        f"/ai/run/{model or config.FREE_IMAGE_MODEL}"
     )
     try:
         r = requests.post(
             url,
             headers={"Authorization": f"Bearer {config.CLOUDFLARE_AI_TOKEN}"},
-            json={"prompt": prompt[:2048], "steps": 4},
+            json={"prompt": prompt[:2048], "steps": 4, "width": size[0], "height": size[1]},
             timeout=90,
         )
     except requests.RequestException as e:
@@ -335,13 +389,15 @@ def _small_reference(data: bytes) -> bytes:
     return out.getvalue()
 
 
-def _cloudflare_ref_image(prompt: str, references: list[bytes]) -> bytes:
+def _cloudflare_ref_image(prompt: str, references: list[bytes], model: str | None = None,
+                          size: tuple[int, int] = (1024, 1024)) -> bytes:
+    """FLUX.2 (çok parçalı istek). references boşsa metinden görsel üretir."""
     url = (
         f"https://api.cloudflare.com/client/v4/accounts/{config.CLOUDFLARE_ACCOUNT_ID}"
-        f"/ai/run/{config.FREE_IMAGE_REF_MODEL}"
+        f"/ai/run/{model or config.FREE_IMAGE_REF_MODEL}"
     )
     files = {f"input_image_{i}": (f"ref{i}.jpg", _small_reference(b), "image/jpeg") for i, b in enumerate(references[:4])}
-    data = {"prompt": prompt[:2048], "width": "1024", "height": "1024"}
+    data = {"prompt": prompt[:2048], "width": str(size[0]), "height": str(size[1])}
     try:
         r = requests.post(url, headers={"Authorization": f"Bearer {config.CLOUDFLARE_AI_TOKEN}"}, data=data, files=files, timeout=120)
     except requests.RequestException as e:
@@ -355,10 +411,18 @@ def _cloudflare_ref_image(prompt: str, references: list[bytes]) -> bytes:
 
 
 def generate_image(concept: str, references: list[bytes] | None = None, translate: bool = True) -> bytes:
+    aspect, concept = image_aspect(concept)
+    size = IMAGE_ASPECTS[aspect]
     prompt = _english_prompt(concept) if translate else concept
     if references:
-        return _cloudflare_ref_image(prompt, references)
-    return _cloudflare_image(prompt)
+        return _cloudflare_ref_image(prompt, references, size=size)
+    if "flux-2" in (config.FREE_IMAGE_MODEL or ""):
+        try:
+            return _cloudflare_ref_image(prompt, [], config.FREE_IMAGE_MODEL, size)
+        except FreeServiceError as e:
+            logger.warning("FLUX.2 olmadı, FLUX.1 schnell deneniyor: %s", e)
+            return _cloudflare_image(prompt, "@cf/black-forest-labs/flux-1-schnell", size)
+    return _cloudflare_image(prompt, size=size)
 
 
 # ---------------- Stok fotoğraf (Pixabay veya Pexels) ----------------

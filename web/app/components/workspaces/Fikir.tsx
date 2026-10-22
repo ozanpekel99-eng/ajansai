@@ -90,7 +90,8 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
       initial={open}
       endpoint="/api/content/chat"
       attach="all"
-      videoHref={videoHref}
+      videoInChat={usage.video_enabled}
+      videoHref={usage.video_enabled ? undefined : videoHref}
       tools={{
         video: usage.video_enabled ? { href: "/araclar/video" } : { href: "/paketler", locked: "Paketle açılır" },
         ads: usage.ads_enabled ? { href: "/araclar/reklam" } : { href: "/paketler", locked: "Pro paketle açılır" },
@@ -99,7 +100,7 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
       blocker={lacking ? <NoCreditsNotice cost={costs.chat_message} /> : undefined}
       footer={(files) => {
         const cost = costs.chat_message + files * costs.chat_attachment;
-        return `${cost} kredi${files ? ` (${files} dosya dahil)` : ""} · görsel +${costs.image} kredi · ${usage.credits.remaining} kredin var`;
+        return `${cost} kredi${files ? ` (${files} dosya dahil)` : ""} · görsel +${costs.image}${usage.video_enabled ? " · video +24" : ""} kredi · ${usage.credits.remaining} kredin var`;
       }}
     />
   );

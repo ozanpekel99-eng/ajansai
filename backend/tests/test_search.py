@@ -52,7 +52,7 @@ def test_search_mode_skips_first_call_and_uses_tavily(client, monkeypatch):
     monkeypatch.setattr(config, "TAVILY_API_KEY", "tv")
     monkeypatch.setattr(config, "GROQ_API_KEY", None)
     monkeypatch.setattr(free_tier, "free_chat_completion", lambda *a, **k: (_ for _ in ()).throw(AssertionError("çağrılmamalı")))
-    monkeypatch.setattr(web_search, "free_chat_completion", lambda messages, max_tokens=0: ("Sonuç: maç 2-1 bitti [1].", "groq:x"))
+    monkeypatch.setattr(web_search, "smart_chat_completion", lambda *a, **k: ("Sonuç: maç 2-1 bitti [1].", "groq:x"))
 
     def fake_post(url, headers=None, json=None, timeout=None):
         assert url == "https://api.tavily.com/search" and json["query"] == "Galatasaray maç sonucu"

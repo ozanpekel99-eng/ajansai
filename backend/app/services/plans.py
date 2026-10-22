@@ -6,8 +6,9 @@ kredi düşer. Kredi maliyetleri sağlayıcı maliyetine göre belirlendi
 
 - Fikir (Claude Haiku 5.5): 2 fikir ≈ $0.001 → her 2 fikir 1 kredi
 - Görsel (Seedream 5.0 Pro): $0.035 → 4 kredi
-- Sohbet mesajı (Claude Haiku 5.5 / video ekinde Gemini 3.6 Flash): ≈ $0.001 → 1 kredi, her ek +1
-  (ücretsiz pakette Groq/Cerebras ücretsiz katmanları, $0)
+- Sohbet mesajı (Claude Sonnet 5.5, $2/$10 per 1M token; video ekinde Gemini 3.6 Flash): tipik ≈ $0.01-0.02
+  → 1 kredi, her ek +1. Kredinin en düşük satış değeri $0.03 (Advanced), marj korunur.
+  (ücretsiz pakette Claude Haiku 5.5, günlük bütçe dolunca Groq/Cerebras ücretsiz katmanları)
 - Video 720p (Seedance 1.5 Pro): sessiz $0.0259/sn, sesli $0.0518/sn
 - Video 1080p (Seedance 1.5 Pro): sessiz $0.0583/sn, sesli $0.1166/sn
 - Video 4K (Seedance 2.0): token ile ücretlenir, $4 / 1M token;

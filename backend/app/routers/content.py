@@ -15,7 +15,7 @@ from app.services import assistant, chat_files, free_tier, gateway_media, storag
 from app.services.claude_service import generate_content_ideas
 from app.services.llm_service import LLMError
 from app.services.plans import CREDIT_COSTS, chat_cost, idea_cost, video_cost
-from app.services.usage_service import QuotaExceededError, consume, refund
+from app.services.usage_service import QuotaExceededError, consume, get_usage, refund
 
 router = APIRouter()
 logger = logging.getLogger("ajansai.content")
@@ -125,19 +125,25 @@ def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
     image_url = payload.image_url or None
     end_image_url = payload.end_image_url if image_url else None
     _own_urls([u for u in (image_url, end_image_url) if u])
-    duration, resolution = payload.duration, payload.resolution
-    credits = video_cost(duration, resolution, payload.audio)
-    label = ("4K" if resolution == "4k" else resolution) + (", sesli" if payload.audio else "")
-    event_id = _charge(user["id"], "video", credits, f"{label}, {duration} sn: {payload.concept}")
+    job_id, error, credits = _start_video_job(
+        user, payload.concept, payload.duration, payload.resolution, image_url, end_image_url, payload.audio, payload.aspect_ratio
+    )
+    return {"job_id": job_id, "error": error, "credits_spent": credits}
+
+
+def _start_video_job(user: dict, concept: str, duration: int, resolution: str, image_url: str | None,
+                     end_image_url: str | None, audio: bool, aspect_ratio: str) -> tuple[str | None, str | None, int]:
+    """Krediyi düşüp video işini başlatır. (iş kimliği, hata, harcanan kredi) döndürür."""
+    credits = video_cost(duration, resolution, audio)
+    label = ("4K" if resolution == "4k" else resolution) + (", sesli" if audio else "")
+    event_id = _charge(user["id"], "video", credits, f"{label}, {duration} sn: {concept[:300]}")
 
     try:
-        operation = gateway_media.start_video(
-            payload.concept, duration, resolution, image_url, end_image_url, payload.audio, payload.aspect_ratio
-        )
+        operation = gateway_media.start_video(concept, duration, resolution, image_url, end_image_url, audio, aspect_ratio)
     except gateway_media.MediaError as e:
         logger.error("Video başlatılamadı: %s", e)
         refund(event_id)
-        return {"job_id": None, "error": "Video üretimi başlatılamadı, kredin iade edildi. Tekrar dene."}
+        return None, "Video üretimi başlatılamadı, kredin iade edildi. Tekrar dene.", 0
 
     job_id = str(uuid.uuid4())
     with get_engine().begin() as conn:
@@ -151,7 +157,7 @@ def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
                 created_at=utcnow(),
             )
         )
-    return {"job_id": job_id, "error": None, "credits_spent": credits}
+    return job_id, None, credits
 
 
 def _store_video(video: dict, user_id: str) -> str:
@@ -235,7 +241,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(..., min_length=1, max_length=40)
-    mode: Literal["chat", "image", "search", "file"] = "chat"
+    mode: Literal["chat", "image", "search", "file", "video"] = "chat"
 
 
 @router.post("/chat")
@@ -263,13 +269,18 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
                 )
             pages.append(n)
     credits = chat_cost(len(last.attachments), pages)
+    video_enabled = bool(get_usage(user["id"]).get("video_enabled")) and gateway_media.is_enabled()
+    if payload.mode == "video" and not video_enabled:
+        raise HTTPException(status_code=402, detail="Video üretimi ücretli paketlerde açık.")
     event_id = _charge(user["id"], "chat", credits, last.content.strip()[:200] or "Dosya incelemesi")
     try:
-        text, model, image_prompt, sources, file_request, model_messages = assistant.reply(
+        text, model, image_prompt, sources, file_request, model_messages, video_request = assistant.reply(
             [m.model_dump() for m in payload.messages[-20:]],
             force_image=payload.mode == "image",
             force_search=payload.mode == "search",
             force_file=payload.mode == "file",
+            force_video=payload.mode == "video",
+            video_enabled=video_enabled,
         )
     except (LLMError, storage.StorageError) as e:
         logger.error("Sohbet yanıtı alınamadı: %s", e)
@@ -292,19 +303,35 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
             file_event, file_error = None, str(e)
         if file_event:
             conversation = model_messages + [{"role": "assistant", "content": text}]
-            made, file_error = chat_files.make(file_request, conversation, f"dosya/{user['id']}")
+            made, file_error = chat_files.make(file_request, conversation, f"dosya/{user['id']}", paid=True)
             if made:
                 out_files.append(made)
                 credits += cost
             else:
                 refund(file_event)
+    videos, video_error = [], None
+    if video_request:
+        start = next((a.url for a in last.attachments if storage.kind_of(a.content_type) == "image"), None)
+        if not start and images and storage.is_own_blob_url(images[0]):
+            start = images[0]
+        try:
+            job_id, video_error, video_credits = _start_video_job(
+                user, video_request["prompt"], video_request["duration"], "720p", start, None,
+                True, video_request["aspect"],
+            )
+        except HTTPException as e:  # kredi yetmedi
+            job_id, video_error, video_credits = None, str(e.detail), 0
+        if job_id:
+            videos.append({"job_id": job_id, "aspect": video_request["aspect"]})
+            credits += video_credits
     return {
-        "reply": text or ("İşte görselin." if images else "Dosyan hazır." if out_files else ""),
+        "reply": text or ("İşte görselin." if images else "Dosyan hazır." if out_files else "Videon hazırlanıyor." if videos else ""),
         "model": model,
         "images": images,
-        "image_error": image_error or file_error,
+        "image_error": image_error or file_error or video_error,
         "sources": sources,
         "files": out_files,
+        "videos": videos,
         "credits_spent": credits,
     }
 
@@ -322,7 +349,8 @@ def _chat_image(user: dict, prompt: str, refs: list[str]) -> tuple[str | None, s
             event_id = None
         if event_id:
             try:
-                data, mime = gateway_media.generate_image(prompt, "1:1", refs or None)
+                aspect, clean = free_tier.image_aspect(prompt)
+                data, mime = gateway_media.generate_image(clean, aspect, refs or None)
                 if storage.is_enabled():
                     return storage.save(data, mime, f"gorsel/{user['id']}"), None, cost
                 return f"data:{mime};base64,{base64.b64encode(data).decode()}", None, cost

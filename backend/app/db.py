@@ -149,6 +149,14 @@ tts_usage = Table(
     Column("chars", Integer, nullable=False, default=0),
 )
 
+# Yapay zeka harcaması (AI Gateway), milyonda bir dolar cinsinden. Anahtar: "<gün>" veya "<gün>:free".
+ai_spend = Table(
+    "ai_spend",
+    metadata,
+    Column("key", String(120), primary_key=True),
+    Column("micro_usd", Integer, nullable=False, default=0),
+)
+
 # Pexels arama sonuçları önbelleği (Pexels API saatlik istek sınırı için).
 stock_cache = Table(
     "stock_cache",
