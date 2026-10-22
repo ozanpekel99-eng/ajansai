@@ -78,6 +78,7 @@ video_tasks = Table(
     Column("status", String(16), nullable=False),  # pending | completed | failed
     Column("video_url", Text, nullable=True),
     Column("error", Text, nullable=True),
+    Column("prompt", String(500), nullable=True),
     Column("created_at", DateTime, nullable=False),
 )
 
@@ -154,6 +155,19 @@ tts_usage = Table(
     metadata,
     Column("key", String(120), primary_key=True),  # "<gün>" veya "<gün>:<kişi>"
     Column("chars", Integer, nullable=False, default=0),
+)
+
+# Üretilen görsel ve videolar (kütüphane)
+media = Table(
+    "media",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), nullable=False, index=True),
+    Column("kind", String(10), nullable=False),  # image | video
+    Column("url", Text, nullable=False),
+    Column("prompt", String(500), nullable=False, default=""),
+    Column("source", String(20), nullable=False, default=""),  # gorsel | video | sohbet
+    Column("created_at", DateTime, nullable=False, index=True),
 )
 
 # Sohbet geçmişi (giriş yapmış kullanıcılar; her cihazdan görünür)
@@ -246,6 +260,7 @@ def init_db() -> None:
             "extra_credits": "INTEGER NOT NULL DEFAULT 0",
         },
         "credit_events": {"extra": "INTEGER NOT NULL DEFAULT 0"},
+        "video_tasks": {"prompt": "VARCHAR(500)"},
         "payments": {
             "currency": "VARCHAR(3) NOT NULL DEFAULT 'TRY'",
             "billing": "VARCHAR(10) NOT NULL DEFAULT 'monthly'",

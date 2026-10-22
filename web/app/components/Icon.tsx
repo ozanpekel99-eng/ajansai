@@ -26,6 +26,7 @@ const PATHS: Record<string, string> = {
   arrowUp: "M12 19V5M6 11l6-6 6 6",
   clip: "M21 11.5 12.5 20a5 5 0 0 1-7-7L14 4.5a3.3 3.3 0 0 1 4.7 4.7L10.2 17.7a1.7 1.7 0 0 1-2.4-2.4L15.5 7.6",
   plus: "M12 5v14M5 12h14",
+  download: "M12 4v11M7 10l5 5 5-5M5 20h14",
   clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
   ratio: "M4 6h16v12H4z",
   image: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9.5h.01",

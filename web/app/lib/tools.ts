@@ -37,10 +37,10 @@ export const TOOLS: Tool[] = [
     slug: "gorsel",
     name: "Görsel Üretimi",
     kind: "gorsel",
-    short: "Konseptten veya ürün fotoğrafından görsel üret ya da telifsiz stok fotoğraf bul.",
-    long: "Yazdığın konsepte göre sosyal medya görseli üretir. Ücretsiz pakette ayda 6 görsel ve sınırsız stok fotoğraf; paketlerde Seedream ile ürün fotoğrafını örnek alan yüksek kaliteli üretim, kare, hikâye, gönderi ve yatay formatlar.",
+    short: "Konseptten veya ürün fotoğrafından yüksek kaliteli görsel üret.",
+    long: "Yazdığın konsepte göre sosyal medya görseli üretir. Ürün fotoğrafını örnek alabilir; kare, hikâye, gönderi ve yatay formatlar. Ürettiklerin Kütüphane'de birikir.",
     quota: "image",
-    costLabel: "Ayda 6 ücretsiz · Seedream 4 kredi",
+    costLabel: "Görsel başı 4 kredi",
     ready: true,
   },
   {

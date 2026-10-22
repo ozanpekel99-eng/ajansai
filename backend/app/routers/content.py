@@ -11,7 +11,7 @@ from sqlalchemy import and_, select, update
 
 from app.db import get_engine, utcnow, video_tasks
 from app.security import get_current_user
-from app.services import assistant, chat_files, free_tier, gateway_media, storage
+from app.services import assistant, chat_files, free_tier, gateway_media, library, storage
 from app.services.claude_service import generate_content_ideas
 from app.services.llm_service import LLMError
 from app.services.plans import CREDIT_COSTS, chat_cost, idea_cost, video_cost
@@ -100,6 +100,7 @@ def create_image(payload: ImageRequest, user: dict = Depends(get_current_user)):
             url = f"data:{mime};base64,{base64.b64encode(data).decode()}"
     else:
         url = f"data:{mime};base64,{base64.b64encode(data).decode()}"
+    library.add(user["id"], "image", url, payload.concept, "gorsel")
     return {"image_url": url, "error": None, "credits_spent": credits}
 
 
@@ -158,6 +159,7 @@ def _compose_frame(user: dict, concept: str, aspect: str, refs: list[str]) -> tu
     try:
         data, mime = gateway_media.generate_image(prompt, aspect, refs)
         url = storage.save(data, mime, f"gorsel/{user['id']}")
+        library.add(user["id"], "image", url, concept, "video")
     except (gateway_media.MediaError, storage.StorageError) as e:
         logger.error("Açılış karesi üretilemedi: %s", e)
         refund(event_id)
@@ -188,6 +190,7 @@ def _start_video_job(user: dict, concept: str, duration: int, resolution: str, i
                 credit_event_id=event_id,
                 operation=json.dumps(operation),
                 status="pending",
+                prompt=concept[:500],
                 created_at=utcnow(),
             )
         )
@@ -244,6 +247,7 @@ def check_video(job_id: str, user: dict = Depends(get_current_user)):
                 .where(and_(video_tasks.c.id == job_id, video_tasks.c.status == "pending"))
                 .values(status="completed", video_url=url)
             )
+        library.add(user["id"], "video", url, task.prompt or "", "video")
         return {"status": "SUCCEEDED", "video_url": url, "error": None}
 
     error = str(result.get("error") or "Video üretilemedi.")[:500]
@@ -331,6 +335,8 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
         url, image_error, image_credits = _chat_image(user, image_prompt, refs)
         if url:
             images.append(url)
+            if image_credits:  # ücretsiz FLUX yedeği kendi kaydını yapar
+                library.add(user["id"], "image", url, last.content.strip() or image_prompt, "sohbet")
         credits += image_credits
     out_files, file_error = [], None
     if file_request:
@@ -417,3 +423,19 @@ def describe(payload: DescribeRequest, user: dict = Depends(get_current_user)):
         refund(event_id)
         raise HTTPException(status_code=503, detail="Örnek incelenemedi, kredin iade edildi. Tekrar dene.")
     return {"concept": concept, "credits_spent": credits}
+
+
+# ---------------- Kütüphane ----------------
+
+@router.get("/library")
+def get_library(kind: Literal["image", "video"] | None = None, limit: int = 60, user: dict = Depends(get_current_user)):
+    """Üretilen görsel ve videolar (en yeni önce)."""
+    return {"items": library.items(user["id"], kind, limit)}
+
+
+@router.delete("/library/{item_id}", status_code=204)
+def delete_library_item(item_id: str, user: dict = Depends(get_current_user)):
+    library.remove(user["id"], item_id)
+    from fastapi import Response
+
+    return Response(status_code=204)

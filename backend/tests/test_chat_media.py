@@ -79,3 +79,20 @@ def test_video_with_multiple_images_composes_start_frame(client, monkeypatch):
     calls.clear()
     r = client.post("/api/content/video", json={"concept": "x", "reference_urls": refs[:1]}, headers=auth(token))
     assert calls == {"start": refs[0]} and r.json()["credits_spent"] == 12
+
+
+def test_generated_media_appear_in_library(client, monkeypatch):
+    from app.services import storage
+    from .test_api import BLOB_URL
+
+    _enable_media(monkeypatch)
+    monkeypatch.setattr(gateway_media, "generate_image", lambda prompt, aspect, refs=None: (b"\x89PNG\r\n\x1a\nx", "image/png"))
+    monkeypatch.setattr(storage, "save", lambda data, mime, folder, filename=None: BLOB_URL + "g.png")
+    token = register_paid(client, plan="pro")
+    r = client.post("/api/content/image", json={"concept": "kahve"}, headers=auth(token))
+    assert r.status_code == 200
+    items = client.get("/api/content/library", params={"kind": "image"}, headers=auth(token)).json()["items"]
+    assert len(items) == 1 and items[0]["url"] == BLOB_URL + "g.png" and items[0]["prompt"] == "kahve"
+    assert client.get("/api/content/library", params={"kind": "video"}, headers=auth(token)).json()["items"] == []
+    assert client.delete(f"/api/content/library/{items[0]['id']}", headers=auth(token)).status_code == 204
+    assert client.get("/api/content/library", headers=auth(token)).json()["items"] == []

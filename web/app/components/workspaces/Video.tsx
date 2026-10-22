@@ -11,7 +11,8 @@ import { useSession } from "../../lib/session";
 import { PendingFile, UploadProgress, useUploader } from "../Attachments";
 import { ChipSelect, SampleToConcept, Toggle } from "../Controls";
 import Icon from "../Icon";
-import { CreditLine, EmptyResult, HistoryList, LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
+import { CreditLine, EmptyResult, LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
+import { LibraryGrid } from "./Library";
 
 type Result = { url: string; concept: string };
 type Ratio = "9:16" | "16:9" | "1:1";
@@ -113,10 +114,10 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
 
   if (tab === "history") {
     return (
-      <HistoryList
-        items={history}
+      <LibraryGrid
+        kind="video"
         onOpen={(item) => {
-          setResult(item.data);
+          setResult({ url: item.url, concept: item.prompt });
           showCreate();
         }}
       />

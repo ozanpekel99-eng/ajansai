@@ -87,7 +87,7 @@ export default function ToolPage() {
             Oluştur
           </button>
           <button role="tab" aria-selected={tab === "history"} className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>
-            Geçmiş
+            {tool.slug === "gorsel" || tool.slug === "video" ? "Kütüphane" : "Geçmiş"}
           </button>
         </div>
       ) : (

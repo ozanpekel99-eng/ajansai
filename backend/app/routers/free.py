@@ -77,7 +77,12 @@ def make_free_image(subject: str, user: dict | None, prompt: str, refs: list[str
         free_tier.release(event_id)
         return None, "Görsel üretilemedi, hakkın düşülmedi. Tekrar dene.", False
     folder = f"gorsel/{user['id']}" if user else "gorsel/ucretsiz"
-    return _save_image(data, "image/jpeg", folder), None, False
+    url = _save_image(data, "image/jpeg", folder)
+    if user:
+        from app.services import library
+
+        library.add(user["id"], "image", url, prompt, "sohbet")
+    return url, None, False
 
 
 def _load_attachments(attachments: list[FreeAttachment]) -> list[dict]:
