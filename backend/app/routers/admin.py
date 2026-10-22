@@ -31,13 +31,13 @@ class ImageBench(BaseModel):
     extra: dict = Field(default_factory=dict)
 
 
-def _chat_image(model: str, prompt: str, refs: list[str]) -> bytes:
+def _chat_image(model: str, prompt: str, refs: list[str], extra: dict | None = None) -> bytes:
     token = ai_gateway_token()
     content = [{"type": "text", "text": prompt}] + [{"type": "image_url", "image_url": {"url": u}} for u in refs]
     r = requests.post(
         f"{config.AI_GATEWAY_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json={"model": model, "messages": [{"role": "user", "content": content}], "modalities": ["text", "image"]},
+        json={"model": model, "messages": [{"role": "user", "content": content}], "modalities": ["text", "image"], **(extra or {})},
         timeout=280,
     )
     if r.status_code != 200:
@@ -55,7 +55,7 @@ def bench_image(p: ImageBench, user: dict = Depends(_admin)):
     t = time.time()
     try:
         if p.via == "chat":
-            data = _chat_image(p.model, p.prompt, p.refs)
+            data = _chat_image(p.model, p.prompt, p.refs, p.extra)
             mime = gateway_media._sniff_mime(data)
         else:
             body = {"prompt": p.prompt, "n": 1, "aspectRatio": p.aspect, **p.extra}
@@ -71,7 +71,13 @@ def bench_image(p: ImageBench, user: dict = Depends(_admin)):
         return {"ok": False, "seconds": round(time.time() - t, 1), "error": str(e)[:500]}
     secs = round(time.time() - t, 1)
     url = storage.save(data, mime, f"bench/{user['id']}")
-    return {"ok": True, "seconds": secs, "url": url, "bytes": len(data)}
+    try:
+        from PIL import Image
+        import io
+        w, h = Image.open(io.BytesIO(data)).size
+    except Exception:  # noqa: BLE001
+        w = h = 0
+    return {"ok": True, "seconds": secs, "url": url, "bytes": len(data), "size": f"{w}x{h}"}
 
 
 class VideoBench(BaseModel):
