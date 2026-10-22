@@ -28,7 +28,7 @@ export type StockPhoto = {
   download: string;
 };
 
-export type StockResult = { photos: StockPhoto[]; page: number; has_more: boolean };
+export type StockResult = { photos: StockPhoto[]; page: number; has_more: boolean; source?: string };
 
 export function useFreeStatus() {
   const [status, setStatus] = useState<FreeStatus | null>(null);
@@ -45,8 +45,9 @@ export function useFreeStatus() {
   return { status, setStatus, refresh };
 }
 
-/** Pexels indirme bağlantısı: tarayıcı dosyayı kaydeder. */
+/** İndirme bağlantısı (Pexels'te ?dl= ile tarayıcı dosyayı doğrudan kaydeder). */
 export function downloadUrl(p: StockPhoto) {
+  if (!p.download.includes("pexels.com")) return p.download;
   const sep = p.download.includes("?") ? "&" : "?";
   return `${p.download}${sep}dl=ajansai-pexels-${p.id}.jpg`;
 }

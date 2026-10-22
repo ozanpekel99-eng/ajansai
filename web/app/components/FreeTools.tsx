@@ -293,10 +293,15 @@ export function StockLibrary({
         </>
       )}
 
-      <p className="stock-credit">
-        Fotoğraflar <a href="https://www.pexels.com" target="_blank" rel="noreferrer">Pexels</a> kütüphanesinden; ücretsiz, ticari
-        kullanım serbest. Fotoğrafçıyı anmak nazik bir jest.
-      </p>
+      {result && (
+        <p className="stock-credit">
+          Fotoğraflar{" "}
+          <a href={result.source === "Pexels" ? "https://www.pexels.com" : "https://pixabay.com"} target="_blank" rel="noreferrer">
+            {result.source || "Pixabay"}
+          </a>{" "}
+          kütüphanesinden; ücretsiz, ticari kullanım serbest. Fotoğrafçıyı anmak nazik bir jest.
+        </p>
+      )}
 
       {selected && (
         <div className="modal-scrim" onMouseDown={(e) => e.target === e.currentTarget && setSelected(null)}>
@@ -307,7 +312,7 @@ export function StockLibrary({
                 <a href={selected.photographer_url} target="_blank" rel="noreferrer">
                   {selected.photographer}
                 </a>{" "}
-                · Pexels
+                · {result?.source || "Pixabay"}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <a className="btn btn-ghost btn-sm" href={downloadUrl(selected)} target="_blank" rel="noreferrer">

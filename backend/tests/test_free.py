@@ -282,3 +282,45 @@ def test_free_chain_skips_providers_without_keys(monkeypatch):
 
 def test_paid_chat_uses_haiku():
     assert config.CHAT_MODEL == "anthropic/claude-haiku-5.5"
+
+
+PIXABAY_HIT = {
+    "id": 77,
+    "pageURL": "https://pixabay.com/photos/kahve-77/",
+    "tags": "kahve, fincan",
+    "previewURL": "https://cdn.pixabay.com/p/77_150.jpg",
+    "webformatURL": "https://pixabay.com/get/77_640.jpg",
+    "largeImageURL": "https://pixabay.com/get/77_1280.jpg",
+    "imageWidth": 4000,
+    "imageHeight": 4000,
+    "user": "ayse",
+    "user_id": 5,
+}
+
+
+def test_pixabay_preferred_for_stock(client, monkeypatch):
+    monkeypatch.setattr(config, "PIXABAY_API_KEY", "px-key")
+    monkeypatch.setattr(config, "PEXELS_API_KEY", "pexels-key")
+    monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", BLOB_TOKEN)
+    calls = []
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        calls.append((url, params))
+        if url == "https://pixabay.com/api/":
+            return FakeResponse(200, {"totalHits": 100, "hits": [PIXABAY_HIT]})
+        assert url == "https://pixabay.com/get/77_1280.jpg"
+        r = FakeResponse(200, {})
+        r.content = b"\xff\xd8\xffjpeg"
+        return r
+
+    monkeypatch.setattr(free_tier.requests, "get", fake_get)
+    r = client.get("/api/free/stock", params={"q": "kahve", "orientation": "portrait"}, headers=IP_A)
+    data = r.json()
+    assert data["source"] == "Pixabay" and data["has_more"] is True
+    assert data["photos"][0]["download"].endswith("77_1280.jpg") and data["photos"][0]["photographer"] == "ayse"
+    assert calls[0][1]["key"] == "px-key" and calls[0][1]["lang"] == "tr" and calls[0][1]["orientation"] == "vertical"
+
+    monkeypatch.setattr(storage, "save", lambda d, m, f: BLOB_URL + "stok.jpg")
+    token = register(client)
+    r = client.post("/api/free/stock/save", json={"photo_id": 77}, headers=auth(token))
+    assert r.status_code == 200 and calls[-2][1]["id"] == 77

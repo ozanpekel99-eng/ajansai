@@ -102,7 +102,7 @@ def stock(
     page: int = Query(1, ge=1, le=20),
     user: dict | None = Depends(get_optional_user),
 ):
-    """Pexels'te telifsiz fotoğraf arar (ücretsiz, sınırsız indirme)."""
+    """Pixabay'de (yoksa Pexels'te) telifsiz fotoğraf arar (ücretsiz, sınırsız indirme)."""
     if not free_tier.stock_enabled():
         raise HTTPException(status_code=503, detail="Stok fotoğraf kütüphanesi henüz açılmadı.")
     try:

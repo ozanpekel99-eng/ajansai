@@ -33,6 +33,8 @@ MONTH = timedelta(days=30)
 STOCK_PER_DAY = 200  # kişi başı arama sınırı (sonuçlar önbellekten de gelir)
 STOCK_CACHE_TTL = timedelta(hours=24)
 PEXELS_HOSTS = {"images.pexels.com"}
+PIXABAY_HOSTS = {"pixabay.com", "cdn.pixabay.com"}
+PIXABAY_ORIENTATION = {"landscape": "horizontal", "portrait": "vertical"}
 
 
 class FreeLimitError(Exception):
@@ -203,10 +205,49 @@ def generate_image(concept: str) -> bytes:
     return _cloudflare_image(_english_prompt(concept))
 
 
-# ---------------- Stok fotoğraf (Pexels) ----------------
+# ---------------- Stok fotoğraf (Pixabay veya Pexels) ----------------
+
+def stock_provider() -> str | None:
+    if config.PIXABAY_API_KEY:
+        return "pixabay"
+    if config.PEXELS_API_KEY:
+        return "pexels"
+    return None
+
 
 def stock_enabled() -> bool:
-    return bool(config.PEXELS_API_KEY)
+    return stock_provider() is not None
+
+
+def _pixabay(params: dict) -> dict:
+    try:
+        r = requests.get(
+            "https://pixabay.com/api/",
+            params={"key": config.PIXABAY_API_KEY, "image_type": "photo", "safesearch": "true", **params},
+            timeout=20,
+        )
+    except requests.RequestException as e:
+        raise FreeServiceError(f"Pixabay'e ulaşılamadı: {e}") from e
+    if r.status_code >= 400:
+        raise FreeServiceError(f"Pixabay {r.status_code}: {r.text[:200]}")
+    return r.json()
+
+
+def _pixabay_photo(h: dict) -> dict:
+    user = h.get("user") or ""
+    return {
+        "id": h["id"],
+        "alt": h.get("tags") or "",
+        "width": h.get("imageWidth"),
+        "height": h.get("imageHeight"),
+        "color": None,
+        "photographer": user,
+        "photographer_url": f"https://pixabay.com/users/{user}-{h.get('user_id')}/" if user else "https://pixabay.com",
+        "page_url": h.get("pageURL") or "",
+        "thumb": h.get("webformatURL") or h.get("previewURL"),
+        "preview": h.get("largeImageURL") or h.get("webformatURL"),
+        "download": h.get("largeImageURL") or h.get("webformatURL"),
+    }
 
 
 def _pexels(path: str, params: dict | None = None) -> dict:
@@ -244,7 +285,8 @@ def _photo(p: dict) -> dict:
 
 
 def search_stock(subject: str, query: str, orientation: str | None, page: int) -> dict:
-    key = json.dumps([query.strip().lower(), orientation or "", page])
+    provider = stock_provider()
+    key = json.dumps([provider, query.strip().lower(), orientation or "", page])
     now = utcnow()
     with get_engine().connect() as conn:
         row = conn.execute(select(stock_cache).where(stock_cache.c.key == key)).first()
@@ -252,15 +294,31 @@ def search_stock(subject: str, query: str, orientation: str | None, page: int) -
         return json.loads(row.data)
 
     _reserve(subject, "stock", STOCK_PER_DAY, DAY, None, "Bugün çok fazla arama yaptın, yarın tekrar dene.")
-    params = {"query": query, "per_page": 24, "page": page, "locale": "tr-TR"}
-    if orientation:
-        params["orientation"] = orientation
-    data = _pexels("search", params)
-    result = {
-        "photos": [_photo(p) for p in data.get("photos", [])],
-        "page": page,
-        "has_more": bool(data.get("next_page")),
-    }
+    if provider == "pixabay":
+        params = {"q": query.strip()[:100], "lang": "tr", "per_page": 24, "page": page}
+        if orientation in PIXABAY_ORIENTATION:
+            params["orientation"] = PIXABAY_ORIENTATION[orientation]
+        data = _pixabay(params)
+        hits = data.get("hits", [])
+        if orientation == "square":  # Pixabay'de kare filtresi yok; oranı yakın olanları al
+            hits = [h for h in hits if h.get("imageHeight") and 0.8 <= h["imageWidth"] / h["imageHeight"] <= 1.25] or hits
+        result = {
+            "photos": [_pixabay_photo(h) for h in hits],
+            "page": page,
+            "has_more": page * 24 < min(int(data.get("totalHits") or 0), 500),
+            "source": "Pixabay",
+        }
+    else:
+        params = {"query": query, "per_page": 24, "page": page, "locale": "tr-TR"}
+        if orientation:
+            params["orientation"] = orientation
+        data = _pexels("search", params)
+        result = {
+            "photos": [_photo(p) for p in data.get("photos", [])],
+            "page": page,
+            "has_more": bool(data.get("next_page")),
+            "source": "Pexels",
+        }
     with get_engine().begin() as conn:
         conn.execute(delete(stock_cache).where(stock_cache.c.key == key))
         conn.execute(stock_cache.insert().values(key=key, data=json.dumps(result), created_at=now))
@@ -268,10 +326,16 @@ def search_stock(subject: str, query: str, orientation: str | None, page: int) -
 
 
 def stock_photo_bytes(photo_id: int) -> tuple[bytes, dict]:
-    """Seçilen stok fotoğrafı indirir (yalnızca Pexels görsel sunucusundan)."""
-    photo = _photo(_pexels(f"photos/{int(photo_id)}"))
+    """Seçilen stok fotoğrafı indirir (yalnızca kütüphanenin kendi görsel sunucusundan)."""
+    if stock_provider() == "pixabay":
+        hits = _pixabay({"id": int(photo_id)}).get("hits") or []
+        if not hits:
+            raise FreeServiceError("Fotoğraf bulunamadı.")
+        photo, hosts = _pixabay_photo(hits[0]), PIXABAY_HOSTS
+    else:
+        photo, hosts = _photo(_pexels(f"photos/{int(photo_id)}")), PEXELS_HOSTS
     url = photo["download"] or ""
-    if urlparse(url).hostname not in PEXELS_HOSTS:
+    if urlparse(url).hostname not in hosts:
         raise FreeServiceError("Beklenmeyen fotoğraf adresi.")
     try:
         r = requests.get(url, timeout=60)

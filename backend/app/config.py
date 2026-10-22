@@ -108,7 +108,8 @@ CLOUDFLARE_AI_TOKEN = _env("CLOUDFLARE_AI_TOKEN")
 FREE_IMAGE_MODEL = _env("FREE_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnell")
 FREE_IMAGES_PER_MONTH = _int("FREE_IMAGES_PER_MONTH", 6)
 FREE_IMAGES_PER_DAY_TOTAL = _int("FREE_IMAGES_PER_DAY_TOTAL", 150)
-# Stok fotoğraf kütüphanesi (Pexels, ücretsiz API anahtarı)
+# Stok fotoğraf kütüphanesi: Pixabay (öncelikli) veya Pexels, ikisi de ücretsiz API anahtarı
+PIXABAY_API_KEY = _env("PIXABAY_API_KEY")
 PEXELS_API_KEY = _env("PEXELS_API_KEY")
 
 # Üretilen dosyaların saklandığı Vercel Blob deposu (projeye bağlanınca otomatik gelir)
