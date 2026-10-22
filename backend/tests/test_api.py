@@ -796,7 +796,9 @@ def test_create_instagram_only_ad(client, monkeypatch):
     monkeypatch.setattr(ads_router.storage, "fetch", lambda url, max_bytes=0: b"jpg")
     r = client.post("/api/ads/meta/ads", json=AD_BODY, headers=auth(token))
     assert r.status_code == 200, r.text
-    assert r.json()["campaign_id"] == "c1" and r.json()["status"] == "PAUSED"
+    assert r.json()["campaign_id"] == "c1" and r.json()["status"] == "ACTIVE"
+    # Oluşturma bittikten sonra hemen yayına alınır (reklam → set → kampanya)
+    assert [(p, d["status"]) for m, p, d in calls if d.get("status") == "ACTIVE"] == [("a1", "ACTIVE"), ("s1", "ACTIVE"), ("c1", "ACTIVE")]
 
     adset = next(d for m, p, d in calls if p.endswith("/adsets"))
     t = adset["targeting"]
@@ -971,3 +973,16 @@ def test_ad_from_existing_instagram_post_and_carousel(client, monkeypatch):
     # İçerik seçilmezse veya tek kartlık karusel reddedilir
     assert client.post("/api/ads/meta/ads", json={**AD_BODY, "media": None}, headers=auth(token)).status_code == 400
     assert client.post("/api/ads/meta/ads", json={**AD_BODY, "media": None, "carousel": cards[:1]}, headers=auth(token)).status_code == 400
+
+
+def test_lifetime_budget_and_draft(client, monkeypatch):
+    token = _meta_ready(client, monkeypatch)
+    calls = _fake_meta(monkeypatch)
+    r = client.post("/api/ads/meta/ads", json={**AD_BODY, "budget_type": "lifetime"}, headers=auth(token))
+    assert r.status_code == 400  # toplam bütçe bitiş tarihi ister
+    body = {**AD_BODY, "budget_type": "lifetime", "daily_budget": 3000, "start_date": "2030-01-01", "end_date": "2030-01-10", "publish": False}
+    r = client.post("/api/ads/meta/ads", json=body, headers=auth(token))
+    assert r.status_code == 200 and r.json()["status"] == "PAUSED"
+    adset = next(d for m, p, d in calls if p.endswith("/adsets"))
+    assert adset["lifetime_budget"] == 300000 and "daily_budget" not in adset
+    assert not [d for m, p, d in calls if d.get("status") == "ACTIVE"]

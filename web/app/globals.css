@@ -3933,3 +3933,20 @@ table.data td.num {
 .carousel-preview-card { flex: 0 0 78%; scroll-snap-align: start; border: 1px solid #e5e5e5; border-radius: 8px; overflow: hidden; }
 .carousel-preview-cta { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 8px; font-size: 12.5px; font-weight: 600; }
 .carousel-preview-cta small { color: #0a58ca; font-weight: 600; white-space: nowrap; }
+
+/* Reklamlarım: Meta tarzı sonuç paneli */
+.ad-dash-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.ad-dash-bar .segmented { flex-wrap: wrap; }
+.ad-dash-bar .faint { margin-left: auto; }
+.ad-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.ad-summary > div { border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px; display: grid; gap: 4px; }
+.ad-summary small, .kpi small { color: var(--text-2); font-size: 12px; }
+.ad-summary b { font-size: 20px; }
+.ad-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin-top: 10px; }
+.kpi { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.kpi b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi.main { border-color: var(--indigo); }
+.kpi.main span { font-size: 11.5px; color: var(--text-2); }
+.kpi.spark-wrap { grid-column: span 2; color: var(--indigo); }
+.spark { width: 100%; height: 30px; display: block; }
+.ad-row-rich { align-items: flex-start; }

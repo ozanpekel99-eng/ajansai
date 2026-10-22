@@ -218,7 +218,9 @@ class CreateAdRequest(BaseModel):
     instagram_user_id: str | None = Field(None, max_length=50)
     name: str = Field(..., min_length=2, max_length=150)
     objective: Literal["profile", "traffic", "whatsapp", "instagram_dm", "awareness"]
-    daily_budget: float = Field(..., gt=0, le=1_000_000)
+    daily_budget: float = Field(..., gt=0, le=10_000_000)  # günlük ya da toplam tutar (budget_type)
+    budget_type: Literal["daily", "lifetime"] = "daily"
+    publish: bool = True  # False: duraklatılmış taslak
     currency: str = Field("TRY", max_length=3)
     start_date: date | None = None
     end_date: date | None = None
@@ -280,6 +282,8 @@ def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_us
         defaults = (["instagram_feed", "instagram_story", "instagram_reels", "instagram_explore"]
                     if payload.source_post.platform == "instagram" else ["facebook_feed"])
         placements = own_platform or defaults
+    if payload.budget_type == "lifetime" and not payload.end_date:
+        raise HTTPException(status_code=400, detail="Toplam bütçede bitiş tarihi seçmelisin.")
     if payload.end_date and payload.start_date and payload.end_date <= payload.start_date:
         raise HTTPException(status_code=400, detail="Bitiş tarihi başlangıçtan sonra olmalı.")
 
@@ -310,6 +314,8 @@ def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_us
         story_media=payload.story_media.model_dump() if payload.story_media else None,
         source_post=payload.source_post.model_dump() if payload.source_post else None,
         carousel=[c.model_dump() for c in payload.carousel] or None,
+        budget_type=payload.budget_type,
+        publish=payload.publish,
     )
     record_id = str(uuid.uuid4())
     with get_engine().begin() as conn:
@@ -325,13 +331,14 @@ def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_us
                 objective=payload.objective,
                 daily_budget=payload.daily_budget,
                 currency=payload.currency[:3].upper(),
+                budget_type=payload.budget_type,
                 media_url=(payload.media.url if payload.media else payload.carousel[0].media.url if payload.carousel
                            else (payload.source_post.thumbnail or "")),
                 created_at=utcnow(),
             )
         )
     consume(user["id"], "ads_draft", CREDIT_COSTS["ads_draft"], payload.name)
-    return {"id": record_id, **ids, "status": "PAUSED"}
+    return {"id": record_id, **ids}
 
 
 def _own_ad(user_id: str, record_id: str):
@@ -345,8 +352,11 @@ def _own_ad(user_id: str, record_id: str):
 
 
 @router.get("/meta/ads")
-def meta_list_ads(user: dict = Depends(get_current_user)):
-    """Kullanıcının ajansAI'dan oluşturduğu reklamlar; durum ve metrikler Meta'dan canlı."""
+def meta_list_ads(range: str = "maximum", user: dict = Depends(get_current_user)):
+    """Kullanıcının ajansAI'dan oluşturduğu reklamlar; durum, inceleme ve metrikler Meta'dan canlı.
+
+    range: today | yesterday | last_7d | last_30d | maximum
+    """
     _require_ads(user)
     token = _get_token(user["id"])
     with get_engine().connect() as conn:
@@ -360,6 +370,7 @@ def meta_list_ads(user: dict = Depends(get_current_user)):
             "name": r.name,
             "objective": r.objective,
             "daily_budget": float(r.daily_budget),
+            "budget_type": r.budget_type or "daily",
             "currency": r.currency,
             "media_url": r.media_url,
             "campaign_id": r.campaign_id,
@@ -367,14 +378,15 @@ def meta_list_ads(user: dict = Depends(get_current_user)):
             "created_at": r.created_at.isoformat() + "Z",
         }
         try:
-            item["status"] = meta.object_status(token, r.campaign_id)
-            item["insights"] = meta.campaign_insights(token, r.campaign_id)
+            delivery = meta.ad_delivery(token, r.campaign_id, r.ad_id)
+            item["status"], item["review"] = delivery["status"], delivery["review"]
+            item["insights"] = meta.campaign_insights(token, r.campaign_id, r.objective, range)
         except MetaError as e:
-            item["status"] = "UNKNOWN"
+            item["status"] = item.get("status") or "UNKNOWN"
             item["insights"] = None
             item["error"] = str(e)
         ads.append(item)
-    return {"ads": ads}
+    return {"ads": ads, "range": range}
 
 
 @router.post("/meta/ads/{record_id}/publish")

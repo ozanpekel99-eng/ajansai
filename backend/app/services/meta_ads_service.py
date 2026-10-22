@@ -572,6 +572,8 @@ def create_instagram_ad(
     story_media: dict | None = None,
     source_post: dict | None = None,
     carousel: list[dict] | None = None,
+    budget_type: str = "daily",
+    publish: bool = False,
 ) -> dict:
     """Seçilen yerleşimlerde (varsayılan Instagram) duraklatılmış bir reklam oluşturur.
 
@@ -596,7 +598,8 @@ def create_instagram_ad(
         adset_body = {
             "name": f"{name} - Instagram",
             "campaign_id": campaign_id,
-            "daily_budget": int(round(daily_budget * 100)),  # TRY ve USD'de en küçük birim 1/100
+            # Günlük ya da toplam (kampanya boyunca) bütçe; TRY ve USD'de en küçük birim 1/100
+            ("lifetime_budget" if budget_type == "lifetime" else "daily_budget"): int(round(daily_budget * 100)),
             "billing_event": "IMPRESSIONS",
             "optimization_goal": optimization_goal,
             "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
@@ -650,7 +653,16 @@ def create_instagram_ad(
         except MetaError:
             logger.warning("Yarım kalan kampanya silinemedi: %s", campaign_id)
         raise
-    return {"campaign_id": campaign_id, "adset_id": adset["id"], "ad_id": ad["id"]}
+    result = {"campaign_id": campaign_id, "adset_id": adset["id"], "ad_id": ad["id"], "status": "PAUSED"}
+    if publish:
+        # Her şey hazır olduktan sonra yayına alınır; Meta incelemesi bitince gösterim başlar.
+        try:
+            set_status(token, [ad["id"], adset["id"], campaign_id], "ACTIVE")
+            result["status"] = "ACTIVE"
+        except MetaError as e:
+            logger.warning("Reklam oluşturuldu ama yayına alınamadı: %s", e)
+            result["publish_error"] = str(e)
+    return result
 
 
 def _single_creative(act, token, name, page_id, instagram_user_id, media, story_media, placements,
@@ -774,32 +786,94 @@ def set_status(token: str, ids: list[str], status: str) -> None:
         _graph("POST", object_id, token, status=status)
 
 
-def campaign_insights(token: str, campaign_id: str) -> dict:
-    data = _graph(
-        "GET",
-        f"{campaign_id}/insights",
-        token,
-        fields="spend,impressions,reach,clicks,ctr,cpc,actions",
-        date_preset="maximum",
-    )
-    rows = data.get("data") or []
-    if not rows:
-        return {"spend": 0, "impressions": 0, "reach": 0, "clicks": 0, "ctr": 0, "cpc": 0, "conversations": 0}
-    r = rows[0]
-    conversations = sum(
-        int(float(a.get("value", 0)))
-        for a in r.get("actions") or []
-        if "messaging_conversation_started" in a.get("action_type", "")
-    )
-    return {
-        "spend": float(r.get("spend", 0)),
-        "impressions": int(r.get("impressions", 0)),
-        "reach": int(r.get("reach", 0)),
-        "clicks": int(r.get("clicks", 0)),
-        "ctr": float(r.get("ctr", 0)),
-        "cpc": float(r.get("cpc", 0)) if r.get("cpc") else 0,
-        "conversations": conversations,
+DATE_PRESETS = {"today", "yesterday", "last_7d", "last_30d", "maximum"}
+INSIGHT_FIELDS = ("spend,impressions,reach,frequency,clicks,inline_link_clicks,ctr,cpc,cpm,actions,"
+                  "cost_per_action_type")
+_INSIGHT_CACHE: dict[tuple, tuple[float, dict]] = {}
+
+
+def _action(rows: list[dict] | None, *names: str) -> float:
+    total = 0.0
+    for a in rows or []:
+        t = a.get("action_type", "")
+        if any(t == n or t.endswith(n) for n in names):
+            total = max(total, float(a.get("value", 0)))  # aynı sonuç farklı adlarla tekrar gelebilir
+    return total
+
+
+RESULT_ACTIONS = {
+    "whatsapp": ("messaging_conversation_started_7d", "Mesaj başlatıldı"),
+    "instagram_dm": ("messaging_conversation_started_7d", "Mesaj başlatıldı"),
+    "traffic": ("link_click", "Bağlantı tıklaması"),
+    "profile": ("link_click", "Profil ziyareti"),
+    "awareness": (None, "Erişim"),
+}
+
+
+def campaign_insights(token: str, campaign_id: str, objective: str = "traffic", preset: str = "maximum") -> dict:
+    """Meta Reklam Yöneticisi'ndeki temel sütunlar + günlük harcama serisi (kısa süre önbellekli)."""
+    preset = preset if preset in DATE_PRESETS else "maximum"
+    key = (campaign_id, preset)
+    hit = _INSIGHT_CACHE.get(key)
+    if hit and _time.time() - hit[0] < 60:
+        return hit[1]
+    rows = _graph("GET", f"{campaign_id}/insights", token, fields=INSIGHT_FIELDS, date_preset=preset).get("data") or []
+    r = rows[0] if rows else {}
+    action_name, result_label = RESULT_ACTIONS.get(objective, (None, "Sonuç"))
+    reach = int(r.get("reach", 0) or 0)
+    if action_name:
+        results = _action(r.get("actions"), action_name, "onsite_conversion." + action_name)
+        if not results and action_name.startswith("messaging"):
+            results = _action(r.get("actions"), "messaging_first_reply", "onsite_conversion.messaging_first_reply")
+    else:
+        results = reach
+    spend = float(r.get("spend", 0) or 0)
+    out = {
+        "spend": spend,
+        "impressions": int(r.get("impressions", 0) or 0),
+        "reach": reach,
+        "frequency": float(r.get("frequency", 0) or 0),
+        "clicks": int(r.get("clicks", 0) or 0),
+        "link_clicks": int(r.get("inline_link_clicks", 0) or 0),
+        "ctr": float(r.get("ctr", 0) or 0),
+        "cpc": float(r.get("cpc", 0) or 0),
+        "cpm": float(r.get("cpm", 0) or 0),
+        "results": int(results),
+        "result_label": result_label,
+        "cost_per_result": round(spend / results, 2) if results else 0,
+        "conversations": int(_action(r.get("actions"), "messaging_conversation_started_7d")),
+        "daily": [],
     }
+    if preset in ("last_7d", "last_30d", "maximum"):
+        try:
+            series = _graph("GET", f"{campaign_id}/insights", token, fields="spend,impressions",
+                            date_preset=preset, time_increment=1, limit=60).get("data") or []
+            out["daily"] = [{"date": d.get("date_start"), "spend": float(d.get("spend", 0) or 0),
+                             "impressions": int(d.get("impressions", 0) or 0)} for d in series]
+        except MetaError:
+            pass
+    _INSIGHT_CACHE[key] = (_time.time(), out)
+    return out
+
+
+def ad_delivery(token: str, campaign_id: str, ad_id: str | None) -> dict:
+    """Kampanya ve reklamın yayın durumu, inceleme sonucu ve red gerekçesi."""
+    camp = _graph("GET", campaign_id, token, fields="effective_status")
+    out = {"status": camp.get("effective_status", "UNKNOWN"), "review": None}
+    if ad_id:
+        try:
+            ad = _graph("GET", ad_id, token, fields="effective_status,ad_review_feedback,issues_info")
+            st = ad.get("effective_status")
+            if out["status"] == "ACTIVE" and st and st != "ACTIVE":
+                out["status"] = st  # ör. PENDING_REVIEW, DISAPPROVED, WITH_ISSUES
+            fb = ad.get("ad_review_feedback") or {}
+            reasons = list((fb.get("global") or {}).values())
+            issues = [i.get("error_message") or i.get("error_summary") for i in ad.get("issues_info") or []]
+            text = " ".join(x for x in reasons + issues if x)
+            out["review"] = text[:400] or None
+        except MetaError:
+            pass
+    return out
 
 
 def object_status(token: str, campaign_id: str) -> str:

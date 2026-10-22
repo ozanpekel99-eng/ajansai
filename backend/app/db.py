@@ -137,6 +137,7 @@ meta_ads = Table(
     Column("daily_budget", Numeric(12, 2), nullable=False),
     Column("currency", String(3), nullable=False),
     Column("media_url", Text, nullable=True),
+    Column("budget_type", String(10), nullable=True),  # daily | lifetime
     Column("created_at", DateTime, nullable=False),
 )
 
@@ -276,6 +277,7 @@ def init_db() -> None:
             "extra_credits": "INTEGER NOT NULL DEFAULT 0",
         },
         "credit_events": {"extra": "INTEGER NOT NULL DEFAULT 0"},
+        "meta_ads": {"budget_type": "VARCHAR(10)"},
         "video_tasks": {"prompt": "VARCHAR(500)", "plan": "TEXT"},
         "payments": {
             "currency": "VARCHAR(3) NOT NULL DEFAULT 'TRY'",

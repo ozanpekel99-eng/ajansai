@@ -22,12 +22,18 @@ type Post = { platform: "instagram" | "facebook"; id: string; caption: string; t
 const newCard = (): Card => ({ id: Math.random().toString(36).slice(2), media: null, headline: "", link: "" });
 type Objective = "profile" | "traffic" | "whatsapp" | "instagram_dm" | "awareness";
 type Goal = "traffic" | "message" | "awareness";
-type Insights = { spend: number; impressions: number; reach: number; clicks: number; ctr: number; cpc: number; conversations: number };
+type Insights = {
+  spend: number; impressions: number; reach: number; frequency: number; clicks: number; link_clicks: number;
+  ctr: number; cpc: number; cpm: number; results: number; result_label: string; cost_per_result: number;
+  conversations: number; daily: { date: string; spend: number; impressions: number }[];
+};
 type AdRow = {
   id: string;
   name: string;
   objective: Objective;
   daily_budget: number;
+  budget_type?: "daily" | "lifetime";
+  review?: string | null;
   currency: string;
   media_url: string | null;
   status: string;
@@ -271,6 +277,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
   const [waLoading, setWaLoading] = useState(false);
   const [name, setName] = useState("");
   const [budget, setBudget] = useState("250");
+  const [budgetType, setBudgetType] = useState<"daily" | "lifetime">("daily");
   const [startDate, setStartDate] = useState(today());
   const [endDate, setEndDate] = useState("");
   const [locations, setLocations] = useState<Loc[]>([{ key: "TR", name: "Türkiye", type: "country", country_code: "TR" }]);
@@ -507,6 +514,8 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
           name,
           objective,
           daily_budget: Number(budget),
+          budget_type: budgetType,
+          publish: true,
           currency,
           start_date: startDate || null,
           end_date: endDate || null,
@@ -787,9 +796,17 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
 
         <section className="panel ws-panel">
           <h2>4. Bütçe ve süre</h2>
+          <div className="segmented small" role="tablist" aria-label="Bütçe türü" style={{ marginBottom: 12 }}>
+            <button type="button" role="tab" aria-selected={budgetType === "daily"} className={budgetType === "daily" ? "active" : ""} onClick={() => setBudgetType("daily")}>
+              Günlük bütçe
+            </button>
+            <button type="button" role="tab" aria-selected={budgetType === "lifetime"} className={budgetType === "lifetime" ? "active" : ""} onClick={() => setBudgetType("lifetime")}>
+              Toplam bütçe
+            </button>
+          </div>
           <div className="field-row">
             <div className="field">
-              <label htmlFor="ad-budget">Günlük bütçe ({currency})</label>
+              <label htmlFor="ad-budget">{budgetType === "daily" ? "Günlük bütçe" : "Toplam bütçe"} ({currency})</label>
               <input id="ad-budget" type="number" min={1} step="1" required value={budget} onChange={(e) => setBudget(e.target.value)} />
             </div>
             <div className="field">
@@ -797,14 +814,18 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
               <input id="ad-start" type="date" min={today()} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="field">
-              <label htmlFor="ad-end">Bitiş (isteğe bağlı)</label>
-              <input id="ad-end" type="date" min={startDate || today()} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <label htmlFor="ad-end">Bitiş{budgetType === "daily" ? " (isteğe bağlı)" : ""}</label>
+              <input id="ad-end" type="date" required={budgetType === "lifetime"} min={startDate || today()} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
           <span className="hint">
-            {days
-              ? `Toplam en fazla ${money(Number(budget || 0) * days, currency)} (${days} gün). `
-              : "Bitiş tarihi vermezsen sen durdurana kadar günlük bütçe kadar harcar. "}
+            {budgetType === "lifetime"
+              ? days
+                ? `Meta ${money(Number(budget || 0), currency)} tutarı ${days} güne kendisi dağıtır (günde ortalama ${money(Math.round((Number(budget || 0) / days) * 100) / 100, currency)}); sonuç iyi olan günlere daha çok harcar. `
+                : "Toplam bütçede bitiş tarihi seçmelisin; Meta tutarı bu tarihe kadar dağıtır. "
+              : days
+                ? `Toplam en fazla ${money(Number(budget || 0) * days, currency)} (${days} gün). `
+                : "Bitiş tarihi vermezsen sen durdurana kadar her gün bu tutar kadar harcar. "}
             Bütçe kendi Meta reklam hesabından harcanır; ajansAI kredisi harcamaz.
           </span>
         </section>
@@ -956,10 +977,11 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
           />
           {error && <div className="notice error">{error}</div>}
           <button className="btn btn-primary btn-block" type="submit" disabled={saving || !accountId}>
-            {saving ? (media?.kind === "video" ? "Video Meta'ya yükleniyor…" : "Reklam oluşturuluyor…") : "Reklamı oluştur (duraklatılmış)"}
+            {saving ? (media?.kind === "video" ? "Video Meta'ya yükleniyor…" : "Reklam yayınlanıyor…") : "Reklamı yayınla"}
           </button>
           <p className="faint" style={{ fontSize: 12.5, margin: "8px 0 0" }}>
-            Reklam Meta'da duraklatılmış oluşturulur. Reklamlarım sekmesinden "Yayına al" dediğinde harcama başlar.
+            Reklam hemen yayına gönderilir. Meta incelemesi genelde birkaç dakika–birkaç saat sürer; onaylanınca gösterim ve harcama
+            başlar. Reklamlarım sekmesinden durdurabilir, sonuçları canlı izleyebilirsin.
           </p>
         </div>
       </aside>
@@ -1371,30 +1393,60 @@ function MediaTile({ media, selected, onClick }: { media: Media; selected: boole
 
 /* ---------------- Reklamlarım ---------------- */
 
+const RANGES = [
+  { value: "today", label: "Bugün" },
+  { value: "yesterday", label: "Dün" },
+  { value: "last_7d", label: "Son 7 gün" },
+  { value: "last_30d", label: "Son 30 gün" },
+  { value: "maximum", label: "Tümü" },
+];
+
+function Spark({ data }: { data: { spend: number }[] }) {
+  if (data.length < 2) return null;
+  const max = Math.max(...data.map((d) => d.spend), 1);
+  const pts = data.map((d, i) => `${(i / (data.length - 1)) * 100},${30 - (d.spend / max) * 28}`).join(" ");
+  return (
+    <svg className="spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-label="Günlük harcama">
+      <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
 function AdList() {
   const [ads, setAds] = useState<AdRow[] | null>(null);
+  const [range, setRange] = useState("today");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [updated, setUpdated] = useState<Date | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const load = () =>
-    api<{ ads: AdRow[] }>("/api/ads/meta/ads")
-      .then((d) => setAds(d.ads))
+  const load = (r = range) => {
+    setLoading(true);
+    return api<{ ads: AdRow[] }>(`/api/ads/meta/ads?range=${r}`)
+      .then((d) => {
+        setAds(d.ads);
+        setUpdated(new Date());
+        setError("");
+      })
       .catch((e) => {
         setError((e as ApiError).message);
-        setAds([]);
-      });
+        setAds((cur) => cur ?? []);
+      })
+      .finally(() => setLoading(false));
+  };
 
+  // Seçili aralık değişince ve her dakika canlı yenilenir
   useEffect(() => {
-    load();
-  }, []);
+    load(range);
+    const t = setInterval(() => load(range), 60000);
+    return () => clearInterval(t);
+  }, [range]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const act = async (id: string, action: "publish" | "pause") => {
     setBusy(id);
     setError("");
     try {
       await api(`/api/ads/meta/ads/${id}/${action}`, { method: "POST" });
-      setConfirmId(null);
       await load();
     } catch (e) {
       setError((e as ApiError).message);
@@ -1403,96 +1455,113 @@ function AdList() {
     }
   };
 
-  if (ads === null) return <EmptyResult loading text="Reklamların ve metrikleri Meta'dan alınıyor…" />;
+  if (ads === null) return <EmptyResult loading text="Reklamların ve sonuçları Meta'dan alınıyor…" />;
+
+  const n = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const currency = ads[0]?.currency || "TRY";
+  const sum = (k: "spend" | "reach" | "impressions" | "results") => ads.reduce((t, a) => t + (a.insights?.[k] || 0), 0);
 
   return (
     <div>
+      <div className="ad-dash-bar">
+        <div className="segmented small" role="tablist" aria-label="Tarih aralığı">
+          {RANGES.map((r) => (
+            <button key={r.value} type="button" role="tab" aria-selected={range === r.value} className={range === r.value ? "active" : ""} onClick={() => setRange(r.value)}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <span className="faint" style={{ fontSize: 12.5 }}>
+          {loading ? "Güncelleniyor…" : updated ? `Son güncelleme ${updated.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })} · her dakika yenilenir` : ""}
+        </span>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => load()} disabled={loading}>
+          Yenile
+        </button>
+      </div>
       {error && <div className="notice error">{error}</div>}
       {ads.length === 0 ? (
         <div className="panel empty">
           <h3>Henüz reklam oluşturmadın</h3>
-          <p>"Yeni reklam" sekmesinden ilk Instagram reklamını oluştur; durumu ve sonuçları burada görürsün.</p>
+          <p>&quot;Yeni reklam&quot; sekmesinden ilk reklamını yayınla; durumunu ve sonuçlarını burada canlı görürsün.</p>
         </div>
       ) : (
-        <div className="ad-list">
-          {ads.map((ad) => {
-            const st = STATUS[ad.status] || { label: ad.status, cls: "pending" };
-            const i = ad.insights;
-            const active = ad.status === "ACTIVE";
-            return (
-              <article key={ad.id} className="panel ad-row">
-                <div className="ad-thumb">
-                  {ad.media_url && (/\.(mp4|mov|webm)(\?|$)/i.test(ad.media_url) ? <video src={ad.media_url} muted playsInline /> : <img src={ad.media_url} alt="" />)}
-                </div>
-                <div className="ad-main">
-                  <div className="ad-title">
-                    <strong>{ad.name}</strong>
-                    <span className={`status-pill ${st.cls}`}>{st.label}</span>
+        <>
+          <div className="ad-summary">
+            <div><small>Harcama</small><b>{money(sum("spend"), currency)}</b></div>
+            <div><small>Sonuç</small><b>{n(sum("results"))}</b></div>
+            <div><small>Erişim</small><b>{n(sum("reach"))}</b></div>
+            <div><small>Gösterim</small><b>{n(sum("impressions"))}</b></div>
+          </div>
+          <div className="ad-list">
+            {ads.map((ad) => {
+              const st = STATUS[ad.status] || { label: ad.status, cls: "pending" };
+              const i = ad.insights;
+              const running = ["ACTIVE", "PENDING_REVIEW", "IN_PROCESS", "WITH_ISSUES"].includes(ad.status);
+              return (
+                <article key={ad.id} className="panel ad-row ad-row-rich">
+                  <div className="ad-thumb">
+                    {ad.media_url && (/\.(mp4|mov|webm)(\?|$)/i.test(ad.media_url) ? <video src={ad.media_url} muted playsInline /> : <img src={ad.media_url} alt="" />)}
                   </div>
-                  <div className="faint" style={{ fontSize: 13 }}>
-                    {OBJECTIVES.find((o) => o.value === ad.objective)?.label} · Günlük {money(ad.daily_budget, ad.currency)} · Instagram
-                  </div>
-                  {i ? (
-                    <div className="ad-metrics">
-                      <span>
-                        <b>{money(i.spend, ad.currency)}</b> harcama
-                      </span>
-                      <span>
-                        <b>{i.reach.toLocaleString("tr-TR")}</b> erişim
-                      </span>
-                      <span>
-                        <b>{i.impressions.toLocaleString("tr-TR")}</b> gösterim
-                      </span>
-                      {isMessage(ad.objective) ? (
-                        <span>
-                          <b>{i.conversations}</b> mesaj
-                        </span>
-                      ) : (
-                        <span>
-                          <b>{i.clicks.toLocaleString("tr-TR")}</b> tıklama
-                        </span>
-                      )}
-                      <span>
-                        <b>%{i.ctr.toFixed(2)}</b> TO
-                      </span>
+                  <div className="ad-main">
+                    <div className="ad-title">
+                      <strong>{ad.name}</strong>
+                      <span className={`status-pill ${st.cls}`}>{st.label}</span>
                     </div>
-                  ) : (
-                    ad.error && <small className="error-text">{ad.error}</small>
-                  )}
-                </div>
-                <div className="ad-actions">
-                  {active ? (
-                    <button className="btn btn-ghost btn-sm" disabled={busy === ad.id} onClick={() => act(ad.id, "pause")}>
-                      Duraklat
-                    </button>
-                  ) : confirmId === ad.id ? (
-                    <>
-                      <span className="faint" style={{ fontSize: 12.5 }}>Harcama başlayacak. Emin misin?</span>
-                      <button className="btn btn-primary btn-sm" disabled={busy === ad.id} onClick={() => act(ad.id, "publish")}>
-                        Evet, yayına al
+                    <div className="faint" style={{ fontSize: 13 }}>
+                      {OBJECTIVES.find((o) => o.value === ad.objective)?.label} · {ad.budget_type === "lifetime" ? "Toplam" : "Günlük"}{" "}
+                      {money(ad.daily_budget, ad.currency)}
+                    </div>
+                    {ad.review && <small className="error-text">Meta: {ad.review}</small>}
+                    {i ? (
+                      <div className="ad-kpis">
+                        <div className="kpi main">
+                          <small>{i.result_label}</small>
+                          <b>{n(i.results)}</b>
+                          <span>{i.results ? `${money(i.cost_per_result, ad.currency)} / sonuç` : "—"}</span>
+                        </div>
+                        <div className="kpi"><small>Harcama</small><b>{money(i.spend, ad.currency)}</b></div>
+                        <div className="kpi"><small>Erişim</small><b>{n(i.reach)}</b></div>
+                        <div className="kpi"><small>Gösterim</small><b>{n(i.impressions)}</b></div>
+                        <div className="kpi"><small>Sıklık</small><b>{n(i.frequency, 2)}</b></div>
+                        <div className="kpi"><small>Bağlantı tıklaması</small><b>{n(i.link_clicks)}</b></div>
+                        <div className="kpi"><small>TO (CTR)</small><b>%{n(i.ctr, 2)}</b></div>
+                        <div className="kpi"><small>TBM (CPC)</small><b>{i.cpc ? money(i.cpc, ad.currency) : "—"}</b></div>
+                        <div className="kpi"><small>BGBM (CPM)</small><b>{i.cpm ? money(i.cpm, ad.currency) : "—"}</b></div>
+                        {i.daily.length > 1 && (
+                          <div className="kpi spark-wrap">
+                            <small>Günlük harcama</small>
+                            <Spark data={i.daily} />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      ad.error && <small className="error-text">{ad.error}</small>
+                    )}
+                  </div>
+                  <div className="ad-actions">
+                    {running ? (
+                      <button className="btn btn-ghost btn-sm" disabled={busy === ad.id} onClick={() => act(ad.id, "pause")}>
+                        Durdur
                       </button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setConfirmId(null)}>
-                        Vazgeç
+                    ) : (
+                      <button className="btn btn-primary btn-sm" disabled={busy === ad.id || ad.status === "DISAPPROVED"} onClick={() => act(ad.id, "publish")}>
+                        Yayına al
                       </button>
-                    </>
-                  ) : (
-                    <button className="btn btn-primary btn-sm" onClick={() => setConfirmId(ad.id)}>
-                      Yayına al
-                    </button>
-                  )}
-                  <a
-                    className="btn btn-ghost btn-sm"
-                    href={`https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${ad.ad_account_id}&selected_campaign_ids=${ad.campaign_id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Meta'da aç
-                  </a>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                    )}
+                    <a
+                      className="btn btn-ghost btn-sm"
+                      href={`https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${ad.ad_account_id}&selected_campaign_ids=${ad.campaign_id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Meta&apos;da aç
+                    </a>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
