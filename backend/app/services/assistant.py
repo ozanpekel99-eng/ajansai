@@ -124,7 +124,7 @@ def reply(history: list[dict], force_image: bool = False, force_search: bool = F
     history = _trim_history(history)
     from app.services import web_search
 
-    system = SYSTEM_PROMPT + web_search.today_line() + free_tier.IMAGE_TOOL_NOTE + (free_tier.FORCE_IMAGE_NOTE if force_image else "")
+    system = SYSTEM_PROMPT + web_search.today_line() + free_tier.IMAGE_TOOL_NOTE + free_tier.MEDIA_NOTE + (free_tier.FORCE_IMAGE_NOTE if force_image else "")
     from app.services import documents
 
     if web_search.enabled():
@@ -140,7 +140,7 @@ def reply(history: list[dict], force_image: bool = False, force_search: bool = F
     for i, msg in enumerate(history):
         attachments = msg.get("attachments") or []
         if msg["role"] == "assistant" or not attachments:
-            messages.append({"role": msg["role"], "content": msg["content"]})
+            messages.append({"role": msg["role"], "content": msg["content"] + (msg.get("_note") or "")})
             continue
         if i != last:
             names = ", ".join(a.get("name") or "dosya" for a in attachments)

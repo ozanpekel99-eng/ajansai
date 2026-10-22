@@ -237,6 +237,8 @@ class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field("", max_length=20000)
     attachments: list[Attachment] = Field(default_factory=list, max_length=5)
+    # Asistan mesajında üretilmiş görsellerin adresleri (sohbet hafızası için)
+    media: list[str] = Field(default_factory=list, max_length=4)
 
 
 class ChatRequest(BaseModel):
@@ -274,8 +276,10 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=402, detail="Video üretimi ücretli paketlerde açık.")
     event_id = _charge(user["id"], "chat", credits, last.content.strip()[:200] or "Dosya incelemesi")
     try:
+        history = [m.model_dump() for m in payload.messages[-20:]]
+        labels = free_tier.label_media(history, storage.is_own_blob_url)
         text, model, image_prompt, sources, file_request, model_messages, video_request = assistant.reply(
-            [m.model_dump() for m in payload.messages[-20:]],
+            history,
             force_image=payload.mode == "image",
             force_search=payload.mode == "search",
             force_file=payload.mode == "file",
@@ -289,7 +293,10 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
 
     images, image_error = [], None
     if image_prompt:
+        ref_url, image_prompt = free_tier.extract_ref(image_prompt, labels)
         refs = [a.url for a in last.attachments if storage.kind_of(a.content_type) == "image"][:4]
+        if ref_url:
+            refs = [ref_url] + refs[:3]
         url, image_error, image_credits = _chat_image(user, image_prompt, refs)
         if url:
             images.append(url)
@@ -312,7 +319,9 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
     videos, video_error = [], None
     if video_request:
         start = next((a.url for a in last.attachments if storage.kind_of(a.content_type) == "image"), None)
-        if not start and images and storage.is_own_blob_url(images[0]):
+        if video_request.get("ref") and labels.get(video_request["ref"]):
+            start = labels[video_request["ref"]]
+        if images and storage.is_own_blob_url(images[0]):  # aynı yanıtta üretilen görsel önceliklidir
             start = images[0]
         try:
             job_id, video_error, video_credits = _start_video_job(

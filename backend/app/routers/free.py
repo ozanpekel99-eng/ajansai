@@ -52,6 +52,7 @@ class FreeMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field("", max_length=20000)
     attachments: list[FreeAttachment] = Field(default_factory=list, max_length=5)
+    media: list[str] = Field(default_factory=list, max_length=4)
 
 
 class FreeChatRequest(BaseModel):
@@ -108,6 +109,7 @@ def chat(payload: FreeChatRequest, request: Request, user: dict | None = Depends
     history = [m.model_dump() for m in payload.messages]
     for m in history[:-1]:
         m["attachments"] = []  # eski eklerin yalnızca son mesajdaki hali kullanılır
+    labels = free_tier.label_media(history, storage.is_own_blob_url)
     try:
         text, image_prompt, sources, file_request, model_messages = free_tier.chat(
             subject,
@@ -128,6 +130,9 @@ def chat(payload: FreeChatRequest, request: Request, user: dict | None = Depends
 
     images, image_error = [], None
     if image_prompt:
+        ref_url, image_prompt = free_tier.extract_ref(image_prompt, labels)
+        if ref_url:
+            refs = [ref_url] + refs[:1]
         url, image_error, _ = make_free_image(subject, user, image_prompt, refs, translate=False)
         if url:
             images.append(url)

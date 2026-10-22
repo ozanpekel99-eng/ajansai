@@ -170,6 +170,45 @@ def image_aspect(prompt: str) -> tuple[str, str]:
     return m.group(1), prompt[m.end():].strip()
 
 
+# ---- Sohbette üretilen görsellerin hafızası ----
+# Arayüz, önceki asistan mesajlarında üretilen görsellerin adreslerini "media" alanında gönderir.
+# Her birine "görsel-N" etiketi verilir; model önceki bir görseli düzenlemek ya da videoya
+# çevirmek isterse etiketin istemine ref=görsel-N yazar.
+REF_TOKEN = re.compile(r"(?:^|[|,;\s])ref\s*=\s*(g[öo]rsel-\d+)\s*[|,;]?", re.IGNORECASE)
+MEDIA_NOTE = (
+    "\n- Bu sohbette daha önce ürettiğin görseller, ilgili yanıtının sonunda 'görsel-N' etiketiyle belirtilir. "
+    "Kullanıcı önceki bir görseli düzenlemek, düzeltmek, benzerini yapmak veya videoya çevirmek isterse etiket satırına "
+    "ref=görsel-N ekle; örn. [[GORSEL: 9:16 | ref=görsel-1 | the same iced latte, ...]] ya da "
+    "[[VIDEO: 9:16 | 5 | ref=görsel-1 | milk slowly pours into the iced latte ...]]. Sistem o görseli kaynak olarak kullanır."
+)
+
+
+def label_media(history: list[dict], own_url) -> dict[str, str]:
+    """Asistan mesajlarındaki üretilmiş görsellere etiket notu ekler; {etiket: adres} döndürür."""
+    labels: dict[str, str] = {}
+    for m in history:
+        media = [u for u in (m.get("media") or []) if isinstance(u, str) and own_url(u)]
+        if m.get("role") != "assistant" or not media:
+            continue
+        names = []
+        for url in media[:4]:
+            label = f"görsel-{len(labels) + 1}"
+            labels[label] = url
+            names.append(label)
+        m["_note"] = f"\n[Sistem notu: bu yanıtta üretilen görsel: {', '.join(names)}]"
+    return labels
+
+
+def extract_ref(prompt: str, labels: dict[str, str]) -> tuple[str | None, str]:
+    """İstemdeki ref=görsel-N'i ayırır: (adres veya None, temiz istem)."""
+    m = REF_TOKEN.search(prompt or "")
+    if not m:
+        return None, prompt
+    key = m.group(1).lower().replace("gorsel", "görsel")
+    clean = (prompt[: m.start()] + " " + prompt[m.end():]).strip(" |,;")
+    return labels.get(key), re.sub(r"\s{2,}", " ", clean)
+
+
 # Sohbetten video üretimi (yalnızca ücretli paketler)
 VIDEO_TOOL_NOTE = (
     "\n- Video da üretebilirsin. Kullanıcı açıkça bir video, reels veya animasyon üretmeni isterse yanıtını kısa tut "
@@ -189,6 +228,8 @@ def split_video_request(text: str) -> tuple[str, dict | None]:
     if not m:
         return text, None
     parts = [p.strip() for p in m.group(1).split("|")]
+    ref = next((p for p in parts if p.lower().startswith("ref=")), None)
+    parts = [p for p in parts if p is not ref]
     aspect, duration = "9:16", 5
     while len(parts) > 1 and parts[0] in ("9:16", "1:1", "16:9", "5", "10", "7"):
         head = parts.pop(0)
@@ -199,7 +240,8 @@ def split_video_request(text: str) -> tuple[str, dict | None]:
     if duration not in (5, 7, 10):
         duration = 5
     prompt = " ".join(parts).strip()[:1500]
-    return VIDEO_TAG.sub("", text).strip(), ({"aspect": aspect, "duration": duration, "prompt": prompt} if prompt else None)
+    req = {"aspect": aspect, "duration": duration, "prompt": prompt, "ref": ref.split("=", 1)[1].strip().lower().replace("gorsel", "görsel") if ref else None}
+    return VIDEO_TAG.sub("", text).strip(), (req if prompt else None)
 
 
 FORCE_IMAGE_NOTE = (
@@ -239,7 +281,7 @@ def chat(
         + ("Yarın devam edebilir ya da bir paket seçebilirsin." if signed_in else "Üye olursan günde daha fazla mesaj yazabilirsin.")
     )
     event_id = _reserve(subject, "chat", lim, DAY, config.FREE_CHAT_PER_DAY_TOTAL, msg)
-    system = assistant.SYSTEM_PROMPT + web_search.today_line() + FREE_NOTE + (IMAGE_TOOL_NOTE if image_enabled() else "")
+    system = assistant.SYSTEM_PROMPT + web_search.today_line() + FREE_NOTE + (IMAGE_TOOL_NOTE + MEDIA_NOTE if image_enabled() else "")
     if web_search.enabled():
         system += web_search.SEARCH_NOTE
     if force_image and image_enabled():
@@ -251,7 +293,7 @@ def chat(
     images = [a for a in attachments if a["kind"] == "image"][:MAX_VISION_IMAGES]
     docs = [a for a in attachments if a["kind"] == "document"]
     for i, m in enumerate(recent):
-        content = (m.get("content") or "")[:MESSAGE_CHARS]
+        content = (m.get("content") or "")[:MESSAGE_CHARS] + (m.get("_note") or "")
         if i < len(recent) - 1 or m["role"] != "user":
             messages.append({"role": m["role"], "content": content or "(dosya)"})
             continue
