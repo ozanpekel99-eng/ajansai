@@ -22,6 +22,7 @@ ACTION_LABELS = {
     "describe": "Örnekten konsept",
     "image": "Görsel",
     "file": "Dosya",
+    "voice": "Sesli okuma",
     "video": "Video",
     "ads_draft": "Reklam taslağı",
 }

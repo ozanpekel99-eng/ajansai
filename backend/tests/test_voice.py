@@ -3,12 +3,13 @@ import base64
 from app import config
 from app.services import tts
 
-from .test_api import FakeResponse
+from .conftest import auth
+from .test_api import FakeResponse, register_paid
 
 
 def test_speak_disabled_without_key(client):
     assert client.post("/api/voice/speak", json={"text": "Merhaba"}).status_code == 503
-    assert client.get("/api/voice/status").json() == {"natural_voice": False}
+    assert client.get("/api/voice/status").json() == {"natural_voice": False, "streaming": False}
 
 
 def test_speak_returns_mp3_and_respects_daily_caps(client, monkeypatch):
@@ -61,3 +62,42 @@ def test_gemini_voice_preferred_and_pcm_wrapped_as_wav(client, monkeypatch):
     assert r.status_code == 200 and r.headers["content-type"] == "audio/wav"
     assert r.content[:4] == b"RIFF" and r.content.endswith(pcm)
     assert calls[1].endswith(":generateContent") and "texttospeech" not in "".join(calls)
+
+
+
+class _Stream:
+    status_code = 200
+    text = ""
+
+    def __init__(self, chunks):
+        self.chunks = chunks
+
+    def iter_lines(self, decode_unicode=False):
+        import json
+
+        for c in self.chunks:
+            yield "data: " + json.dumps({"candidates": [{"content": {"parts": [{"inlineData": {"mimeType": "audio/L16;rate=24000", "data": base64.b64encode(c).decode()}}]}}]})
+            yield ""
+
+
+def test_stream_returns_pcm_and_paid_users_pay_per_1000_chars(client, monkeypatch):
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "gk")
+    a, b = b"\x01\x00" * 300, b"\x02\x00" * 300
+    monkeypatch.setattr(tts.requests, "post", lambda *x, **k: _Stream([a, b]))
+    r = client.post("/api/voice/stream", json={"text": "Merhaba"})  # misafir: kredisiz
+    assert r.status_code == 200 and r.content == a + b and r.headers["content-type"].startswith("audio/L16")
+
+    token = register_paid(client, plan="pro")
+    used = lambda: client.get("/api/plans/usage", headers=auth(token)).json()["credits"]["used"]
+    for _ in range(3):  # 3 x 400 = 1200 karakter → 1 kredi
+        assert client.post("/api/voice/stream", json={"text": "a" * 400}, headers=auth(token)).status_code == 200
+    assert used() == 1
+
+
+def test_stream_failure_refunds(client, monkeypatch):
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "gk")
+    monkeypatch.setattr(config, "TTS_CHARS_PER_CREDIT", 10)
+    monkeypatch.setattr(tts.requests, "post", lambda *x, **k: FakeResponse(429, {}))
+    token = register_paid(client, plan="pro")
+    assert client.post("/api/voice/stream", json={"text": "a" * 50}, headers=auth(token)).status_code == 503
+    assert client.get("/api/plans/usage", headers=auth(token)).json()["credits"]["used"] == 0

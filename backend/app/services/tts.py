@@ -176,21 +176,81 @@ def _google_cloud(text: str) -> tuple[bytes, str]:
     return base64.b64decode(r.json().get("audioContent", "")), "audio/mpeg"
 
 
-def synthesize(text: str, subject: str) -> tuple[bytes, str]:
-    """(ses baytları, mime) döndürür."""
-    if not enabled():
-        raise TTSUnavailable("Doğal ses yapılandırılmadı.")
-    text = text.strip()[:MAX_CHARS]
-    if not text:
-        raise TTSUnavailable("Boş metin.")
-    n = len(text)
+def reserve(n: int, subject: str, paid: bool) -> list[tuple[str, int]]:
+    """Karakter kotasını ayırır; başarısız işlemde geri almak için kayıtları döndürür.
+
+    Ücretsiz/misafir: site geneli günlük tavan + kişi başı günlük tavan.
+    Ücretli: kişi başı yüksek güvenlik tavanı (asıl sınır kredidir).
+    """
     day = date.today().isoformat()
-    if not _add(day, n, config.TTS_DAILY_CHARS):
-        raise TTSUnavailable("Günlük doğal ses kotası doldu.")
-    personal = f"{day}:{subject}"
-    if not _add(personal, n, config.TTS_CHARS_PER_DAY_SUBJECT):
-        _undo(day, n)
-        raise TTSUnavailable("Kişisel günlük doğal ses kotası doldu.")
+    taken: list[tuple[str, int]] = []
+    checks = (
+        [(f"{day}:{subject}:p", config.TTS_PAID_CHARS_PER_DAY)]
+        if paid
+        else [(day, config.TTS_DAILY_CHARS), (f"{day}:{subject}", config.TTS_CHARS_PER_DAY_SUBJECT)]
+    )
+    for key, limit in checks:
+        if not _add(key, n, limit):
+            release(taken)
+            raise TTSUnavailable("Günlük doğal ses hakkı doldu.")
+        taken.append((key, n))
+    return taken
+
+
+def release(taken: list[tuple[str, int]]) -> None:
+    for key, n in taken:
+        _undo(key, n)
+
+
+def paid_chars_today(subject: str) -> int:
+    day = date.today().isoformat()
+    with get_engine().connect() as conn:
+        row = conn.execute(select(tts_usage.c.chars).where(tts_usage.c.key == f"{day}:{subject}:p")).first()
+    return row[0] if row else 0
+
+
+def stream_pcm(text: str):
+    """Gemini TTS akışı: 24 kHz, 16-bit mono PCM parçaları üretir (ilk ses ~1 sn'de gelir)."""
+    r = requests.post(
+        f"{GEMINI_URL}/models/{config.GEMINI_TTS_MODEL}:streamGenerateContent",
+        params={"alt": "sse"},
+        headers={"x-goog-api-key": config.GEMINI_API_KEY, "Content-Type": "application/json"},
+        json={
+            "contents": [{"parts": [{"text": f"{config.TTS_STYLE.capitalize()} bir sesle oku: {text}"}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": config.GEMINI_TTS_VOICE}}},
+            },
+        },
+        stream=True,
+        timeout=45,
+    )
+    if r.status_code != 200:
+        raise TTSUnavailable(f"Gemini akış {r.status_code}: {r.text[:200]}")
+    got = False
+    for line in r.iter_lines(decode_unicode=True):
+        if not line or not line.startswith("data:"):
+            continue
+        try:
+            import json
+
+            found = _find_audio(json.loads(line[5:].strip()))
+        except ValueError:
+            continue
+        if not found:
+            continue
+        raw = base64.b64decode(found[0])
+        if raw[:4] == b"RIFF":
+            raw = raw[44:]
+        if raw:
+            got = True
+            yield raw
+    if not got:
+        raise TTSUnavailable("Gemini akışında ses yok")
+
+
+def synthesize_raw(text: str) -> tuple[bytes, str]:
+    """Kota ayırmadan sesi üretir (kotayı çağıran yönetir)."""
     errors = []
     providers = ([_gemini] if config.GEMINI_API_KEY else []) + ([_google_cloud] if config.GOOGLE_TTS_API_KEY else [])
     for provider in providers:
@@ -199,6 +259,24 @@ def synthesize(text: str, subject: str) -> tuple[bytes, str]:
         except TTSUnavailable as e:
             errors.append(str(e))
             logger.warning("Doğal ses sağlayıcısı olmadı: %s", e)
-    _undo(day, n)
-    _undo(personal, n)
+    raise TTSUnavailable("; ".join(errors) or "Doğal ses yapılandırılmadı.")
+
+
+def synthesize(text: str, subject: str, paid: bool = False) -> tuple[bytes, str]:
+    """(ses baytları, mime) döndürür."""
+    if not enabled():
+        raise TTSUnavailable("Doğal ses yapılandırılmadı.")
+    text = text.strip()[:MAX_CHARS]
+    if not text:
+        raise TTSUnavailable("Boş metin.")
+    taken = reserve(len(text), subject, paid)
+    errors = []
+    providers = ([_gemini] if config.GEMINI_API_KEY else []) + ([_google_cloud] if config.GOOGLE_TTS_API_KEY else [])
+    for provider in providers:
+        try:
+            return provider(text)
+        except TTSUnavailable as e:
+            errors.append(str(e))
+            logger.warning("Doğal ses sağlayıcısı olmadı: %s", e)
+    release(taken)
     raise TTSUnavailable("; ".join(errors))
