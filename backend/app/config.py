@@ -116,6 +116,13 @@ FREE_IMAGE_MODEL = _env("FREE_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnel
 FREE_IMAGE_REF_MODEL = _env("FREE_IMAGE_REF_MODEL", "@cf/black-forest-labs/flux-2-klein-4b")
 FREE_IMAGES_PER_MONTH = _int("FREE_IMAGES_PER_MONTH", 6)
 FREE_IMAGES_PER_DAY_TOTAL = _int("FREE_IMAGES_PER_DAY_TOTAL", 150)
+# Doğal sesli okuma: Google Cloud Text-to-Speech (Chirp 3 HD). Ayda 1M karakter ücretsiz;
+# günlük tavan bunun altında tutulur, aşılırsa tarayıcının kendi sesine düşülür.
+GOOGLE_TTS_API_KEY = _env("GOOGLE_TTS_API_KEY")
+TTS_VOICE = _env("TTS_VOICE", "tr-TR-Chirp3-HD-Achernar")
+TTS_DAILY_CHARS = _int("TTS_DAILY_CHARS", 30000)
+TTS_CHARS_PER_DAY_SUBJECT = _int("TTS_CHARS_PER_DAY_SUBJECT", 6000)
+
 # Stok fotoğraf kütüphanesi: Pixabay (öncelikli) veya Pexels, ikisi de ücretsiz API anahtarı
 PIXABAY_API_KEY = _env("PIXABAY_API_KEY")
 PEXELS_API_KEY = _env("PEXELS_API_KEY")

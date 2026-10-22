@@ -141,6 +141,14 @@ free_events = Table(
     Column("created_at", DateTime, nullable=False, index=True),
 )
 
+# Sesli okuma (TTS) günlük karakter sayacı: ücretsiz kotayı aşmamak için.
+tts_usage = Table(
+    "tts_usage",
+    metadata,
+    Column("key", String(120), primary_key=True),  # "<gün>" veya "<gün>:<kişi>"
+    Column("chars", Integer, nullable=False, default=0),
+)
+
 # Pexels arama sonuçları önbelleği (Pexels API saatlik istek sınırı için).
 stock_cache = Table(
     "stock_cache",

@@ -182,6 +182,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
 
   function startVoiceMode() {
     voice.stopSpeaking();
+    voice.unlock();
     setError("");
     voiceModeRef.current = true;
     setVoiceMode(true);
@@ -218,6 +219,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
       return;
     }
     setSpeakingIdx(i);
+    voice.unlock();
     voice.speak(content, () => setSpeakingIdx(null));
   };
 
