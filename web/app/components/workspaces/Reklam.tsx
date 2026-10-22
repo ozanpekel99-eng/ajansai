@@ -11,8 +11,8 @@ import { ChipSelect } from "../Controls";
 import Icon from "../Icon";
 import { EmptyResult, LockedNotice, WorkspaceProps } from "./common";
 
-type AdAccount = { account_id: string; name: string; currency: string; account_status: number };
-type Page = { id: string; name: string };
+type AdAccount = { account_id: string; name: string; currency: string; account_status: number; status_label?: string; usable?: boolean; billing_url?: string };
+type Page = { id: string; name: string; instagram_id?: string | null; instagram_username?: string | null; source?: string };
 type IgAccount = { id: string; username: string; page_id?: string | null };
 type Loc = { key: string; name: string; type: "country" | "region" | "city"; country_code?: string | null; region?: string | null };
 type Media = { url: string; kind: "image" | "video" };
@@ -238,35 +238,41 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
   const account = accounts.find((a) => a.account_id === accountId);
   const currency = account?.currency || "TRY";
 
+  const usable = (a: AdAccount) => a.usable ?? a.account_status === 1;
+
   useEffect(() => {
-    Promise.all([
-      api<{ ad_accounts: AdAccount[] }>("/api/ads/meta/ad-accounts"),
-      api<{ pages: Page[] }>("/api/ads/meta/pages"),
-    ])
-      .then(([a, p]) => {
-        const sorted = [...a.ad_accounts].sort((x, y) => (x.account_status === 1 ? -1 : 0) - (y.account_status === 1 ? -1 : 0));
-        setAccounts(sorted);
-        const firstActive = sorted.find((x) => x.account_status === 1);
-        if (firstActive) setAccountId(firstActive.account_id);
-        setPages(p.pages);
-        if (p.pages[0]) setPageId(p.pages[0].id);
+    api<{ ad_accounts: AdAccount[] }>("/api/ads/meta/ad-accounts")
+      .then((a) => {
+        setAccounts(a.ad_accounts);
+        const first = a.ad_accounts.find((x) => x.account_status === 1) || a.ad_accounts.find(usable);
+        if (first) setAccountId(first.account_id);
       })
       .catch((e) => setLoadError((e as ApiError).message));
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Reklam hesabı değişince: o hesabın tanıtabildiği sayfalar ve bağlı Instagram hesapları gelir,
+  // sayfa ile Instagram birbirine göre otomatik eşlenir.
   useEffect(() => {
     if (!accountId) return;
     setIgAccounts([]);
     setIgId("");
-    api<{ accounts: IgAccount[] }>(`/api/ads/meta/instagram-accounts?ad_account_id=${accountId}`)
-      .then((d) => {
-        setIgAccounts(d.accounts);
-        if (d.accounts[0]) {
-          setIgId(d.accounts[0].id);
-          if (d.accounts[0].page_id) setPageId(d.accounts[0].page_id);
-        }
-      })
-      .catch(() => setIgAccounts([]));
+    Promise.all([
+      api<{ pages: Page[] }>(`/api/ads/meta/pages?ad_account_id=${accountId}`).catch(() => ({ pages: [] as Page[] })),
+      api<{ accounts: IgAccount[] }>(`/api/ads/meta/instagram-accounts?ad_account_id=${accountId}`).catch(() => ({ accounts: [] as IgAccount[] })),
+    ]).then(([p, ig]) => {
+      setPages(p.pages);
+      setIgAccounts(ig.accounts);
+      // Önce Instagram'ı bağlı olan sayfa, yoksa reklam hesabının sayfası, yoksa ilk sayfa
+      const withIg = p.pages.find((x) => x.instagram_id);
+      const page = withIg || p.pages.find((x) => x.source === "ad_account") || p.pages[0];
+      const igLinked = ig.accounts.find((a) => a.page_id && a.page_id === page?.id) || ig.accounts.find((a) => a.id === page?.instagram_id) || ig.accounts[0];
+      if (igLinked) {
+        setIgId(igLinked.id);
+        setPageId(igLinked.page_id || page?.id || "");
+      } else if (page) {
+        setPageId(page.id);
+      }
+    });
   }, [accountId]);
 
   const writeCopy = async () => {
@@ -354,19 +360,41 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
                 {accounts.length ? "Seç" : "Yükleniyor…"}
               </option>
               {accounts.map((a) => (
-                <option key={a.account_id} value={a.account_id} disabled={a.account_status !== 1}>
-                  {a.name} ({a.currency}){a.account_status !== 1 ? " · aktif değil" : ""}
+                <option key={a.account_id} value={a.account_id} disabled={!usable(a)}>
+                  {a.name} ({a.currency}){a.account_status !== 1 ? ` · ${a.account_status === 3 ? "ödenmemiş bakiye" : a.account_status === 9 ? "ödeme ek süresinde" : (a.status_label || "aktif değil").toLowerCase()}` : ""}
                 </option>
               ))}
             </select>
+            {account && account.account_status !== 1 && usable(account) && (
+              <div className="notice" style={{ marginTop: 8 }}>
+                <span>{account.status_label}. Reklamı yine de hazırlayabilirsin.</span>
+                {account.billing_url && (
+                  <a className="btn btn-light btn-sm" href={account.billing_url} target="_blank" rel="noreferrer">
+                    Bakiyeyi öde
+                  </a>
+                )}
+              </div>
+            )}
           </div>
           <div className="field-row">
             <div className="field">
               <label htmlFor="ad-page">Facebook sayfası</label>
-              <select id="ad-page" value={pageId} onChange={(e) => setPageId(e.target.value)} required>
+              <select
+                id="ad-page"
+                value={pageId}
+                onChange={(e) => {
+                  setPageId(e.target.value);
+                  const pg = pages.find((x) => x.id === e.target.value);
+                  const ig = igAccounts.find((a) => a.page_id === pg?.id) || igAccounts.find((a) => a.id === pg?.instagram_id);
+                  if (ig) setIgId(ig.id);
+                }}
+                required
+              >
+                {!pages.length && <option value="">Sayfa bulunamadı</option>}
                 {pages.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
+                    {p.instagram_username ? ` · @${p.instagram_username}` : ""}
                   </option>
                 ))}
               </select>
@@ -391,7 +419,10 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
               </select>
             </div>
           </div>
-          <span className="hint">Reklam yalnızca Instagram'da gösterilir: akış, hikâye, Reels ve keşfet.</span>
+          <span className="hint">
+            Reklam yalnızca Instagram&apos;da gösterilir: akış, hikâye, Reels ve keşfet. Aradığın sayfa ya da Instagram listede yoksa Meta izin
+            ekranında seçilmemiştir; &quot;Meta bağlantısını kaldır&quot; deyip yeniden bağlanırken hepsini işaretle.
+          </span>
         </section>
 
         <section className="panel ws-panel">

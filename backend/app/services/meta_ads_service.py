@@ -87,11 +87,14 @@ def list_ad_accounts(access_token: str) -> list[dict]:
     try:
         response = requests.get(
             f"{META_BASE_URL}/me/adaccounts",
-            params={"fields": "account_id,name,currency,account_status", "access_token": access_token},
+            params={"fields": "account_id,name,currency,account_status", "access_token": access_token, "limit": 200},
             timeout=30,
         )
         response.raise_for_status()
-        return response.json().get("data", [])
+        rows = [describe_account(a) for a in response.json().get("data", [])]
+        # Önce aktif, sonra kullanılabilir (bakiyeli vb.), en sonda kapalı hesaplar
+        rows.sort(key=lambda a: (a["account_status"] != 1, not a["usable"], a.get("name", "").lower()))
+        return rows
     except (requests.RequestException, ValueError) as e:
         raise MetaError("Reklam hesapları alınamadı.") from e
 
@@ -173,9 +176,50 @@ def _graph(method: str, path: str, token: str, **data) -> dict:
     return payload
 
 
-def list_pages(token: str) -> list[dict]:
-    data = _graph("GET", "me/accounts", token, fields="id,name", limit=100)
-    return [{"id": p["id"], "name": p["name"]} for p in data.get("data", [])]
+# Meta reklam hesabı durum kodları → kullanıcıya açıklama; usable: reklam oluşturulabilir mi
+ACCOUNT_STATUS = {
+    1: ("Aktif", True),
+    3: ("Ödenmemiş bakiye var: Meta, bakiye ödenene kadar reklamları yayınlamaz", True),
+    9: ("Ödeme ek süresinde: bakiyeyi kısa sürede öde", True),
+    7: ("Meta incelemesinde", True),
+    8: ("Ödeme bekleniyor", True),
+    2: ("Devre dışı (Meta tarafından kapatıldı)", False),
+    100: ("Kapanıyor", False),
+    101: ("Kapalı", False),
+}
+
+
+def describe_account(a: dict) -> dict:
+    label, usable = ACCOUNT_STATUS.get(a.get("account_status"), ("Durum bilinmiyor", True))
+    return {**a, "status_label": label, "usable": usable,
+            "billing_url": f"https://business.facebook.com/billing_hub/payment_activity/?asset_id={a.get('account_id')}"}
+
+
+def _page_row(p: dict, source: str) -> dict:
+    ig = p.get("instagram_business_account") or {}
+    return {"id": p["id"], "name": p.get("name", ""), "instagram_id": ig.get("id"),
+            "instagram_username": ig.get("username"), "source": source}
+
+
+def list_pages(token: str, ad_account_id: str | None = None) -> list[dict]:
+    """Reklamda kullanılabilecek sayfalar: reklam hesabının tanıtabildiği sayfalar (önce) +
+    kullanıcının yönettiği sayfalar. Her sayfanın bağlı Instagram hesabı da döner."""
+    found: dict[str, dict] = {}
+    fields = "id,name,instagram_business_account{id,username}"
+    if ad_account_id:
+        act = ad_account_id.removeprefix("act_")
+        try:
+            for p in _graph("GET", f"act_{act}/promote_pages", token, fields=fields, limit=100).get("data", []):
+                found[p["id"]] = _page_row(p, "ad_account")
+        except MetaError:
+            pass
+    try:
+        for p in _graph("GET", "me/accounts", token, fields=fields, limit=100).get("data", []):
+            found.setdefault(p["id"], _page_row(p, "user"))
+    except MetaError:
+        if not found:
+            raise
+    return list(found.values())
 
 
 def list_instagram_accounts(ad_account_id: str, token: str) -> list[dict]:
@@ -190,11 +234,11 @@ def list_instagram_accounts(ad_account_id: str, token: str) -> list[dict]:
     except MetaError:
         pass
     try:
-        pages = _graph("GET", "me/accounts", token, fields="id,instagram_business_account{id,username}", limit=100)
-        for p in pages.get("data", []):
-            ig = p.get("instagram_business_account")
-            if ig and ig.get("id"):
-                found.setdefault(ig["id"], {"id": ig["id"], "username": ig.get("username", ""), "page_id": p["id"]})
+        for p in list_pages(token, ad_account_id):
+            if p.get("instagram_id"):
+                row = found.setdefault(p["instagram_id"], {"id": p["instagram_id"], "username": p.get("instagram_username") or "", "page_id": None})
+                row["page_id"] = row["page_id"] or p["id"]
+                row["username"] = row["username"] or p.get("instagram_username") or ""
     except MetaError:
         pass
     return list(found.values())
@@ -431,17 +475,25 @@ def setup_status(token: str) -> dict:
         fields="account_id,name,currency,account_status,disable_reason,funding_source,funding_source_details{display_string}",
         limit=50,
     ).get("data", [])
-    pages = _graph("GET", "me/accounts", token, fields="id,name,instagram_business_account{id,username}", limit=100).get("data", [])
     active = [a for a in accounts if a.get("account_status") == 1]
+    unsettled = [a for a in accounts if a.get("account_status") in (3, 9)]
     paid = [a for a in active if a.get("funding_source") or (a.get("funding_source_details") or {}).get("display_string")]
-    instagram = [p for p in pages if p.get("instagram_business_account")]
-    first = (paid or active or accounts or [{}])[0].get("account_id")
+    first = (paid or active or unsettled or accounts or [{}])[0].get("account_id")
+    pages = list_pages(token, first) if first else list_pages(token)
+    try:
+        instagram = list_instagram_accounts(first, token) if first else []
+    except MetaError:
+        instagram = []
+    instagram = instagram or [{"id": p["instagram_id"], "username": p["instagram_username"]} for p in pages if p.get("instagram_id")]
     steps = [
         {
             "key": "ad_account", "done": bool(active), "title": "Reklam hesabı",
-            "text": "Meta'da aktif bir reklam hesabın olmalı." if not accounts
-            else ("Reklam hesabın devre dışı; Meta'dan aktifleştirmen gerekiyor." if not active else f"{active[0].get('name')} hazır."),
-            "action": "Reklam hesabı oluştur", "url": "https://business.facebook.com/latest/settings/ad_accounts",
+            "text": "Meta'da bir reklam hesabın olmalı; yoksa 1 dakikada oluşturulur." if not accounts
+            else (f"Hesaplarında ödenmemiş bakiye var ({unsettled[0].get('name')}); ödeyince reklamlar yayına girer." if not active and unsettled
+                  else ("Reklam hesabın devre dışı; Meta'dan aktifleştirmen gerekiyor." if not active else f"{len(active)} aktif reklam hesabın var.")),
+            "action": "Bakiyeyi öde" if (not active and unsettled) else "Reklam hesabı oluştur",
+            "url": f"https://business.facebook.com/billing_hub/payment_activity/?asset_id={unsettled[0].get('account_id')}" if (not active and unsettled)
+            else "https://business.facebook.com/latest/settings/ad_accounts",
         },
         {
             "key": "payment", "done": bool(paid), "title": "Ödeme yöntemi (kart)",
@@ -460,7 +512,7 @@ def setup_status(token: str) -> dict:
         {
             "key": "instagram", "done": bool(instagram), "title": "Instagram hesabı",
             "text": "Instagram hesabını profesyonel hesaba çevirip Facebook sayfana bağla (Instagram > Ayarlar > Hesap Merkezi)."
-            if not instagram else f"@{instagram[0]['instagram_business_account'].get('username')} bağlı.",
+            if not instagram else f"@{instagram[0].get('username')} bağlı.",
             "action": "Instagram'ı bağla", "url": "https://business.facebook.com/latest/settings/instagram_account",
         },
     ]
