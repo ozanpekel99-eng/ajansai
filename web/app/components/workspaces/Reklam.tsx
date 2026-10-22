@@ -296,11 +296,12 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
   const account = accounts.find((a) => a.account_id === accountId);
   pageRef.current = pageId;
   const page = pages.find((p) => p.id === pageId);
-  // Yalnızca seçili sayfaya bağlı Instagram hesapları gösterilir
-  const pageIg: IgAccount[] = [
+  // Önce seçili sayfaya bağlı Instagram; sayfada görünmüyorsa reklam hesabına atanmış Instagram hesapları
+  const linkedIg: IgAccount[] = [
     ...(page?.instagram_id ? [{ id: page.instagram_id, username: page.instagram_username || "", page_id: page.id }] : []),
     ...igAccounts.filter((a) => a.page_id === pageId && a.id !== page?.instagram_id),
   ];
+  const pageIg: IgAccount[] = linkedIg.length ? linkedIg : igAccounts.filter((a) => !a.page_id || a.page_id === pageId);
 
   const loadPages = (fresh = false) =>
     api<{ pages: Page[] }>(`/api/ads/meta/pages?fresh=${fresh ? 1 : 0}${accountId ? `&ad_account_id=${accountId}` : ""}`).then((d) => {
@@ -311,9 +312,18 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
   const choosePage = (id: string, list: Page[] = pages) => {
     setPageId(id);
     const pg = list.find((x) => x.id === id);
-    const ig = igAccounts.find((a) => a.page_id === id) || (pg?.instagram_id ? { id: pg.instagram_id } : null);
+    const ig = igAccounts.find((a) => a.page_id === id) || (pg?.instagram_id ? { id: pg.instagram_id } : null) || guessIg(pg?.name || "");
     setIgId(ig?.id || "");
     if (!ig && id) lookupIg(id);
+  };
+
+  // Sayfanın bağlantısı okunamazsa reklam hesabındaki Instagram'lardan adı benzeyen seçilir
+  const norm = (t: string) =>
+    t.toLocaleLowerCase("tr").replace(/[çğıöşü]/g, (c) => ({ ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u" })[c] || c).replace(/[^a-z0-9]/g, "");
+  const guessIg = (pageName: string, list: IgAccount[] = igAccounts) => {
+    const words = pageName.split(/\s+/).map(norm).filter((w) => w.length >= 4);
+    const free = list.filter((a) => !a.page_id);
+    return free.find((a) => words.some((w) => norm(a.username).includes(w))) || (free.length === 1 ? free[0] : null);
   };
 
   // Listede Instagram görünmeyen sayfa için tek tek sorulur (sayfa jetonuyla)
@@ -407,17 +417,19 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
     ]).then(([p, ig]) => {
       setPages(p.pages);
       setIgAccounts(ig.accounts);
-      // Önce Instagram'ı bağlı olan sayfa, yoksa reklam hesabının sayfası, yoksa ilk sayfa
-      const withIg = p.pages.find((x) => x.instagram_id);
-      const page = withIg || p.pages.find((x) => x.source === "ad_account") || p.pages[0];
-      const igLinked = ig.accounts.find((a) => a.page_id && a.page_id === page?.id) || ig.accounts.find((a) => a.id === page?.instagram_id) || ig.accounts[0];
-      if (igLinked) {
-        setIgId(igLinked.id);
-        setPageId(igLinked.page_id || page?.id || "");
-      } else if (page) {
-        setPageId(page.id);
-        lookupIg(page.id);
-      }
+      // Önce reklam hesabının kendi sayfası (Instagram'ı bağlı olan öncelikli), sonra adı reklam hesabına benzeyen sayfa
+      const accName = norm(accounts.find((a) => a.account_id === accountId)?.name || "");
+      const own = p.pages.filter((x) => x.source === "ad_account");
+      const named = p.pages.find((x) => accName && (accName.includes(norm(x.name)) || norm(x.name).includes(accName)));
+      const page = own.find((x) => x.instagram_id) || own[0] || named || p.pages.find((x) => x.instagram_id) || p.pages[0];
+      if (!page) return;
+      setPageId(page.id);
+      const pick =
+        ig.accounts.find((a) => a.page_id === page.id) ||
+        (page.instagram_id ? { id: page.instagram_id } : null) ||
+        guessIg(page.name, ig.accounts);
+      if (pick) setIgId(pick.id);
+      else lookupIg(page.id);
     });
   }, [accountId]);
 
@@ -590,11 +602,13 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
               </select>
             </div>
           </div>
-          {pageId && !pageIg.length && (
+          {pageId && !linkedIg.length && (
             <div className="notice setup-inline">
               <span>
-                <strong>{page?.name}</strong> sayfasına bağlı bir Instagram hesabı yok. Bağlarsan reklam Instagram hesabının adıyla görünür;
-                bağlamazsan sayfa adıyla yayınlanır.
+                <strong>{page?.name}</strong> sayfasına bağlı Instagram görünmüyor.{" "}
+                {pageIg.length
+                  ? "Yukarıdan reklam hesabındaki Instagram hesaplarından birini seçebilir ya da sayfaya bağlayabilirsin."
+                  : "Bağlarsan reklam Instagram hesabının adıyla görünür; bağlamazsan sayfa adıyla yayınlanır."}
               </span>
               <button type="button" className="btn btn-primary btn-sm" onClick={() => watchMeta("ig")} disabled={watching === "ig"}>
                 {watching === "ig" ? "Bağlantı bekleniyor…" : "Instagram'ı bu sayfaya bağla"}
