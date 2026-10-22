@@ -178,3 +178,6 @@ SUPPORT_ADDRESS = _env("SUPPORT_ADDRESS", "support@ajansai.tr")
 SUPPORT_FORWARD_TO = _env("SUPPORT_FORWARD_TO", "")  # gelen mailin ve yanıtın kopyası (ör. kişisel Gmail)
 SUPPORT_AUTO_REPLY = _env("SUPPORT_AUTO_REPLY", "1") not in ("0", "false", "False", "")
 SUPPORT_REPLIES_PER_SENDER_PER_DAY = _int("SUPPORT_REPLIES_PER_SENDER_PER_DAY", 5)
+
+# Yönetici e-postaları (model karşılaştırma uçları vb.)
+ADMIN_EMAILS = {e.strip().lower() for e in _env("ADMIN_EMAILS", "ozanpekel99@gmail.com").split(",") if e.strip()}
