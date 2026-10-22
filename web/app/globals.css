@@ -3138,3 +3138,37 @@ table.data td.num {
   height: 1px;
   background: var(--line);
 }
+
+/* ChatGPT gibi: boş sohbette başlık ve yazma kutusu ortada */
+.chat.is-empty {
+  justify-content: center;
+}
+
+.chat.is-empty .chat-scroll {
+  flex: 0 0 auto;
+  padding-bottom: 8px;
+}
+
+.chat.is-empty .chat-empty {
+  padding: 0 0 12px;
+}
+
+.chat-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-top: 16px;
+  padding-bottom: 24px;
+}
+
+.chat-page .chat {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+.chat-page-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

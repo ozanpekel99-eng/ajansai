@@ -27,7 +27,7 @@ export const TOOLS: Tool[] = [
     slug: "fikir",
     name: "Sohbet",
     kind: "metin",
-    short: "ChatGPT gibi konuş: paylaşım fikri, caption, reklam metni ve görsel; ne istersen yaz.",
+    short: "Her şeyi sorabileceğin asistan; yazı, fikir, reklam metni ya da görsel iste.",
     long: "Ne istediğini yaz; form doldurmana gerek yok. Görsel istersen sohbetin içinde üretir. Ürün fotoğrafı eklersen ondan yeni görseller çıkarır; ücretli paketlerde video ve belge de ekleyebilirsin.",
     quota: "ideas",
     costLabel: "Ücretsiz pakette günde 20 mesaj",

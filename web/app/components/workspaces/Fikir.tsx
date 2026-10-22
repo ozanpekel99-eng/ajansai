@@ -71,8 +71,8 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
         }
         footer={() =>
           status
-            ? `Ücretsiz paket · bugün ${status.chat.remaining}/${status.chat.limit} mesaj, 30 günde ${status.images.remaining}/${status.images.limit} görsel hakkın var`
-            : "Ücretsiz paket"
+            ? `Bugün ${status.chat.remaining} mesaj, bu ay ${status.images.remaining} görsel hakkın kaldı`
+            : ""
         }
       />
     );
@@ -91,7 +91,7 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
       blocker={lacking ? <NoCreditsNotice cost={costs.chat_message} /> : undefined}
       footer={(files) => {
         const cost = costs.chat_message + files * costs.chat_attachment;
-        return `Bu mesaj ${cost} kredi, görsel istersen +${costs.image}${files ? ` (mesaj 1 + ${files} dosya; ${costs.chat_pdf_pages ?? 10} sayfadan uzun PDF'lerde her ${costs.chat_pdf_pages ?? 10} sayfa +1)` : ""} · Enter gönderir, Shift+Enter alt satır`;
+        return `${cost} kredi${files ? ` (${files} dosya dahil)` : ""} · görsel +${costs.image} kredi · ${usage.credits.remaining} kredin var`;
       }}
     />
   );

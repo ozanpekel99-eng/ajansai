@@ -27,13 +27,6 @@ export type AttachMode = "all" | "images" | "signup";
 
 const CHATS_KEY = "ajansai_chats";
 
-const SUGGESTIONS = [
-  "Beyaz eşya mağazam için bu hafta paylaşabileceğim 5 Reels fikri",
-  "Kafem için soğuk kahve kampanyasının gönderi görselini üret",
-  "Emlak ofisim için Instagram reklam metni ve hedef kitle önerisi",
-  "Kuaför salonum için bir haftalık hikâye planı hazırla",
-];
-
 export function loadChats(): Conversation[] {
   try {
     return JSON.parse(localStorage.getItem(CHATS_KEY) || "[]");
@@ -156,19 +149,11 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
   const pendingImage = sending && /görsel|resim|fotoğraf|afiş|post|çiz/i.test(lastUserWithImages?.content || "");
 
   return (
-    <div className="chat">
+    <div className={`chat ${messages.length === 0 ? "is-empty" : ""}`}>
       <div className="chat-scroll">
         {messages.length === 0 ? (
           <div className="chat-empty">
-            <h2>Hadi sohbete başlayalım</h2>
-            <p>İşletmeni ve ne istediğini anlat. Paylaşım fikri, caption, reklam metni ya da görsel; ne istersen yaz.</p>
-            <div className="suggestions">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} type="button" onClick={() => send(undefined, s)} disabled={sending || !!blocker}>
-                  {s}
-                </button>
-              ))}
-            </div>
+            <h2>Nasıl yardımcı olabilirim?</h2>
           </div>
         ) : (
           <div className="messages">
@@ -204,16 +189,6 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                       <button className="btn btn-ghost btn-sm" type="button" onClick={() => copy(m.content, i)}>
                         <Icon name="copy" size={14} /> {copied === i ? "Kopyalandı" : "Kopyala"}
                       </button>
-                      {!m.images?.length && i === messages.length - 1 && (
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          type="button"
-                          disabled={sending || !!blocker}
-                          onClick={() => send(undefined, "Bunun için bir gönderi görseli üret")}
-                        >
-                          <Icon name="image" size={14} /> Görselini üret
-                        </button>
-                      )}
                       {vid && (
                         <Link className="btn btn-ghost btn-sm" href={vid}>
                           Video üret
@@ -233,7 +208,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                     <span />
                     <span />
                   </div>
-                  {pendingImage && <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>Görsel istendiyse birlikte hazırlanıyor, 10–20 saniye sürebilir.</div>}
+                  {pendingImage && <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>Görsel hazırlanıyor…</div>}
                 </div>
               </div>
             )}
@@ -277,7 +252,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
               e.target.style.height = `${Math.min(e.target.scrollHeight, 220)}px`;
             }}
             onKeyDown={onKey}
-            placeholder="Bir şey sor ya da bir görsel iste…"
+            placeholder="Bir şey sor…"
             aria-label="Mesaj"
           />
           <button type="submit" className="send-btn" disabled={!canSend} aria-label="Gönder">

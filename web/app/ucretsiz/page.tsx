@@ -57,11 +57,7 @@ export default function GuestPage() {
               </div>
             ) : undefined
           }
-          footer={() =>
-            status
-              ? `Ücretsiz · bugün ${status.chat.remaining}/${status.chat.limit} mesaj, 30 günde ${status.images.remaining}/${status.images.limit} görsel hakkın var`
-              : "Ücretsiz · Enter gönderir"
-          }
+          footer={() => (status ? `Bugün ${status.chat.remaining} mesaj hakkın kaldı` : "")}
         />
       </main>
     </div>

@@ -23,7 +23,7 @@ export default function Dashboard() {
   const stepCopy: Record<string, { text: string; action: React.ReactNode }> = {
     account: { text: "Kayıt oldun, ücretsiz paketin açıldı.", action: <span className="chip">Tamamlandı</span> },
     idea: {
-      text: "İşletmeni anlat; fikir, caption ya da görsel iste.",
+      text: "Aklına ne gelirse sor; yazı, fikir ya da görsel iste.",
       action: (
         <Link href="/araclar/fikir" className="btn btn-light btn-sm">
           Sohbete başla
@@ -92,7 +92,7 @@ export default function Dashboard() {
           </span>
           <div>
             <h3>Seedream görsel ve video üretimini aç</h3>
-            <p>Ücretsiz pakette günde 20 fikir mesajı ve ayda 6 görsel var. Başlangıç paketi $10: 200 kredi, örneğin 50 görsel ya da 16 kısa video.</p>
+            <p>Ücretsiz pakette günde 20 mesaj ve ayda 6 görsel var. Başlangıç paketi $10: 200 kredi, örneğin 50 görsel ya da 16 kısa video.</p>
           </div>
           <button className="btn btn-light" onClick={() => openCheckout("baslangic")}>
             Paketi seç

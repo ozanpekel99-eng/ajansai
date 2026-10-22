@@ -124,9 +124,7 @@ def status(subject: str, signed_in: bool) -> dict:
 
 # ---------------- Sohbet ----------------
 
-FREE_NOTE = (
-    "\n- Bu kullanıcı ücretsiz pakette: yanıtları derli toplu tut (en fazla 5 fikir)."
-)
+FREE_NOTE = "\n- Yanıtları derli toplu tut."
 
 # Sohbetten görsel üretimi (ChatGPT gibi): model görsel istendiğini bu satırla bildirir.
 IMAGE_TOOL_NOTE = (

@@ -41,6 +41,22 @@ export default function ToolPage() {
   }
 
   const Workspace = WORKSPACES[tool.slug];
+
+  // Sohbet: ChatGPT gibi sade, tam ekran; yalnızca geçmiş/yeni sohbet düğmesi
+  if (tool.slug === "fikir") {
+    return (
+      <div className="page chat-page">
+        <div className="chat-page-bar">
+          <button className="btn btn-ghost btn-sm" type="button" onClick={() => setTab(tab === "history" ? "create" : "history")}>
+            {tab === "history" ? "Sohbete dön" : "Geçmiş sohbetler"}
+          </button>
+        </div>
+        <Suspense fallback={null}>
+          <Workspace tab={tab} showCreate={() => setTab("create")} />
+        </Suspense>
+      </div>
+    );
+  }
   const hasHistory = tool.slug !== "reklam";
 
   return (

@@ -10,6 +10,7 @@ import { onboardingSteps, useSession } from "../lib/session";
 import Icon from "./Icon";
 
 const MAIN = [
+  { href: "/araclar/fikir", label: "Sohbet", icon: "sparkle" },
   { href: "/", label: "Ana sayfa", icon: "home" },
   { href: "/araclar", label: "Araçlar", icon: "grid" },
   { href: "/paketler", label: "Paketler", icon: "tag" },
@@ -23,7 +24,7 @@ const WORKSPACE = [
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
-  if (href === "/araclar") return pathname === "/araclar" || (pathname.startsWith("/araclar/") && pathname !== "/araclar/reklam");
+  if (href === "/araclar") return pathname === "/araclar" || (pathname.startsWith("/araclar/") && pathname !== "/araclar/reklam" && pathname !== "/araclar/fikir");
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -122,7 +123,7 @@ function FreeQuotaCard({ onUpgrade }: { onUpgrade: () => void }) {
       <div className="meta">
         {status
           ? `Bugün ${status.chat.remaining}/${status.chat.limit} mesaj · ${status.images.remaining}/${status.images.limit} görsel hakkın var`
-          : "Günlük fikir mesajı ve aylık görsel hakkı"}
+          : "Günlük mesaj ve aylık görsel hakkı"}
       </div>
       <button className="btn btn-light btn-sm btn-block" onClick={onUpgrade}>
         Paket seç
