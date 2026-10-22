@@ -9,7 +9,7 @@ export default function DataDeletion() {
     <LegalPage title="Verilerini silme" updated="22 Ekim 2026">
       <p>Hesabını ve ajansAI'daki verilerini istediğin zaman sildirebilirsin.</p>
       <ol>
-        <li>Hesabına kayıtlı e-posta adresinden destek@ajansai.tr adresine "Hesabımı sil" konulu bir e-posta gönder.</li>
+        <li>Hesabına kayıtlı e-posta adresinden support@ajansai.tr adresine "Hesabımı sil" konulu bir e-posta gönder.</li>
         <li>Hesabın, sohbet ve kullanım kayıtların, yüklediğin ve ürettiğin dosyalar ve bağladığın Meta erişim anahtarı 30 gün içinde silinir.</li>
         <li>Yasal olarak saklamamız gereken ödeme kayıtları ilgili süre boyunca saklanır.</li>
       </ol>

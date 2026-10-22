@@ -248,67 +248,79 @@ def _all(path: str, token: str, **params) -> list[dict]:
     return out
 
 
-def list_pages(token: str, ad_account_id: str | None = None) -> list[dict]:
+_PAGES_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
+PAGES_TTL = 180  # sn; Meta'nın uygulama başı istek sınırını korumak için
+
+
+def list_pages(token: str, ad_account_id: str | None = None, fresh: bool = False) -> list[dict]:
     """Kullanıcının erişebildiği tüm Facebook sayfaları ve her birine bağlı Instagram hesabı.
 
-    Kaynaklar: reklam hesabının tanıtabildiği sayfalar, kullanıcının yönettiği sayfalar ve
-    kullanıcının işletme portföylerine (Business Manager) ait/erişimli sayfalar.
+    Kaynaklar (en fazla 3 istek): reklam hesabının tanıtabildiği sayfalar, kullanıcının yönettiği
+    sayfalar ve işletme portföylerinin (Business Manager) sahip olduğu / erişebildiği sayfalar.
+    Sonuç kısa süre önbellekte tutulur.
     """
+    key = (token[-24:], ad_account_id or "")
+    hit = _PAGES_CACHE.get(key)
+    if hit and not fresh and _time.time() - hit[0] < PAGES_TTL:
+        return hit[1]
+
     found: dict[str, dict] = {}
-    tokens: dict[str, str] = {}
 
     def add(rows, source):
-        for p in rows:
+        for p in rows or []:
             row = _page_row(p, source)
             cur = found.get(p["id"])
             if not cur:
                 found[p["id"]] = row
             elif not cur.get("instagram_id") and row.get("instagram_id"):
                 cur.update(instagram_id=row["instagram_id"], instagram_username=row["instagram_username"])
-            if p.get("access_token"):
-                tokens[p["id"]] = p["access_token"]
 
     errors = []
     if ad_account_id:
         try:
-            add(_all(f"act_{ad_account_id.removeprefix('act_')}/promote_pages", token, fields=PAGE_FIELDS), "ad_account")
+            add(_graph("GET", f"act_{ad_account_id.removeprefix('act_')}/promote_pages", token, fields=PAGE_FIELDS, limit=100).get("data"), "ad_account")
         except MetaError as e:
             errors.append(e)
     try:
-        add(_all("me/accounts", token, fields=PAGE_FIELDS + ",access_token"), "user")
+        add(_graph("GET", "me/accounts", token, fields=PAGE_FIELDS, limit=100).get("data"), "user")
     except MetaError as e:
         errors.append(e)
     try:
-        for b in _all("me/businesses", token, fields="id,name"):
-            for edge in ("owned_pages", "client_pages"):
-                try:
-                    add(_all(f"{b['id']}/{edge}", token, fields=PAGE_FIELDS), "business")
-                except MetaError:
-                    pass
+        sub = f"{{{PAGE_FIELDS}}}"
+        biz = _graph("GET", "me/businesses", token, limit=25,
+                     fields=f"id,owned_pages.limit(100){sub},client_pages.limit(100){sub}").get("data", [])
+        for b in biz:
+            add((b.get("owned_pages") or {}).get("data"), "business")
+            add((b.get("client_pages") or {}).get("data"), "business")
     except MetaError:
         pass
-    # Bağlı Instagram kullanıcı jetonuyla görünmüyorsa sayfa jetonuyla tekrar sorulur
-    for pid, row in found.items():
-        if row.get("instagram_id") or pid not in tokens:
-            continue
-        try:
-            p = _graph("GET", pid, tokens[pid], fields="instagram_business_account{id,username},connected_instagram_account{id,username}")
-            ig = p.get("instagram_business_account") or p.get("connected_instagram_account") or {}
-            if ig.get("id"):
-                row.update(instagram_id=ig["id"], instagram_username=ig.get("username"))
-                continue
-        except MetaError:
-            pass
-        # Reklam için kullanılabilen, sayfaya bağlı Instagram hesapları (Marketing API kenarı)
-        try:
-            igs = _graph("GET", f"{pid}/instagram_accounts", tokens[pid], fields="id,username").get("data", [])
-            if igs:
-                row.update(instagram_id=igs[0]["id"], instagram_username=igs[0].get("username"))
-        except MetaError:
-            pass
     if not found and errors:
         raise errors[0]
-    return sorted(found.values(), key=lambda r: (r["source"] != "ad_account", not r.get("instagram_id"), r["name"].lower()))
+    rows = sorted(found.values(), key=lambda r: (r["source"] != "ad_account", not r.get("instagram_id"), r["name"].lower()))
+    _PAGES_CACHE[key] = (_time.time(), rows)
+    return rows
+
+
+def page_instagram(token: str, page_id: str) -> dict | None:
+    """Tek bir sayfanın bağlı Instagram hesabı (sayfa jetonuyla; liste bulamazsa seçimde sorulur)."""
+    try:
+        p = _graph("GET", page_id, token, fields="access_token,instagram_business_account{id,username},connected_instagram_account{id,username}")
+    except MetaError:
+        return None
+    ig = p.get("instagram_business_account") or p.get("connected_instagram_account")
+    if not ig and p.get("access_token"):
+        try:
+            igs = _graph("GET", f"{page_id}/instagram_accounts", p["access_token"], fields="id,username").get("data", [])
+            ig = igs[0] if igs else None
+        except MetaError:
+            ig = None
+    if ig and ig.get("id"):
+        for _, rows in _PAGES_CACHE.values():
+            for r in rows:
+                if r["id"] == page_id:
+                    r.update(instagram_id=ig["id"], instagram_username=ig.get("username"))
+        return {"id": ig["id"], "username": ig.get("username") or ""}
+    return None
 
 
 def granted_permissions(token: str) -> list[str]:

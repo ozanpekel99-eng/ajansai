@@ -152,9 +152,16 @@ def meta_whatsapp(page_id: str, user: dict = Depends(get_current_user)):
 
 
 @router.get("/meta/pages")
-def meta_pages(ad_account_id: str | None = None, user: dict = Depends(get_current_user)):
+def meta_pages(ad_account_id: str | None = None, fresh: bool = False, user: dict = Depends(get_current_user)):
     _require_ads(user)
-    return {"pages": _meta_call(meta.list_pages, _get_token(user["id"]), ad_account_id)}
+    return {"pages": _meta_call(meta.list_pages, _get_token(user["id"]), ad_account_id, fresh)}
+
+
+@router.get("/meta/page-instagram")
+def meta_page_instagram(page_id: str, user: dict = Depends(get_current_user)):
+    """Seçilen sayfaya bağlı Instagram hesabı (listede görünmediyse)."""
+    _require_ads(user)
+    return {"instagram": meta.page_instagram(_get_token(user["id"]), page_id)}
 
 
 @router.get("/meta/instagram-accounts")

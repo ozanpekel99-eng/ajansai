@@ -257,6 +257,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
   const { refresh } = useSession();
   const [accounts, setAccounts] = useState<AdAccount[]>([]);
   const [pages, setPages] = useState<Page[]>([]);
+  const pageRef = useRef("");
   const [igAccounts, setIgAccounts] = useState<IgAccount[]>([]);
   const [accountId, setAccountId] = useState("");
   const [pageId, setPageId] = useState("");
@@ -293,6 +294,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
   useEffect(() => () => clearInterval(watchTimer.current), []);
 
   const account = accounts.find((a) => a.account_id === accountId);
+  pageRef.current = pageId;
   const page = pages.find((p) => p.id === pageId);
   // Yalnızca seçili sayfaya bağlı Instagram hesapları gösterilir
   const pageIg: IgAccount[] = [
@@ -300,8 +302,8 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
     ...igAccounts.filter((a) => a.page_id === pageId && a.id !== page?.instagram_id),
   ];
 
-  const loadPages = () =>
-    api<{ pages: Page[] }>(`/api/ads/meta/pages${accountId ? `?ad_account_id=${accountId}` : ""}`).then((d) => {
+  const loadPages = (fresh = false) =>
+    api<{ pages: Page[] }>(`/api/ads/meta/pages?fresh=${fresh ? 1 : 0}${accountId ? `&ad_account_id=${accountId}` : ""}`).then((d) => {
       setPages(d.pages);
       return d.pages;
     });
@@ -311,7 +313,20 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
     const pg = list.find((x) => x.id === id);
     const ig = igAccounts.find((a) => a.page_id === id) || (pg?.instagram_id ? { id: pg.instagram_id } : null);
     setIgId(ig?.id || "");
+    if (!ig && id) lookupIg(id);
   };
+
+  // Listede Instagram görünmeyen sayfa için tek tek sorulur (sayfa jetonuyla)
+  const lookupIg = (id: string) =>
+    api<{ instagram: { id: string; username: string } | null }>(`/api/ads/meta/page-instagram?page_id=${id}`)
+      .then((d) => {
+        const ig = d.instagram;
+        if (!ig) return null;
+        setPages((cur) => cur.map((p) => (p.id === id ? { ...p, instagram_id: ig.id, instagram_username: ig.username } : p)));
+        if (pageRef.current === id) setIgId(ig.id);
+        return ig;
+      })
+      .catch(() => null);
 
   // Meta'nın sayfasını küçük bir pencerede açar; kullanıcı ajansAI'dan ayrılmaz.
   // Pencere açıkken birkaç saniyede bir yeni sayfa / bağlanan Instagram kontrol edilir.
@@ -327,13 +342,14 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
     clearInterval(watchTimer.current);
     watchTimer.current = setInterval(async () => {
       let list: Page[] = [];
+      let linked: string | undefined;
       try {
-        list = await loadPages();
+        if (kind === "page") list = await loadPages(true);
+        else linked = (await lookupIg(target))?.id;
       } catch {
         return;
       }
       const fresh = list.find((p) => !known.has(p.id));
-      const linked = list.find((p) => p.id === target)?.instagram_id;
       const done = kind === "page" ? fresh : linked;
       if (done) {
         clearInterval(watchTimer.current);
@@ -349,7 +365,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
         setWatching(null);
         setWatchMiss(kind);
       }
-    }, 4000);
+    }, kind === "page" ? 10000 : 6000);
   };
   const igUsername = igAccounts.find((a) => a.id === igId)?.username || "";
 
@@ -400,6 +416,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
         setPageId(igLinked.page_id || page?.id || "");
       } else if (page) {
         setPageId(page.id);
+        lookupIg(page.id);
       }
     });
   }, [accountId]);
@@ -514,7 +531,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
               </option>
               {accounts.map((a) => (
                 <option key={a.account_id} value={a.account_id} disabled={!usable(a)}>
-                  {a.name} ({a.currency}){(a.balance_due || 0) > 0 ? ` · borç ${money(a.balance_due || 0, a.currency)}` : ""}{a.account_status !== 1 ? ` · ${a.account_status === 3 ? "ödenmemiş bakiye" : a.account_status === 9 ? "ödeme ek süresinde" : (a.status_label || "aktif değil").toLowerCase()}` : ""}
+                  {a.name} ({a.currency}){(a.balance_due || 0) > 0 ? ` · ${a.account_status === 1 ? "bakiye" : "borç"} ${money(a.balance_due || 0, a.currency)}` : ""}{a.account_status !== 1 ? ` · ${a.account_status === 3 ? "ödenmemiş bakiye" : a.account_status === 9 ? "ödeme ek süresinde" : (a.status_label || "aktif değil").toLowerCase()}` : ""}
                 </option>
               ))}
             </select>
@@ -523,7 +540,8 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
                 <span>
                   {(account.balance_due || 0) > 0 && (
                     <>
-                      Ödenmemiş bakiye: <span className="debt">{money(account.balance_due || 0, account.currency)}</span>.{" "}
+                      {account.account_status === 1 ? "Biriken bakiye (bir sonraki çekimde ödenir)" : "Ödenmemiş borç"}:{" "}
+                      <span className="debt">{money(account.balance_due || 0, account.currency)}</span>.{" "}
                     </>
                   )}
                   {account.account_status !== 1
@@ -597,7 +615,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
                 varlıklara erişim izni vermemiş olabilir: izinleri yenileyip ekranda yeni sayfayı / Instagram&apos;ı da işaretle.
               </span>
               <span style={{ display: "flex", gap: 6 }}>
-                <button type="button" className="btn btn-light btn-sm" onClick={() => { setWatchMiss(null); loadPages().then((l) => pageId || !l[0] || choosePage(l[0].id, l)); }}>
+                <button type="button" className="btn btn-light btn-sm" onClick={() => { setWatchMiss(null); loadPages(true).then((l) => { if (pageId) lookupIg(pageId); else if (l[0]) choosePage(l[0].id, l); }); }}>
                   Tekrar kontrol et
                 </button>
                 <button type="button" className="btn btn-primary btn-sm" onClick={onReconnect}>

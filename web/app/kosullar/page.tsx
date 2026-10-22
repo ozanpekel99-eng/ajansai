@@ -26,7 +26,7 @@ export default function Terms() {
         <li>Ücretli paketler aylık (30 gün) veya yıllık (365 gün) olarak satılır, otomatik yenilenmez. Fiyatlara KDV eklenir.</li>
         <li>Krediler her 30 günde yenilenir; kullanılmayan kredi sonraki döneme devretmez.</li>
         <li>Üretim teknik bir hata nedeniyle başarısız olursa harcanan kredi otomatik iade edilir.</li>
-        <li>Ödemeler iyzico üzerinden ABD doları olarak alınır. İade ve cayma talepleri için destek@ajansai.tr adresine yazabilirsin; kullanılmamış paketler için talepler mevzuata uygun şekilde değerlendirilir.</li>
+        <li>Ödemeler iyzico üzerinden ABD doları olarak alınır. İade ve cayma talepleri için support@ajansai.tr adresine yazabilirsin; kullanılmamış paketler için talepler mevzuata uygun şekilde değerlendirilir.</li>
         <li>Ücretsiz paketin kullanım sınırları önceden haber verilerek değiştirilebilir.</li>
       </ul>
 
@@ -45,7 +45,7 @@ export default function Terms() {
       </p>
 
       <h2>Değişiklikler ve iletişim</h2>
-      <p>Bu koşulları güncelleyebiliriz; önemli değişiklikleri sitede duyururuz. Sorular için: destek@ajansai.tr</p>
+      <p>Bu koşulları güncelleyebiliriz; önemli değişiklikleri sitede duyururuz. Sorular için: support@ajansai.tr</p>
     </LegalPage>
   );
 }

@@ -53,12 +53,12 @@ export default function Privacy() {
       <h2>Hakların</h2>
       <p>
         KVKK'nın 11. maddesi kapsamında verilerinin işlenip işlenmediğini öğrenme, bilgi isteme, düzeltilmesini veya silinmesini
-        isteme ve itiraz etme hakların vardır. Taleplerin için destek@ajansai.tr adresine yazabilirsin. Veri silme adımları için{" "}
+        isteme ve itiraz etme hakların vardır. Taleplerin için support@ajansai.tr adresine yazabilirsin. Veri silme adımları için{" "}
         <a href="/veri-silme">veri silme sayfasına</a> bakabilirsin.
       </p>
 
       <h2>İletişim</h2>
-      <p>Sorular için: destek@ajansai.tr</p>
+      <p>Sorular için: support@ajansai.tr</p>
     </LegalPage>
   );
 }

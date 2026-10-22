@@ -84,7 +84,7 @@ export default function Sidebar({ open, onNavigate }: { open: boolean; onNavigat
             {item.href === "/araclar/reklam" && usage && !usage.ads_enabled && <span className="chip">Pro</span>}
           </Link>
         ))}
-        <a className="nav-link" href="mailto:destek@ajansai.tr">
+        <a className="nav-link" href="mailto:support@ajansai.tr?subject=ajansAI%20destek">
           <Icon name="help" />
           Destek
         </a>
