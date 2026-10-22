@@ -122,3 +122,19 @@ def bench_video_status(p: VideoPoll, user: dict = Depends(_admin)):
             data = base64.b64decode(v.get("data", ""))
         return {"status": "completed", "url": storage.save(data, "video/mp4", f"bench/{user['id']}")}
     return res
+
+
+@router.get("/meta/get")
+def meta_get(path: str, fields: str = "", page_token_for: str = "", user: dict = Depends(_admin)):
+    """Yönetici teşhisi: kendi Meta jetonuyla salt okunur Graph GET (isteğe bağlı sayfa jetonuyla)."""
+    from app.routers.ads import _get_token
+    from app.services import meta_ads_service as meta
+
+    token = _get_token(user["id"])
+    try:
+        if page_token_for:
+            token = meta._graph("GET", page_token_for, token, fields="access_token").get("access_token") or token
+        params = {"fields": fields} if fields else {}
+        return meta._graph("GET", path, token, **params)
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)[:500]}
