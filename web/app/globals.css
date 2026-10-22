@@ -3856,3 +3856,34 @@ table.data td.num {
     justify-self: start;
   }
 }
+
+/* Reklam alanları */
+.placement-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.placement-group { border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 14px 12px; margin: 0; display: grid; gap: 6px; }
+.placement-group legend { font-weight: 600; font-size: 13.5px; padding: 0 4px; }
+.placement-group .check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+.placement-group .check input { width: 16px; height: 16px; accent-color: var(--indigo); }
+.placement-group.blocked { opacity: .55; }
+.placement-group small { font-size: 12px; color: var(--text-2); }
+.preview-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.preview-tabs button { border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.preview-tabs button.active { background: var(--indigo); border-color: var(--indigo); color: #fff; }
+.ig-media.square { aspect-ratio: 1 / 1; }
+.ig-avatar.fb { background: #1877f2; }
+.fb-text { margin: 0; padding: 0 10px 10px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+.fb-cta { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px; background: #f0f2f5; }
+.fb-cta small { display: block; font-size: 11px; color: #65676b; }
+.fb-cta strong { font-size: 13.5px; }
+.fb-cta span { background: #e4e6eb; border-radius: 6px; padding: 6px 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.ad-phone { position: relative; aspect-ratio: 9 / 16; max-height: 560px; margin: 0 auto 14px; border-radius: 18px; overflow: hidden; background: #111; color: #fff; }
+.ad-phone-media { position: absolute; inset: 0; display: grid; place-items: center; color: #aaa; font-size: 13px; }
+.ad-phone-media img, .ad-phone-media video { width: 100%; height: 100%; object-fit: cover; }
+.story-bars { position: absolute; top: 8px; left: 10px; right: 10px; height: 2px; background: rgba(255,255,255,.35); border-radius: 2px; }
+.story-bars span { display: block; width: 40%; height: 100%; background: #fff; border-radius: 2px; }
+.ad-phone-head { position: absolute; top: 18px; left: 10px; right: 10px; display: flex; align-items: center; gap: 8px; font-size: 12.5px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.ad-phone-head small { opacity: .85; }
+.ad-phone.reels .ad-phone-head { top: auto; bottom: 92px; }
+.ad-phone-foot { position: absolute; left: 10px; right: 10px; bottom: 14px; display: grid; gap: 8px; }
+.ad-phone-foot p { margin: 0; font-size: 12.5px; line-height: 1.4; max-height: 3.6em; overflow: hidden; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.ad-phone-cta { display: block; text-align: center; background: #fff; color: #111; border-radius: 8px; padding: 9px; font-size: 13px; font-weight: 600; }
+.ad-phone.reels .ad-phone-cta { background: rgba(255,255,255,.2); color: #fff; text-align: left; }

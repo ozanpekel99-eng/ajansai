@@ -201,6 +201,9 @@ class CreateAdRequest(BaseModel):
     age_max: int = Field(65, ge=18, le=65)
     gender: Literal["all", "male", "female"] = "all"
     media: AdMedia
+    # Hikâye ve Reels için dikey (9:16) görsel/video; verilmezse ana medya her yerde kullanılır
+    story_media: AdMedia | None = None
+    placements: list[str] = Field(default_factory=lambda: list(meta.DEFAULT_PLACEMENTS), max_length=10)
     primary_text: str = Field(..., min_length=1, max_length=2000)
     headline: str = Field("", max_length=120)
     link: str | None = Field(None, max_length=1000)
@@ -226,6 +229,11 @@ def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_us
         raise HTTPException(status_code=400, detail="Bu reklam için bir Instagram hesabı seçmelisin.")
     if payload.call_to_action not in CTA_TYPES:
         raise HTTPException(status_code=400, detail="Geçersiz buton türü.")
+    bad = [p for p in payload.placements if p not in meta.PLACEMENTS]
+    if bad or not payload.placements:
+        raise HTTPException(status_code=400, detail="En az bir geçerli reklam alanı seç.")
+    if payload.story_media and not storage.is_own_blob_url(payload.story_media.url):
+        raise HTTPException(status_code=400, detail="Hikâye görseli ajansAI'a yüklenmiş olmalı.")
     if not storage.is_own_blob_url(payload.media.url):
         raise HTTPException(status_code=400, detail="Reklam görseli/videosu ajansAI'a yüklenmiş olmalı.")
     if payload.end_date and payload.start_date and payload.end_date <= payload.start_date:
@@ -254,6 +262,8 @@ def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_us
         link=payload.link,
         call_to_action=payload.call_to_action,
         fetch_bytes=storage.fetch,
+        placements=payload.placements,
+        story_media=payload.story_media.model_dump() if payload.story_media else None,
     )
     record_id = str(uuid.uuid4())
     with get_engine().begin() as conn:

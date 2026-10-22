@@ -144,6 +144,19 @@ def create_campaign_draft(
 
 INSTAGRAM_POSITIONS = ["stream", "story", "reels", "explore"]
 
+# Arayüzdeki yerleşim seçenekleri → Meta yerleşimleri
+PLACEMENTS = {
+    "instagram_feed": ("instagram", "stream"),
+    "instagram_story": ("instagram", "story"),
+    "instagram_reels": ("instagram", "reels"),
+    "instagram_explore": ("instagram", "explore"),
+    "facebook_feed": ("facebook", "feed"),
+    "facebook_story": ("facebook", "story"),
+    "facebook_reels": ("facebook", "facebook_reels"),
+}
+DEFAULT_PLACEMENTS = ["instagram_feed", "instagram_story", "instagram_reels", "instagram_explore"]
+VERTICAL = {"story", "reels", "facebook_reels"}  # 9:16 dikey görsel kullanılan yerleşimler
+
 OBJECTIVES = {
     # amaç: (kampanya objective, reklam seti optimization_goal, destination_type)
     "profile": ("OUTCOME_TRAFFIC", "VISIT_INSTAGRAM_PROFILE", "INSTAGRAM_PROFILE"),
@@ -268,7 +281,26 @@ def search_locations(query: str, token: str) -> list[dict]:
     ]
 
 
-def _targeting(locations: list[dict], age_min: int, age_max: int, gender: str) -> dict:
+def _positions(placements: list[str] | None) -> dict:
+    platforms, ig, fb = [], [], []
+    for key in placements or DEFAULT_PLACEMENTS:
+        if key not in PLACEMENTS:
+            continue
+        platform, position = PLACEMENTS[key]
+        if platform not in platforms:
+            platforms.append(platform)
+        (ig if platform == "instagram" else fb).append(position)
+    out = {"publisher_platforms": platforms or ["instagram"]}
+    if ig:
+        out["instagram_positions"] = ig
+    if fb:
+        out["facebook_positions"] = fb
+    if not platforms:
+        out["instagram_positions"] = INSTAGRAM_POSITIONS
+    return out
+
+
+def _targeting(locations: list[dict], age_min: int, age_max: int, gender: str, placements: list[str] | None = None) -> dict:
     geo: dict = {}
     for loc in locations or [{"type": "country", "key": "TR"}]:
         if loc["type"] == "country":
@@ -281,9 +313,8 @@ def _targeting(locations: list[dict], age_min: int, age_max: int, gender: str) -
         "geo_locations": geo,
         "age_min": age_min,
         "age_max": age_max,
-        # Yerleşim yalnızca Instagram: Facebook, Messenger, Audience Network ve Threads yok.
-        "publisher_platforms": ["instagram"],
-        "instagram_positions": INSTAGRAM_POSITIONS,
+        # Yerleşimler kullanıcının seçtikleri (varsayılan yalnızca Instagram). Messenger, Audience Network ve Threads yok.
+        **_positions(placements),
         "targeting_automation": {"advantage_audience": 0},
     }
     if gender in ("male", "female"):
@@ -339,8 +370,14 @@ def create_instagram_ad(
     link: str | None,
     call_to_action: str,
     fetch_bytes,
+    placements: list[str] | None = None,
+    story_media: dict | None = None,
 ) -> dict:
-    """Instagram'a özel, duraklatılmış bir reklam oluşturur. Oluşan kimlikleri döndürür."""
+    """Seçilen yerleşimlerde (varsayılan Instagram) duraklatılmış bir reklam oluşturur.
+
+    story_media verilirse hikâye/Reels yerleşimlerinde dikey (9:16) görsel, akışta ana görsel
+    kullanılır (yerleşime göre görsel özelleştirme).
+    """
     act = ad_account_id.removeprefix("act_")
     camp_objective, optimization_goal, destination = OBJECTIVES[objective]
 
@@ -363,7 +400,7 @@ def create_instagram_ad(
             "billing_event": "IMPRESSIONS",
             "optimization_goal": optimization_goal,
             "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
-            "targeting": _targeting(locations, age_min, age_max, gender),
+            "targeting": _targeting(locations, age_min, age_max, gender, placements),
             "status": "PAUSED",
         }
         if destination:
@@ -415,7 +452,15 @@ def create_instagram_ad(
             }
         if instagram_user_id:
             story["instagram_user_id"] = instagram_user_id
-        creative = _graph("POST", f"act_{act}/adcreatives", token, name=f"{name} - kreatif", object_story_spec=story)
+        creative_body = {"name": f"{name} - kreatif", "object_story_spec": story}
+        pos = _positions(placements)
+        vertical = [p for p in pos.get("instagram_positions", []) + pos.get("facebook_positions", []) if p in VERTICAL]
+        if story_media and vertical and story_media.get("kind") == media.get("kind"):
+            creative_body = _customized_creative(
+                act, token, name, page_id, instagram_user_id, uploaded, _upload_media(act, token, story_media, fetch_bytes),
+                pos, primary_text, headline, target_link, cta,
+            )
+        creative = _graph("POST", f"act_{act}/adcreatives", token, **creative_body)
         ad = _graph(
             "POST",
             f"act_{act}/ads",
@@ -432,6 +477,47 @@ def create_instagram_ad(
             logger.warning("Yarım kalan kampanya silinemedi: %s", campaign_id)
         raise
     return {"campaign_id": campaign_id, "adset_id": adset["id"], "ad_id": ad["id"]}
+
+
+def _customized_creative(act, token, name, page_id, ig_id, feed, story, pos, text, headline, link, cta) -> dict:
+    """Yerleşime göre görsel: akışta kare/4:5, hikâye ve Reels'te dikey görsel (asset_feed_spec)."""
+    is_image = "image_hash" in feed
+    key = "images" if is_image else "videos"
+
+    def asset(up, label):
+        if is_image:
+            return {"hash": up["image_hash"], "adlabels": [{"name": label}]}
+        return {"video_id": up["video_id"], "thumbnail_url": up["thumbnail"], "adlabels": [{"name": label}]}
+
+    label_key = "image_label" if is_image else "video_label"
+    feed_spec: dict = {"publisher_platforms": pos["publisher_platforms"]}
+    vert_spec: dict = {"publisher_platforms": pos["publisher_platforms"]}
+    ig, fb = pos.get("instagram_positions", []), pos.get("facebook_positions", [])
+    if [p for p in ig if p not in VERTICAL]:
+        feed_spec["instagram_positions"] = [p for p in ig if p not in VERTICAL]
+    if [p for p in fb if p not in VERTICAL]:
+        feed_spec["facebook_positions"] = [p for p in fb if p not in VERTICAL]
+    if [p for p in ig if p in VERTICAL]:
+        vert_spec["instagram_positions"] = [p for p in ig if p in VERTICAL]
+    if [p for p in fb if p in VERTICAL]:
+        vert_spec["facebook_positions"] = [p for p in fb if p in VERTICAL]
+    rules = [{"customization_spec": vert_spec, label_key: {"name": "dikey"}}]
+    if len(feed_spec) > 1:
+        rules.append({"customization_spec": feed_spec, label_key: {"name": "akis"}})
+    spec = {
+        key: [asset(feed, "akis"), asset(story, "dikey")],
+        "bodies": [{"text": text}],
+        "titles": [{"text": headline}] if headline else [],
+        "link_urls": [{"website_url": link}],
+        "call_to_action_types": [cta["type"]],
+        "ad_formats": ["SINGLE_IMAGE" if is_image else "SINGLE_VIDEO"],
+        "asset_customization_rules": rules,
+        "optimization_type": "PLACEMENT",
+    }
+    oss = {"page_id": page_id}
+    if ig_id:
+        oss["instagram_user_id"] = ig_id
+    return {"name": f"{name} - kreatif", "object_story_spec": oss, "asset_feed_spec": spec}
 
 
 def set_status(token: str, ids: list[str], status: str) -> None:

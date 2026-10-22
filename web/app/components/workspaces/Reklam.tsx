@@ -77,6 +77,36 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 const AGES = Array.from({ length: 48 }, (_, i) => i + 18);
 const today = () => new Date().toISOString().slice(0, 10);
 
+type Placement =
+  | "instagram_feed" | "instagram_story" | "instagram_reels" | "instagram_explore"
+  | "facebook_feed" | "facebook_story" | "facebook_reels";
+const PLACEMENT_GROUPS: { platform: "instagram" | "facebook"; label: string; items: { value: Placement; label: string }[] }[] = [
+  {
+    platform: "instagram",
+    label: "Instagram",
+    items: [
+      { value: "instagram_feed", label: "Akış (gönderi)" },
+      { value: "instagram_story", label: "Hikâye" },
+      { value: "instagram_reels", label: "Reels" },
+      { value: "instagram_explore", label: "Keşfet" },
+    ],
+  },
+  {
+    platform: "facebook",
+    label: "Facebook",
+    items: [
+      { value: "facebook_feed", label: "Akış (gönderi)" },
+      { value: "facebook_story", label: "Hikâye" },
+      { value: "facebook_reels", label: "Reels" },
+    ],
+  },
+];
+const ALL_PLACEMENTS = PLACEMENT_GROUPS.flatMap((g) => g.items);
+const DEFAULT_PLACEMENTS: Placement[] = ["instagram_feed", "instagram_story", "instagram_reels", "instagram_explore"];
+const isVertical = (p: Placement) => /story|reels/.test(p);
+// Profil ziyareti ve Instagram DM yalnızca Instagram'da çalışır
+const igOnly = (o: Objective) => o === "profile" || o === "instagram_dm";
+
 export default function ReklamWorkspace(_: WorkspaceProps) {
   const { usage, metaConnected, refresh } = useSession();
   const [view, setView] = useState<"new" | "list">("new");
@@ -240,6 +270,9 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
   const [ageMax, setAgeMax] = useState(65);
   const [gender, setGender] = useState<"all" | "male" | "female">("all");
   const [media, setMedia] = useState<Media | null>(null);
+  const [storyMedia, setStoryMedia] = useState<Media | null>(null);
+  const [placements, setPlacements] = useState<Placement[]>(DEFAULT_PLACEMENTS);
+  const [previewAt, setPreviewAt] = useState<Placement>("instagram_feed");
   const [primaryText, setPrimaryText] = useState("");
   const [headline, setHeadline] = useState("");
   const [link, setLink] = useState("");
@@ -335,7 +368,15 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!media) {
-      setError("Reklam için bir görsel veya video seç.");
+      setError("Gönderi için bir görsel veya video seç.");
+      return;
+    }
+    if (!activePlacements.length) {
+      setError("En az bir reklam alanı işaretle.");
+      return;
+    }
+    if (storyMedia && storyMedia.kind !== media.kind) {
+      setError("Gönderi ve hikâye dosyası aynı türde olmalı: ikisi de görsel ya da ikisi de video.");
       return;
     }
     setSaving(true);
@@ -358,6 +399,8 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
           age_max: ageMax,
           gender,
           media,
+          story_media: storyMedia && activePlacements.some(isVertical) ? storyMedia : null,
+          placements: activePlacements,
           primary_text: primaryText,
           headline,
           link: needsLink(objective) ? link : objective === "profile" && igUsername ? `https://www.instagram.com/${igUsername}/` : null,
@@ -375,6 +418,20 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
 
   if (loadError) return <div className="notice error">{loadError}</div>;
 
+  // Hedefe uymayan alanlar (ör. profil ziyaretinde Facebook) gönderilmez
+  const activePlacements = placements.filter((p) => !(igOnly(objective) && p.startsWith("facebook")));
+  const togglePlacement = (p: Placement) =>
+    setPlacements((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]));
+  const shownPreview: Placement = activePlacements.includes(previewAt) ? previewAt : activePlacements[0] || "instagram_feed";
+  const pageName = pages.find((p) => p.id === pageId)?.name || "Sayfan";
+  const ctaLabel =
+    objective === "whatsapp"
+      ? "WhatsApp'tan mesaj gönder"
+      : objective === "instagram_dm"
+        ? "Mesaj gönder"
+        : objective === "profile"
+          ? "Profili ziyaret et"
+          : CTAS.find((c) => c.value === cta)?.label || "Daha fazla bilgi al";
   const igName = igAccounts.find((a) => a.id === igId)?.username || pages.find((p) => p.id === pageId)?.name || "hesabin";
 
   return (
@@ -590,8 +647,42 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
         </section>
 
         <section className="panel ws-panel">
-          <h2>5. Görsel veya video</h2>
-          <MediaPicker value={media} onChange={setMedia} />
+          <h2>5. Reklam alanları ve görseller</h2>
+          <div className="placement-groups">
+            {PLACEMENT_GROUPS.map((g) => {
+              const blocked = g.platform === "facebook" && igOnly(objective);
+              return (
+                <fieldset key={g.platform} className={`placement-group ${blocked ? "blocked" : ""}`} disabled={blocked}>
+                  <legend>{g.label}</legend>
+                  {g.items.map((it) => (
+                    <label key={it.value} className="check">
+                      <input
+                        type="checkbox"
+                        checked={!blocked && placements.includes(it.value)}
+                        onChange={() => togglePlacement(it.value)}
+                      />
+                      {it.label}
+                    </label>
+                  ))}
+                  {blocked && <small>{objective === "profile" ? "Profil ziyareti" : "Instagram DM"} yalnızca Instagram'da çalışır.</small>}
+                </fieldset>
+              );
+            })}
+          </div>
+          <MediaPicker
+            title="Gönderi görseli · akış ve keşfet"
+            hint="Kare (1:1) veya dikdörtgen (4:5) en iyisi."
+            value={media}
+            onChange={setMedia}
+          />
+          {activePlacements.some(isVertical) && (
+            <MediaPicker
+              title="Hikâye ve Reels görseli · isteğe bağlı"
+              hint="Dikey (9:16) yükle; hikâye ve Reels'te bu, akışta gönderi görseli gösterilir. Boş bırakırsan her yerde gönderi görseli kullanılır."
+              value={storyMedia}
+              onChange={setStoryMedia}
+            />
+          )}
         </section>
 
         <section className="panel ws-panel">
@@ -646,41 +737,28 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
       <aside className="ad-preview-col">
         <div className="panel ws-panel ad-preview-panel">
           <h2>Önizleme</h2>
-          <div className="ig-card">
-            <div className="ig-head">
-              <span className="ig-avatar" aria-hidden="true" />
-              <div>
-                <strong>{igName}</strong>
-                <small>Sponsorlu</small>
-              </div>
-            </div>
-            <div className="ig-media">
-              {media ? (
-                media.kind === "image" ? (
-                  <img src={media.url} alt="" />
-                ) : (
-                  <video src={media.url} muted playsInline autoPlay loop />
-                )
-              ) : (
-                <span>Görsel veya video seç</span>
-              )}
-            </div>
-            <div className="ig-cta">
-              <span>
-                {objective === "whatsapp"
-                  ? "WhatsApp'tan mesaj gönder"
-                  : objective === "instagram_dm"
-                    ? "Mesaj gönder"
-                    : objective === "profile"
-                      ? "Profili ziyaret et"
-                      : CTAS.find((c) => c.value === cta)?.label}
-              </span>
-              <Icon name="arrowLeft" size={14} />
-            </div>
-            <p className="ig-text">
-              <strong>{igName}</strong> {primaryText || "Ana metin burada görünür."}
-            </p>
+          <div className="preview-tabs" role="tablist" aria-label="Reklam alanı önizlemesi">
+            {ALL_PLACEMENTS.filter((p) => activePlacements.includes(p.value)).map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                role="tab"
+                aria-selected={shownPreview === p.value}
+                className={shownPreview === p.value ? "active" : ""}
+                onClick={() => setPreviewAt(p.value)}
+              >
+                {p.value.startsWith("facebook") ? "FB" : "IG"} {p.label.replace(" (gönderi)", "")}
+              </button>
+            ))}
           </div>
+          <AdPreview
+            placement={shownPreview}
+            media={isVertical(shownPreview) && storyMedia ? storyMedia : media}
+            name={shownPreview.startsWith("facebook") ? pageName : igName}
+            text={primaryText}
+            headline={headline}
+            cta={ctaLabel}
+          />
           {error && <div className="notice error">{error}</div>}
           <button className="btn btn-primary btn-block" type="submit" disabled={saving || !accountId}>
             {saving ? (media?.kind === "video" ? "Video Meta'ya yükleniyor…" : "Reklam oluşturuluyor…") : "Reklamı oluştur (duraklatılmış)"}
@@ -753,7 +831,7 @@ function LocationPicker({ value, onChange }: { value: Loc[]; onChange: (v: Loc[]
   );
 }
 
-function MediaPicker({ value, onChange }: { value: Media | null; onChange: (m: Media | null) => void }) {
+function MediaPicker({ value, onChange, title, hint }: { value: Media | null; onChange: (m: Media | null) => void; title: string; hint: string }) {
   const up = useUploader(["image", "video"], 1, 0, (f) => onChange({ url: f.url, kind: f.kind === "video" ? "video" : "image" }));
   const library = useMemo(() => {
     const imgs = readHistory<{ url: string }>("gorsel").map((h) => ({ url: h.data.url, kind: "image" as const }));
@@ -763,6 +841,7 @@ function MediaPicker({ value, onChange }: { value: Media | null; onChange: (m: M
 
   return (
     <div className="field">
+      <label>{title}</label>
       {up.field}
       <div className="media-grid">
         <button type="button" className="media-upload" onClick={up.pick} disabled={up.busy.length > 0}>
@@ -780,8 +859,79 @@ function MediaPicker({ value, onChange }: { value: Media | null; onChange: (m: M
       <UploadProgress busy={up.busy} />
       {up.error && <small className="error-text">{up.error}</small>}
       <span className="hint">
-        Kendi dosyanı yükle ya da ajansAI'da ürettiğin görsel ve videolardan seç. Hikâye ve Reels için dikey (9:16), akış için kare veya 4:5 en iyisi.
+        {hint} Kendi dosyanı yükle ya da ajansAI'da ürettiklerinden seç.
       </span>
+    </div>
+  );
+}
+
+function AdPreview({ placement, media, name, text, headline, cta }: { placement: Placement; media: Media | null; name: string; text: string; headline: string; cta: string }) {
+  const visual = media ? (
+    media.kind === "image" ? <img src={media.url} alt="" /> : <video src={media.url} muted playsInline autoPlay loop />
+  ) : (
+    <span>Görsel veya video seç</span>
+  );
+  const body = text || "Ana metin burada görünür.";
+
+  if (isVertical(placement)) {
+    const reels = placement.endsWith("reels");
+    return (
+      <div className={`ad-phone ${reels ? "reels" : "story"}`}>
+        <div className="ad-phone-media">{visual}</div>
+        {!reels && <div className="story-bars" aria-hidden="true"><span /></div>}
+        <div className="ad-phone-head">
+          <span className="ig-avatar" aria-hidden="true" />
+          <strong>{name}</strong>
+          <small>Sponsorlu</small>
+        </div>
+        <div className="ad-phone-foot">
+          {reels && <p>{body}</p>}
+          <span className="ad-phone-cta">{cta}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (placement === "facebook_feed") {
+    return (
+      <div className="ig-card fb-card">
+        <div className="ig-head">
+          <span className="ig-avatar fb" aria-hidden="true" />
+          <div>
+            <strong>{name}</strong>
+            <small>Sponsorlu</small>
+          </div>
+        </div>
+        <p className="fb-text">{body}</p>
+        <div className="ig-media square">{visual}</div>
+        <div className="fb-cta">
+          <div>
+            <small>{name}</small>
+            <strong>{headline || name}</strong>
+          </div>
+          <span>{cta}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ig-card">
+      <div className="ig-head">
+        <span className="ig-avatar" aria-hidden="true" />
+        <div>
+          <strong>{name}</strong>
+          <small>Sponsorlu</small>
+        </div>
+      </div>
+      <div className="ig-media">{visual}</div>
+      <div className="ig-cta">
+        <span>{cta}</span>
+        <Icon name="arrowLeft" size={14} />
+      </div>
+      <p className="ig-text">
+        <strong>{name}</strong> {body}
+      </p>
     </div>
   );
 }
