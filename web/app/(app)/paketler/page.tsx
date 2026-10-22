@@ -173,7 +173,7 @@ export default function Paketler() {
             <div className="section-head">
               <div>
                 <h2>Video kredi tablosu</h2>
-                <p>Metinden veya görselden (başlangıç ve bitiş karesi), 9:16, 1:1 veya 16:9. Parantez içi sesli fiyattır.</p>
+                <p>Metinden veya yüklediğin görsellerden, 9:16, 1:1 veya 16:9. Parantez içi sesli fiyattır.</p>
               </div>
             </div>
             <div className="panel table-wrap">

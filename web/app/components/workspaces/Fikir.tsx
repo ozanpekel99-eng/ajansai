@@ -13,8 +13,11 @@ export default function FikirWorkspace({ initial = null }: { initial?: Conversat
 
   if (!usage) return null;
 
+  // "Video üret" yalnızca video/reels konuşulan yanıtlarda gösterilir
   const videoHref = (text: string) =>
-    usage.video_enabled ? `/araclar/video?konsept=${encodeURIComponent((extractConcept(text, "Video") || text).slice(0, 400))}` : null;
+    usage.video_enabled && /video|reels|animasyon/i.test(text)
+      ? `/araclar/video?konsept=${encodeURIComponent((extractConcept(text, "Video") || text).slice(0, 400))}`
+      : null;
 
   // Ücretsiz paket: Haiku ile kredisiz sohbet, günlük mesaj hakkı, dosya eklenemez.
   if (usage.plan === "deneme") {
