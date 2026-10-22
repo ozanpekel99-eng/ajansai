@@ -24,7 +24,7 @@ export default function Terms() {
       <h2>Paketler, krediler ve ödeme</h2>
       <ul>
         <li>Ücretli paketler aylık (30 gün) veya yıllık (365 gün) olarak satılır, otomatik yenilenmez. Fiyatlara KDV eklenir.</li>
-        <li>Krediler her 30 günde yenilenir; kullanılmayan kredi sonraki döneme devretmez.</li>
+        <li>Aylık pakette krediler her 30 günde yenilenir; kullanılmayan kredi sonraki döneme devretmez. Yıllık pakette 12 aylık kredi tek seferde yüklenir. Ek kredi paketleri dönem bitse de silinmez.</li>
         <li>Üretim teknik bir hata nedeniyle başarısız olursa harcanan kredi otomatik iade edilir.</li>
         <li>Ödemeler iyzico üzerinden ABD doları olarak alınır. İade ve cayma talepleri için support@ajansai.tr adresine yazabilirsin; kullanılmamış paketler için talepler mevzuata uygun şekilde değerlendirilir.</li>
         <li>Ücretsiz paketin kullanım sınırları önceden haber verilerek değiştirilebilir.</li>

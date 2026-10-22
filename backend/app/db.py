@@ -198,6 +198,20 @@ stock_cache = Table(
     Column("created_at", DateTime, nullable=False),
 )
 
+# Destek e-postaları (support@ajansai.tr) ve otomatik yanıtlar
+support_tickets = Table(
+    "support_tickets",
+    metadata,
+    Column("id", String(64), primary_key=True),  # Resend email_id
+    Column("from_addr", String(320), nullable=False, index=True),
+    Column("subject", String(500), nullable=False),
+    Column("body", Text, nullable=False),
+    Column("reply", Text, nullable=True),
+    Column("status", String(20), nullable=False),  # replied | escalated | skipped | error
+    Column("note", String(300), nullable=True),
+    Column("created_at", DateTime, nullable=False, index=True),
+)
+
 # Uygulamanın kendi ürettiği ayarlar (ör. JWT_SECRET tanımlı değilse oluşturulan anahtar).
 app_settings = Table(
     "app_settings",

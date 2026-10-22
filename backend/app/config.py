@@ -168,3 +168,13 @@ IYZICO_API_KEY = _env("IYZICO_API_KEY")
 IYZICO_SECRET_KEY = _env("IYZICO_SECRET_KEY")
 # Test için sandbox; canlıya geçince https://api.iyzipay.com
 IYZICO_BASE_URL = (_env("IYZICO_BASE_URL", "https://sandbox-api.iyzipay.com") or "").rstrip("/")
+
+
+# Destek e-postası (support@ajansai.tr): Resend ile alınır, Claude ile otomatik yanıtlanır.
+RESEND_API_KEY = _env("RESEND_API_KEY", "")
+RESEND_WEBHOOK_SECRET = _env("RESEND_WEBHOOK_SECRET", "")  # whsec_...
+SUPPORT_FROM = _env("SUPPORT_FROM", "ajansAI Destek <support@ajansai.tr>")
+SUPPORT_ADDRESS = _env("SUPPORT_ADDRESS", "support@ajansai.tr")
+SUPPORT_FORWARD_TO = _env("SUPPORT_FORWARD_TO", "")  # gelen mailin ve yanıtın kopyası (ör. kişisel Gmail)
+SUPPORT_AUTO_REPLY = _env("SUPPORT_AUTO_REPLY", "1") not in ("0", "false", "False", "")
+SUPPORT_REPLIES_PER_SENDER_PER_DAY = _int("SUPPORT_REPLIES_PER_SENDER_PER_DAY", 5)
