@@ -363,7 +363,7 @@ def test_image_with_reference_images(client, monkeypatch):
 
 def test_upload_token_rules(client, monkeypatch):
     _enable_media(monkeypatch)
-    token = register(client)
+    token = register_paid(client)
     ok = client.post("/api/uploads/token", json={"filename": "urun.JPG", "content_type": "image/jpeg", "size": 1000}, headers=auth(token))
     assert ok.status_code == 200, ok.text
     body = ok.json()
@@ -378,6 +378,12 @@ def test_upload_token_rules(client, monkeypatch):
     assert too_big.status_code == 413
     wrong = client.post("/api/uploads/token", json={"filename": "a.exe", "content_type": "application/x-msdownload", "size": 10}, headers=auth(token))
     assert wrong.status_code == 400
+
+    # Ziyaretçi: görsel ve belge yükleyebilir, video yükleyemez, 10 MB sınırı
+    guest = client.post("/api/uploads/token", json={"filename": "a.pdf", "content_type": "application/pdf", "size": 1000})
+    assert guest.status_code == 200 and "/misafir/" in guest.json()["pathname"]
+    assert client.post("/api/uploads/token", json={"filename": "v.mp4", "content_type": "video/mp4", "size": 10}).status_code == 403
+    assert client.post("/api/uploads/token", json={"filename": "b.png", "content_type": "image/png", "size": 11 * 1024 * 1024}).status_code == 413
 
 
 def test_chat_with_attachments(client, monkeypatch):

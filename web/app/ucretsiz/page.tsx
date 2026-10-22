@@ -47,7 +47,11 @@ export default function GuestPage() {
       <main className="page guest-main">
         <ChatPanel
           endpoint="/api/free/chat"
-          attach={signedIn ? "images" : "signup"}
+          attach="basic"
+          tools={{
+            video: { href: "/kayit", locked: "Paketle açılır" },
+            ads: { href: "/kayit", locked: "Pro paketle açılır" },
+          }}
           onSent={(data) => data?.free && setStatus(data.free)}
           blocker={
             status && status.chat.remaining === 0 ? (

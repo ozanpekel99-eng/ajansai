@@ -39,6 +39,25 @@ def _docx_text(data: bytes) -> str:
     return re.sub(r"<[^>]+>", "", xml)
 
 
+def _pdf_text(data: bytes) -> str:
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(data))
+    return "\n".join((p.extract_text() or "") for p in reader.pages[:MAX_PDF_PAGES])
+
+
+def document_text(data: bytes, ctype: str) -> str:
+    """Belgeyi düz metne çevirir (PDF, DOCX, TXT, CSV, MD)."""
+    try:
+        if ctype == "application/pdf":
+            return _pdf_text(data)
+        if ctype.endswith("wordprocessingml.document"):
+            return _docx_text(data)
+    except Exception:
+        return "(belge okunamadı)"
+    return data.decode("utf-8", "ignore")
+
+
 def _attachment_part(att: dict) -> tuple[dict, bool]:
     """(mesaj parçası, video_mu) döndürür."""
     url, ctype, name = att["url"], att["content_type"], att.get("name") or "dosya"
@@ -87,7 +106,7 @@ def _trim_history(history: list[dict]) -> list[dict]:
     return kept
 
 
-def reply(history: list[dict]) -> tuple[str, str]:
+def reply(history: list[dict], force_image: bool = False) -> tuple[str, str]:
     """Sohbet geçmişine yanıt verir. (metin, kullanılan_model) döndürür.
 
     Geçmişteki eski eklerin yalnızca adı gönderilir; dosyaların kendisi son mesajla gider.
@@ -95,7 +114,8 @@ def reply(history: list[dict]) -> tuple[str, str]:
     from app.services import free_tier  # döngüsel içe aktarmayı önlemek için burada
 
     history = _trim_history(history)
-    messages = [{"role": "system", "content": SYSTEM_PROMPT + free_tier.IMAGE_TOOL_NOTE}]
+    system = SYSTEM_PROMPT + free_tier.IMAGE_TOOL_NOTE + (free_tier.FORCE_IMAGE_NOTE if force_image else "")
+    messages = [{"role": "system", "content": system}]
     has_video = False
     last = len(history) - 1
     for i, msg in enumerate(history):

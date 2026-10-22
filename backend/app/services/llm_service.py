@@ -213,10 +213,17 @@ def free_chain() -> list[tuple[str, str]]:
     return chain
 
 
-def free_chat_completion(messages: list[dict], max_tokens: int = 1200) -> tuple[str, str]:
-    """Önce ücretsiz katmanlar, en son Haiku. (metin, "sağlayıcı:model") döndürür."""
+VISION_MODELS = ("qwen",)  # ücretsiz katmanlarda görsel anlayabilen modeller
+
+
+def free_chat_completion(messages: list[dict], max_tokens: int = 1200, vision: bool = False) -> tuple[str, str]:
+    """Önce ücretsiz katmanlar, en son Haiku. (metin, "sağlayıcı:model") döndürür.
+
+    vision=True ise yalnızca görsel anlayabilen modeller denenir.
+    """
     errors = []
-    for provider, model in free_chain():
+    chain = [(p, m) for p, m in free_chain() if not vision or any(v in m for v in VISION_MODELS)]
+    for provider, model in chain:
         try:
             return _free_provider_call(provider, model, messages, max_tokens), f"{provider}:{model}"
         except LLMError as e:

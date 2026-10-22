@@ -12,7 +12,7 @@ IP_B = {"x-forwarded-for": "85.100.1.2"}
 
 
 def _fake_chat(monkeypatch, seen=None):
-    def fake(messages, max_tokens=0):
+    def fake(messages, max_tokens=0, vision=False):
         if seen is not None:
             seen.append({"messages": messages, "max_tokens": max_tokens})
         return "Ücretsiz fikir", "groq:test"
@@ -36,7 +36,7 @@ def test_guest_chat_uses_haiku_and_daily_limit_per_ip(client, monkeypatch):
     assert seen[0]["max_tokens"] <= 1200
 
     r = client.post("/api/free/chat", json=_msg(), headers=IP_A)
-    assert r.status_code == 429 and "Ücretsiz üye olursan" in r.json()["detail"]
+    assert r.status_code == 429 and "Üye olursan" in r.json()["detail"]
     # Başka bir IP etkilenmez
     assert client.post("/api/free/chat", json=_msg(), headers=IP_B).status_code == 200
 
@@ -83,7 +83,7 @@ def test_free_chat_sends_short_history(client, monkeypatch):
 def _enable_free_images(monkeypatch, calls):
     monkeypatch.setattr(config, "CLOUDFLARE_ACCOUNT_ID", "acc123")
     monkeypatch.setattr(config, "CLOUDFLARE_AI_TOKEN", "cf-token")
-    monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0: ("a fridge in a white kitchen", "groq:x"))
+    monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0, vision=False: ("a fridge in a white kitchen", "groq:x"))
 
     def fake_post(url, headers=None, json=None, timeout=None):
         calls.append({"url": url, "headers": headers, "json": json})
@@ -333,7 +333,7 @@ def test_paid_text_chat_falls_back_to_free_chain(client, monkeypatch):
         raise LLMError("ödeme yöntemi yok")
 
     monkeypatch.setattr(assistant, "chat_completion", gateway_down)
-    monkeypatch.setattr(assistant, "free_chat_completion", lambda messages, max_tokens=0: ("Groq yanıtı", "groq:openai/gpt-oss-120b"))
+    monkeypatch.setattr(assistant, "free_chat_completion", lambda messages, max_tokens=0, vision=False: ("Groq yanıtı", "groq:openai/gpt-oss-120b"))
     token = register_paid(client)
     r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Fikir ver"}]}, headers=auth(token))
     assert r.status_code == 200 and r.json()["reply"] == "Groq yanıtı"
@@ -345,7 +345,7 @@ def test_free_chat_generates_image_when_asked(client, monkeypatch):
     monkeypatch.setattr(
         free_tier,
         "free_chat_completion",
-        lambda messages, max_tokens=0: ("Harika fikir! İşte görselin.\n[[GORSEL: a latte on a wooden table, morning light]]", "groq:x"),
+        lambda messages, max_tokens=0, vision=False: ("Harika fikir! İşte görselin.\n[[GORSEL: a latte on a wooden table, morning light]]", "groq:x"),
     )
     r = client.post("/api/free/chat", json=_msg("Ahşap masada latte görseli üret"), headers=IP_A)
     data = r.json()
@@ -356,14 +356,13 @@ def test_free_chat_generates_image_when_asked(client, monkeypatch):
     assert data["free"]["images"]["used"] == 1
 
 
-def test_free_chat_image_attachment_requires_login_and_uses_reference_model(client, monkeypatch):
+def test_free_chat_image_attachment_uses_vision_and_reference_model(client, monkeypatch):
     calls = []
     _enable_free_images(monkeypatch, calls)
     monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", BLOB_TOKEN)
-    monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0: ("Tamam.\n[[GORSEL: the product in image 0 on a beach]]", "groq:x"))
+    monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0, vision=False: ("Tamam.\n[[GORSEL: the product in image 0 on a beach]]", "groq:x"))
     att = {"url": BLOB_URL + "urun.jpg", "content_type": "image/jpeg", "name": "urun.jpg"}
     body = {"messages": [{"role": "user", "content": "Bunu plajda göster", "attachments": [att]}]}
-    assert client.post("/api/free/chat", json=body, headers=IP_A).status_code == 401
 
     import io
     from PIL import Image
@@ -448,3 +447,36 @@ def test_social_verify_real_signature(monkeypatch):
     for bad in ({**good, "aud": "baska"}, {**good, "iss": "https://evil.com"}, {**good, "exp": now - 10}, {**good, "email_verified": False}):
         with pytest.raises(social_auth.SocialAuthError):
             social_auth.verify("google", pyjwt.encode(bad, key, algorithm="RS256"))
+
+
+def test_free_chat_reads_documents_and_forces_image_mode(client, monkeypatch):
+    calls = []
+    _enable_free_images(monkeypatch, calls)
+    monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", BLOB_TOKEN)
+    monkeypatch.setattr(storage, "fetch", lambda url, max_bytes=0: "Menü: latte 90 TL, mocha 110 TL".encode())
+    seen = {}
+
+    def fake(messages, max_tokens=0, vision=False):
+        seen.update(messages=messages, vision=vision)
+        return "Tamam.\n[[GORSEL: a coffee menu board]]", "groq:x"
+
+    monkeypatch.setattr(free_tier, "free_chat_completion", fake)
+    att = {"url": BLOB_URL + "menu.txt", "content_type": "text/plain", "name": "menu.txt"}
+    r = client.post("/api/free/chat", json={"mode": "image", "messages": [{"role": "user", "content": "Buna göre", "attachments": [att]}]}, headers=IP_A)
+    assert r.status_code == 200, r.text
+    assert "latte 90 TL" in seen["messages"][-1]["content"] and seen["vision"] is False
+    assert "Görsel oluştur" in seen["messages"][0]["content"]
+    assert r.json()["images"]
+    video = {"url": BLOB_URL + "v.mp4", "content_type": "video/mp4", "name": "v.mp4"}
+    assert client.post("/api/free/chat", json={"messages": [{"role": "user", "content": "x", "attachments": [video]}]}, headers=IP_A).status_code == 400
+
+
+def test_free_vision_chain_uses_only_qwen(monkeypatch):
+    from app.services import llm_service as ls
+
+    monkeypatch.setattr(config, "GROQ_API_KEY", "gk")
+    monkeypatch.setattr(config, "CEREBRAS_API_KEY", None)
+    used = []
+    monkeypatch.setattr(ls, "_free_provider_call", lambda p, m, msgs, mt: used.append(m) or "ok")
+    ls.free_chat_completion([{"role": "user", "content": "x"}], vision=True)
+    assert used == ["qwen/qwen3.8-27b"]

@@ -235,6 +235,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(..., min_length=1, max_length=40)
+    mode: Literal["chat", "image"] = "chat"
 
 
 @router.post("/chat")
@@ -264,7 +265,7 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
     credits = chat_cost(len(last.attachments), pages)
     event_id = _charge(user["id"], "chat", credits, last.content.strip()[:200] or "Dosya incelemesi")
     try:
-        text, model = assistant.reply([m.model_dump() for m in payload.messages[-20:]])
+        text, model = assistant.reply([m.model_dump() for m in payload.messages[-20:]], force_image=payload.mode == "image")
     except (LLMError, storage.StorageError) as e:
         logger.error("Sohbet yanıtı alınamadı: %s", e)
         refund(event_id)

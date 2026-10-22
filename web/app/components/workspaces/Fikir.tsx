@@ -62,7 +62,11 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
         key={open?.id ?? "yeni"}
         initial={open}
         endpoint="/api/free/chat"
-        attach="images"
+        attach="basic"
+        tools={{
+          video: { href: "/paketler", locked: "Paketle açılır" },
+          ads: { href: "/paketler", locked: "Pro paketle açılır" },
+        }}
         onSent={(data) => data?.free && setStatus(data.free)}
         blocker={
           left === 0 ? (
@@ -87,6 +91,10 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
       endpoint="/api/content/chat"
       attach="all"
       videoHref={videoHref}
+      tools={{
+        video: usage.video_enabled ? { href: "/araclar/video" } : { href: "/paketler", locked: "Paketle açılır" },
+        ads: usage.ads_enabled ? { href: "/araclar/reklam" } : { href: "/paketler", locked: "Pro paketle açılır" },
+      }}
       onSent={() => refresh()}
       blocker={lacking ? <NoCreditsNotice cost={costs.chat_message} /> : undefined}
       footer={(files) => {

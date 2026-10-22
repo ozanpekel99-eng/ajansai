@@ -4,6 +4,7 @@ const PATHS: Record<string, string> = {
   grid: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
   tag: "M3 12V4h8l10 10-8 8zM7.5 7.5h.01",
   megaphone: "M3 10v4h3l6 4V6L6 10zM16 8a5 5 0 0 1 0 8M19 5a9 9 0 0 1 0 14",
+  video: "M3 6h12v12H3zM15 10l6-3v10l-6-3",
   chart: "M4 20V10M10 20V4M16 20v-7M22 20H2",
   card: "M2 6h20v12H2zM2 10h20M6 15h4",
   help: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5h.01",

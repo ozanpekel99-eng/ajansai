@@ -97,6 +97,10 @@ def _reserve(subject: str, kind: str, limit: int, window: timedelta, total_limit
     return event_id
 
 
+def reserve_upload(subject: str, per_day: int) -> str:
+    return _reserve(subject, "upload", per_day, DAY, None, "Bugün çok fazla dosya yükledin, yarın tekrar dene.")
+
+
 def release(event_id: str) -> None:
     """Başarısız işlemde kullanım hakkını geri verir (virgülle birden çok kayıt olabilir)."""
     with get_engine().begin() as conn:
@@ -148,24 +152,70 @@ def split_image_request(text: str) -> tuple[str, str | None]:
     return IMAGE_TAG.sub("", text).strip(), m.group(1).strip()[:1500]
 
 
-def chat(subject: str, signed_in: bool, history: list[dict]) -> tuple[str, str | None]:
-    """(yanıt metni, görsel istemi veya None) döndürür."""
+FORCE_IMAGE_NOTE = (
+    "\n- Kullanıcı bu mesajda 'Görsel oluştur' seçeneğini kullandı: mutlaka en sona [[GORSEL: ...]] satırını ekle."
+)
+MAX_VISION_IMAGES = 3
+
+
+def _vision_part(data: bytes) -> dict:
+    """Görseli küçültüp (en uzun kenar 1024) data URL olarak modele gönderir."""
+    from PIL import Image, ImageOps
+
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+    img.thumbnail((1024, 1024))
+    out = io.BytesIO()
+    img.save(out, "JPEG", quality=85)
+    return {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode()}}
+
+
+def chat(
+    subject: str,
+    signed_in: bool,
+    history: list[dict],
+    attachments: list[dict] | None = None,
+    force_image: bool = False,
+) -> tuple[str, str | None]:
+    """(yanıt metni, görsel istemi veya None) döndürür.
+
+    attachments: son mesajın ekleri; her biri {"kind", "name", "data"(bayt)}.
+    Belgeler metne çevrilip mesaja eklenir; görseller görebilen ücretsiz modele (Qwen) gider.
+    """
     lim = limits(signed_in)["chat_per_day"]
     msg = (
         f"Ücretsiz pakette günde {lim} mesaj hakkın var ve bugünkü hakkın doldu. "
-        + ("Yarın devam edebilir ya da bir paket seçebilirsin." if signed_in else "Ücretsiz üye olursan günde daha fazla mesaj yazabilirsin.")
+        + ("Yarın devam edebilir ya da bir paket seçebilirsin." if signed_in else "Üye olursan günde daha fazla mesaj yazabilirsin.")
     )
     event_id = _reserve(subject, "chat", lim, DAY, config.FREE_CHAT_PER_DAY_TOTAL, msg)
     system = assistant.SYSTEM_PROMPT + FREE_NOTE + (IMAGE_TOOL_NOTE if image_enabled() else "")
+    if force_image and image_enabled():
+        system += FORCE_IMAGE_NOTE
     messages = [{"role": "system", "content": system}]
-    for m in history[-HISTORY_MESSAGES:]:
+    recent = history[-HISTORY_MESSAGES:]
+    attachments = attachments or []
+    images = [a for a in attachments if a["kind"] == "image"][:MAX_VISION_IMAGES]
+    docs = [a for a in attachments if a["kind"] == "document"]
+    for i, m in enumerate(recent):
         content = (m.get("content") or "")[:MESSAGE_CHARS]
-        n = len(m.get("attachments") or [])
-        if n:
-            content = f"{content}\n[Kullanıcı bu mesaja {n} görsel ekledi: image 0{', image 1' if n > 1 else ''}]".strip()
-        messages.append({"role": m["role"], "content": content or "(boş mesaj)"})
+        if i < len(recent) - 1 or m["role"] != "user":
+            messages.append({"role": m["role"], "content": content or "(dosya)"})
+            continue
+        for d in docs:
+            text = assistant.document_text(d["data"], d["content_type"])[: assistant.MAX_TEXT_CHARS // 2]
+            content += f"\n\n--- Ek belge: {d['name']} ---\n{text}\n--- Belge sonu ---"
+        if images:
+            note = f"[Kullanıcı {len(images)} görsel ekledi: " + ", ".join(f"image {k}" for k in range(len(images))) + "]"
+            parts = [{"type": "text", "text": f"{content}\n{note}".strip()}]
+            try:
+                parts += [_vision_part(a["data"]) for a in images]
+            except Exception as e:
+                release(event_id)
+                raise FreeServiceError("Görsel okunamadı.") from e
+            messages.append({"role": "user", "content": parts})
+        else:
+            messages.append({"role": "user", "content": content or "(dosya)"})
     try:
-        text, _ = free_chat_completion(messages, max_tokens=1200)
+        text, _ = free_chat_completion(messages, max_tokens=1200, vision=bool(images))
     except Exception:
         release(event_id)
         raise

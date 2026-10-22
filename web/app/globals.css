@@ -3187,3 +3187,98 @@ table.data td.num {
   justify-content: center;
   margin: 0 0 24px;
 }
+
+/* ---------- Sohbet + menüsü ---------- */
+.plus-wrap {
+  position: relative;
+}
+
+.plus-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 30;
+  width: min(340px, calc(100vw - 48px));
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.chat.is-empty .plus-menu {
+  bottom: auto;
+  top: calc(100% + 10px);
+}
+
+.plus-menu button,
+.plus-menu a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.plus-menu button:hover,
+.plus-menu a:hover {
+  background: var(--surface-3);
+}
+
+.plus-menu button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.plus-menu span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.plus-menu strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.plus-menu small {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+.plus-menu .locked strong {
+  color: var(--text-2);
+}
+
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-bottom: 8px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  background: var(--indigo-soft);
+  border: 1px solid var(--indigo-hi);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.mode-chip button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}

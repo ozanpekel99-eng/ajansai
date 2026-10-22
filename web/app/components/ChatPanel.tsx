@@ -20,10 +20,12 @@ export type Conversation = { id: string; title: string; at: number; messages: Ms
 /**
  * Ek ekleme biçimi:
  * - all: görsel, video, belge (ücretli paketler)
- * - images: yalnızca görsel (ücretsiz üye; görselden görsel üretimi için)
- * - signup: ataç düğmesi üye olmaya yönlendirir (ziyaretçi)
+ * - basic: görsel ve belge (ücretsiz paket ve ziyaretçi)
  */
-export type AttachMode = "all" | "images" | "signup";
+export type AttachMode = "all" | "basic";
+
+/** + menüsündeki ek araçlar: href yoksa kilitli (locked açıklamasıyla). */
+export type MenuTool = { href: string; locked?: string };
 
 const CHATS_KEY = "ajansai_chats";
 
@@ -53,10 +55,28 @@ type Props = {
   onSent?: (data: any) => void;
   /** Yanıttan video üretmeye geçiş bağlantısı (yoksa gösterilmez). */
   videoHref?: (text: string) => string | null;
+  /** + menüsünde gösterilecek video / reklam araçları */
+  tools?: { video?: MenuTool; ads?: MenuTool };
   initial?: Conversation | null;
 };
 
-export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, videoHref, initial }: Props) {
+export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, videoHref, tools, initial }: Props) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [imageMode, setImageMode] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: MouseEvent) => !menuRef.current?.contains(e.target as Node) && setMenuOpen(false);
+    const esc = (e: globalThis.KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [menuOpen]);
+
   const [chatId, setChatId] = useState<string>(() => initial?.id ?? `${Date.now()}`);
   const [messages, setMessages] = useState<Msg[]>(initial?.messages ?? []);
   const [text, setText] = useState("");
@@ -67,8 +87,8 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
   const endRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLTextAreaElement>(null);
 
-  const maxFiles = attach === "all" ? 5 : 2;
-  const kinds = attach === "all" ? (["image", "video", "document"] as const) : (["image"] as const);
+  const maxFiles = attach === "all" ? 5 : 3;
+  const kinds = attach === "all" ? (["image", "video", "document"] as const) : (["image", "document"] as const);
   const uploader = useUploader([...kinds], maxFiles, files.length, (f) => setFiles((x) => [...x, f]));
 
   useEffect(() => {
@@ -97,6 +117,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
       const data = await api<{ reply: string; images?: string[]; image_error?: string | null }>(endpoint, {
         method: "POST",
         body: JSON.stringify({
+          mode: imageMode ? "image" : "chat",
           messages: next.map((m) => ({
             role: m.role,
             content: m.content,
@@ -105,6 +126,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
         }),
       });
       const reply: Msg = { role: "assistant", content: data.reply, images: data.images || [], imageError: data.image_error };
+      setImageMode(false);
       const done = [...next, reply];
       setMessages(done);
       persist(done);
@@ -146,7 +168,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
   };
 
   const lastUserWithImages = [...messages].reverse().find((m) => m.role === "user");
-  const pendingImage = sending && /görsel|resim|fotoğraf|afiş|post|çiz/i.test(lastUserWithImages?.content || "");
+  const pendingImage = sending && (imageMode || /görsel|resim|fotoğraf|afiş|post|çiz/i.test(lastUserWithImages?.content || ""));
 
   return (
     <div className={`chat ${messages.length === 0 ? "is-empty" : ""}`}>
@@ -222,26 +244,64 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
         {(error || uploader.error) && <div className="notice error">{error || uploader.error}</div>}
         <FileChips files={files} onRemove={(id) => setFiles((x) => x.filter((f) => f.id !== id))} />
         <UploadProgress busy={uploader.busy} />
+        {imageMode && (
+          <div className="mode-chip">
+            <Icon name="image" size={14} /> Görsel oluştur
+            <button type="button" aria-label="Görsel modunu kapat" onClick={() => setImageMode(false)}>
+              <Icon name="close" size={12} />
+            </button>
+          </div>
+        )}
         <div className="composer-box">
-          {attach === "signup" ? (
-            <Link href="/kayit" className="icon-btn" aria-label="Görsel eklemek için üye ol" title="Görsel eklemek için üye ol">
-              <Icon name="clip" />
-            </Link>
-          ) : (
-            <>
-              {uploader.field}
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={uploader.pick}
-                disabled={files.length >= maxFiles}
-                aria-label={attach === "all" ? "Görsel, video veya belge ekle" : "Görsel ekle"}
-                title={attach === "all" ? "Görsel, video veya belge ekle" : "Görsel ekle (görselden görsel üretebilirsin)"}
-              >
-                <Icon name="clip" />
-              </button>
-            </>
-          )}
+          {uploader.field}
+          <div className="plus-wrap" ref={menuRef}>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label="Ekle ve araçlar"
+            >
+              <Icon name="plus" />
+            </button>
+            {menuOpen && (
+              <div className="plus-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={files.length >= maxFiles}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    uploader.pick();
+                  }}
+                >
+                  <Icon name="clip" size={18} />
+                  <span>
+                    <strong>Fotoğraf ve dosya ekle</strong>
+                    <small>{attach === "all" ? "Görsel, video, PDF, Word, metin" : "Görsel, PDF, Word, metin"}</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setImageMode(true);
+                    boxRef.current?.focus();
+                  }}
+                >
+                  <Icon name="image" size={18} />
+                  <span>
+                    <strong>Görsel oluştur</strong>
+                    <small>Tarif et ya da eklediğin görselden üret</small>
+                  </span>
+                </button>
+                {tools?.video && <MenuLink icon="video" title="Video oluştur" desc="Reels ve hikâye için kısa video" tool={tools.video} />}
+                {tools?.ads && <MenuLink icon="megaphone" title="Reklam oluştur" desc="Instagram reklamını kur ve yayınla" tool={tools.ads} />}
+              </div>
+            )}
+          </div>
           <textarea
             ref={boxRef}
             rows={1}
@@ -252,7 +312,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
               e.target.style.height = `${Math.min(e.target.scrollHeight, 220)}px`;
             }}
             onKeyDown={onKey}
-            placeholder="Bir şey sor…"
+            placeholder={imageMode ? "Görseli tarif et…" : "Bir şey sor…"}
             aria-label="Mesaj"
           />
           <button type="submit" className="send-btn" disabled={!canSend} aria-label="Gönder">
@@ -269,5 +329,17 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
         </div>
       </form>
     </div>
+  );
+}
+
+function MenuLink({ icon, title, desc, tool }: { icon: string; title: string; desc: string; tool: MenuTool }) {
+  return (
+    <Link href={tool.href} role="menuitem" className={tool.locked ? "locked" : ""}>
+      <Icon name={icon} size={18} />
+      <span>
+        <strong>{title}</strong>
+        <small>{tool.locked || desc}</small>
+      </span>
+    </Link>
   );
 }
