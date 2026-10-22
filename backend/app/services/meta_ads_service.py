@@ -87,7 +87,7 @@ def list_ad_accounts(access_token: str) -> list[dict]:
     try:
         response = requests.get(
             f"{META_BASE_URL}/me/adaccounts",
-            params={"fields": "account_id,name,currency,account_status", "access_token": access_token, "limit": 200},
+            params={"fields": "account_id,name,currency,account_status,balance", "access_token": access_token, "limit": 200},
             timeout=30,
         )
         response.raise_for_status()
@@ -204,8 +204,21 @@ ACCOUNT_STATUS = {
 }
 
 
+# Meta tutarları kuruş cinsinden döndürür; bu para birimlerinde küsurat yoktur
+ZERO_DECIMAL = {"JPY", "KRW", "CLP", "COP", "HUF", "ISK", "TWD", "VND", "IDR", "PYG", "CRC"}
+
+
+def _money(value, currency: str | None) -> float:
+    try:
+        n = int(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return float(n) if (currency or "").upper() in ZERO_DECIMAL else n / 100
+
+
 def describe_account(a: dict) -> dict:
     label, usable = ACCOUNT_STATUS.get(a.get("account_status"), ("Durum bilinmiyor", True))
+    a = {**a, "balance_due": _money(a.pop("balance", 0), a.get("currency"))}
     return {**a, "status_label": label, "usable": usable,
             "billing_url": f"https://business.facebook.com/billing_hub/payment_activity/?asset_id={a.get('account_id')}"}
 

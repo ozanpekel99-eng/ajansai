@@ -11,7 +11,7 @@ import { ChipSelect } from "../Controls";
 import Icon from "../Icon";
 import { EmptyResult, LockedNotice, WorkspaceProps } from "./common";
 
-type AdAccount = { account_id: string; name: string; currency: string; account_status: number; status_label?: string; usable?: boolean; billing_url?: string };
+type AdAccount = { account_id: string; name: string; currency: string; account_status: number; status_label?: string; usable?: boolean; billing_url?: string; balance_due?: number };
 type Page = { id: string; name: string; instagram_id?: string | null; instagram_username?: string | null; source?: string };
 type IgAccount = { id: string; username: string; page_id?: string | null };
 type Loc = { key: string; name: string; type: "country" | "region" | "city"; country_code?: string | null; region?: string | null };
@@ -286,6 +286,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   // Meta penceresi açıkken (sayfa oluşturma / Instagram bağlama) arka planda kontrol edilir
+  const lib = useAdLibrary();
   const [watching, setWatching] = useState<null | "page" | "ig">(null);
   const [watchMiss, setWatchMiss] = useState<null | "page" | "ig">(null);
   const watchTimer = useRef<ReturnType<typeof setInterval>>();
@@ -513,16 +514,25 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
               </option>
               {accounts.map((a) => (
                 <option key={a.account_id} value={a.account_id} disabled={!usable(a)}>
-                  {a.name} ({a.currency}){a.account_status !== 1 ? ` · ${a.account_status === 3 ? "ödenmemiş bakiye" : a.account_status === 9 ? "ödeme ek süresinde" : (a.status_label || "aktif değil").toLowerCase()}` : ""}
+                  {a.name} ({a.currency}){(a.balance_due || 0) > 0 ? ` · borç ${money(a.balance_due || 0, a.currency)}` : ""}{a.account_status !== 1 ? ` · ${a.account_status === 3 ? "ödenmemiş bakiye" : a.account_status === 9 ? "ödeme ek süresinde" : (a.status_label || "aktif değil").toLowerCase()}` : ""}
                 </option>
               ))}
             </select>
-            {account && account.account_status !== 1 && usable(account) && (
-              <div className="notice" style={{ marginTop: 8 }}>
-                <span>{account.status_label}. Reklamı yine de hazırlayabilirsin.</span>
+            {account && (account.account_status !== 1 || (account.balance_due || 0) > 0) && (
+              <div className="notice setup-inline" style={{ marginTop: 8 }}>
+                <span>
+                  {(account.balance_due || 0) > 0 && (
+                    <>
+                      Ödenmemiş bakiye: <span className="debt">{money(account.balance_due || 0, account.currency)}</span>.{" "}
+                    </>
+                  )}
+                  {account.account_status !== 1
+                    ? `${account.status_label}. ${usable(account) ? "Reklamı yine de hazırlayabilirsin." : ""}`
+                    : "Meta bu tutarı kartından çekecek; çekilemezse reklamlar durur."}
+                </span>
                 {account.billing_url && (
                   <a className="btn btn-light btn-sm" href={account.billing_url} target="_blank" rel="noreferrer">
-                    Bakiyeyi öde
+                    {(account.balance_due || 0) > 0 ? "Bakiyeyi öde" : "Ödeme ayarları"}
                   </a>
                 )}
               </div>
@@ -771,6 +781,11 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
             hint="Kare (1:1) veya dikdörtgen (4:5) en iyisi."
             value={media}
             onChange={setMedia}
+            library={lib.items}
+            onDelete={(m) => {
+              if (storyMedia?.url === m.url) setStoryMedia(null);
+              lib.remove(m);
+            }}
           />
           {activePlacements.some(isVertical) && (
             <MediaPicker
@@ -778,6 +793,11 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
               hint="Dikey (9:16) yükle; hikâye ve Reels'te bu, akışta gönderi görseli gösterilir. Boş bırakırsan her yerde gönderi görseli kullanılır."
               value={storyMedia}
               onChange={setStoryMedia}
+              library={lib.items}
+              onDelete={(m) => {
+                if (media?.url === m.url) setMedia(null);
+                lib.remove(m);
+              }}
             />
           )}
         </section>
@@ -928,13 +948,54 @@ function LocationPicker({ value, onChange }: { value: Loc[]; onChange: (v: Loc[]
   );
 }
 
-function MediaPicker({ value, onChange, title, hint }: { value: Media | null; onChange: (m: Media | null) => void; title: string; hint: string }) {
-  const up = useUploader(["image", "video"], 1, 0, (f) => onChange({ url: f.url, kind: f.kind === "video" ? "video" : "image" }));
-  const library = useMemo(() => {
-    const imgs = readHistory<{ url: string }>("gorsel").map((h) => ({ url: h.data.url, kind: "image" as const }));
-    const vids = readHistory<{ url: string }>("video").map((h) => ({ url: h.data.url, kind: "video" as const }));
-    return [...imgs, ...vids].filter((m) => m.url && m.url.startsWith("https://")).slice(0, 12);
+type LibMedia = Media & { id: string; local?: string };
+
+// Reklamda kullanılabilecek görsel/videolar: ajansAI kütüphanesi + bu tarayıcıdaki eski üretimler.
+// Silinen öğe kütüphaneden de kaldırılır.
+function useAdLibrary() {
+  const [items, setItems] = useState<LibMedia[]>([]);
+  useEffect(() => {
+    const local: LibMedia[] = [
+      ...readHistory<{ url: string }>("gorsel").map((h) => ({ id: `l-gorsel-${h.id}`, local: "gorsel", url: h.data.url, kind: "image" as const })),
+      ...readHistory<{ url: string }>("video").map((h) => ({ id: `l-video-${h.id}`, local: "video", url: h.data.url, kind: "video" as const })),
+    ].filter((m) => m.url && m.url.startsWith("https://"));
+    api<{ items: { id: string; kind: "image" | "video"; url: string }[] }>("/api/content/library?limit=40")
+      .catch(() => ({ items: [] }))
+      .then((d) => {
+        const server: LibMedia[] = d.items.map((i) => ({ id: i.id, url: i.url, kind: i.kind }));
+        const seen = new Set(server.map((m) => m.url));
+        setItems([...server, ...local.filter((m) => !seen.has(m.url))].slice(0, 40));
+      });
   }, []);
+  const remove = async (m: LibMedia) => {
+    setItems((cur) => cur.filter((x) => x.url !== m.url));
+    if (m.local) {
+      try {
+        const k = `ajansai_history_${m.local}`;
+        const list = JSON.parse(localStorage.getItem(k) || "[]");
+        localStorage.setItem(k, JSON.stringify(list.filter((h: { data?: { url?: string } }) => h.data?.url !== m.url)));
+      } catch {
+        /* depolama kapalı */
+      }
+    } else {
+      await api(`/api/content/library/${m.id}`, { method: "DELETE" }).catch(() => undefined);
+    }
+  };
+  return { items, remove };
+}
+
+function MediaPicker({
+  value, onChange, title, hint, library, onDelete,
+}: {
+  value: Media | null;
+  onChange: (m: Media | null) => void;
+  title: string;
+  hint: string;
+  library: LibMedia[];
+  onDelete: (m: LibMedia) => void;
+}) {
+  const up = useUploader(["image", "video"], 1, 0, (f) => onChange({ url: f.url, kind: f.kind === "video" ? "video" : "image" }));
+  const [confirm, setConfirm] = useState<string | null>(null);
 
   return (
     <div className="field">
@@ -950,14 +1011,37 @@ function MediaPicker({ value, onChange, title, hint }: { value: Media | null; on
           <MediaTile media={value} selected onClick={() => onChange(null)} />
         )}
         {library.map((m) => (
-          <MediaTile key={m.url} media={m} selected={value?.url === m.url} onClick={() => onChange(value?.url === m.url ? null : m)} />
+          <div key={m.id} className="media-tile-wrap">
+            <MediaTile media={m} selected={value?.url === m.url} onClick={() => onChange(value?.url === m.url ? null : m)} />
+            {confirm === m.id ? (
+              <div className="media-confirm">
+                <span>Silinsin mi?</span>
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  onClick={() => {
+                    if (value?.url === m.url) onChange(null);
+                    onDelete(m);
+                    setConfirm(null);
+                  }}
+                >
+                  Sil
+                </button>
+                <button type="button" className="btn btn-light btn-sm" onClick={() => setConfirm(null)}>
+                  Vazgeç
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="media-del" aria-label="Bu dosyayı sil" title="Sil" onClick={() => setConfirm(m.id)}>
+                <Icon name="close" size={12} />
+              </button>
+            )}
+          </div>
         ))}
       </div>
       <UploadProgress busy={up.busy} />
       {up.error && <small className="error-text">{up.error}</small>}
-      <span className="hint">
-        {hint} Kendi dosyanı yükle ya da ajansAI'da ürettiklerinden seç.
-      </span>
+      <span className="hint">{hint} Kendi dosyanı yükle ya da ajansAI&apos;da ürettiklerinden seç; sildiğin dosya kütüphanenden de kalkar.</span>
     </div>
   );
 }

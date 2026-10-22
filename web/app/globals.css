@@ -3889,3 +3889,13 @@ table.data td.num {
 .ad-phone.reels .ad-phone-cta { background: rgba(255,255,255,.2); color: #fff; text-align: left; }
 .notice.setup-inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .notice.setup-inline > span:first-child { flex: 1 1 260px; }
+
+.media-tile-wrap { position: relative; }
+.media-tile-wrap .media-tile { width: 100%; }
+.media-del { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; border: 0; display: grid; place-items: center; background: rgba(0,0,0,.65); color: #fff; cursor: pointer; opacity: 0; transition: opacity .15s; }
+.media-tile-wrap:hover .media-del, .media-del:focus-visible { opacity: 1; }
+@media (hover: none) { .media-del { opacity: 1; } }
+.media-confirm { position: absolute; inset: 0; border-radius: var(--r-md); background: rgba(10,10,14,.86); display: grid; place-content: center; gap: 6px; text-align: center; font-size: 13px; color: #fff; }
+.btn-danger { background: #d93a3a; color: #fff; border: 0; }
+.btn-danger:hover { background: #c22f2f; }
+.debt { font-weight: 600; }
