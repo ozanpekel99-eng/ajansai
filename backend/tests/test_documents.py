@@ -133,3 +133,9 @@ def test_all_slide_layouts_render_pdf_and_pptx():
     from pptx import Presentation
 
     assert len(Presentation(io.BytesIO(slides.to_pptx(spec, {}))).slides) == 11
+
+
+def test_unclosed_file_tag_still_creates_request():
+    text, req = documents.split_file_request("Hazırlıyorum.\n[[DOSYA: sunum|pdf|Kağan Sarı reels kurguları, 12 slayt, çok uzun açıklama")
+    assert text == "Hazırlıyorum." and req["kind"] == "presentation" and req["format"] == "pdf"
+    assert req["brief"].startswith("Kağan Sarı")

@@ -19,7 +19,7 @@ from app.services.llm_service import LLMError, smart_chat_completion
 
 logger = logging.getLogger("ajansai.documents")
 
-FILE_TAG = re.compile(r"\[\[\s*DOSYA\s*:\s*(.+?)\]\]", re.IGNORECASE | re.DOTALL)
+FILE_TAG = re.compile(r"\[\[\s*DOSYA\s*:\s*(.+?)(?:\]\]|\Z)", re.IGNORECASE | re.DOTALL)
 FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 
 KINDS = {"sunum": "presentation", "belge": "document", "tablo": "spreadsheet"}
@@ -39,7 +39,8 @@ FILE_NOTE = (
     "\n- Dosya oluşturabilirsin: görselli sunum (PDF veya PowerPoint), belge/rapor (PDF veya Word) ve tablo (Excel). "
     "Kullanıcı bir sunum, slayt, PDF, rapor, teklif, belge, Word, Excel veya tablo dosyası isterse uzun içeriği sohbete "
     "yazma; 1-2 cümleyle ne hazırladığını söyle ve en sona tek satır ekle: [[DOSYA: <sunum|belge|tablo>|<pdf|pptx|docx|xlsx>"
-    "|<içeriğin ayrıntılı açıklaması: konu, hedef kitle, slayt/bölüm sayısı, istenen her şey>]]. Format belirtilmemişse "
+    "|<en fazla 40 kelimelik kısa özet: konu, hedef kitle, slayt/bölüm sayısı>]]. İçeriğin ayrıntısını bu satıra yazma; dosyayı "
+    "sohbetin tamamına bakarak ayrı bir adımda sen hazırlayacaksın. Format belirtilmemişse "
     "sunum ve belge için pdf, tablo için xlsx seç. Dosyayı sistem oluşturur ve indirme bağlantısını gösterir; dosya "
     "oluşturamayacağını asla söyleme."
 )

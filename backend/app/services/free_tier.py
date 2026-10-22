@@ -144,7 +144,7 @@ IMAGE_TOOL_NOTE = (
     "ona atıf yap. Görsel istenmedikçe bu satırı ekleme. Görsel üretemeyeceğini asla söyleme; satırı eklemen yeterli, "
     "görseli sistem üretip mesajının altında gösterir. Satırda yazı/logo isteme; görselde metin olmasın."
 )
-IMAGE_TAG = re.compile(r"\[\[\s*G[ÖO]RSEL\s*:\s*(.+?)\]\]", re.IGNORECASE | re.DOTALL)
+IMAGE_TAG = re.compile(r"\[\[\s*G[ÖO]RSEL\s*:\s*(.+?)(?:\]\]|\Z)", re.IGNORECASE | re.DOTALL)
 HISTORY_MESSAGES = 8
 FREE_FILES_PER_DAY = 3
 MESSAGE_CHARS = 3000
@@ -219,7 +219,7 @@ VIDEO_TOOL_NOTE = (
     "doldurulmuş açan bir buton gösterir. Videoyu kendin üretemeyeceğini uzun uzun anlatma."
 )
 SYSTEM_NOTE = re.compile(r"\[Sistem notu:[^\]]*\]", re.IGNORECASE)
-VIDEO_TAG = re.compile(r"\[\[\s*V[İI]DEO\s*:\s*(.+?)\]\]", re.IGNORECASE | re.DOTALL)
+VIDEO_TAG = re.compile(r"\[\[\s*V[İI]DEO\s*:\s*(.+?)(?:\]\]|\Z)", re.IGNORECASE | re.DOTALL)
 
 
 def split_video_request(text: str) -> tuple[str, dict | None]:
