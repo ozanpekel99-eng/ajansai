@@ -19,6 +19,8 @@ MAX_CHATS = 300  # kullanıcı başı; fazlası en eskiden silinir
 class ChatIn(BaseModel):
     title: str = Field("Sohbet", max_length=200)
     messages: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
+    # Yalnızca eski (tarayıcıdaki) sohbetler taşınırken: sohbetin asıl zamanı (ms)
+    at: int | None = None
 
 
 def _own(conn, chat_id: str, user_id: str):
@@ -57,6 +59,14 @@ def save_chat(chat_id: str, payload: ChatIn, user: dict = Depends(get_current_us
         raise HTTPException(status_code=413, detail="Sohbet çok uzun; yeni bir sohbet başlat.")
     title = (payload.title or "Sohbet").strip()[:200] or "Sohbet"
     now = utcnow()
+    if payload.at:
+        from datetime import datetime, timezone
+
+        try:
+            given = datetime.fromtimestamp(payload.at / 1000, tz=timezone.utc).replace(tzinfo=None)
+            now = min(now, given)
+        except (OverflowError, OSError, ValueError):
+            pass
     with get_engine().begin() as conn:
         existing = conn.execute(select(conversations.c.user_id).where(conversations.c.id == chat_id)).first()
         if existing is not None and existing.user_id != user["id"]:

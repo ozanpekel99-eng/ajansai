@@ -20,3 +20,11 @@ def test_chats_are_saved_listed_and_private(client):
     assert client.get("/api/chats", headers=auth(a)).json()[0]["title"] == "Güncel"
     assert client.delete("/api/chats/c1", headers=auth(a)).status_code == 204
     assert [c["id"] for c in client.get("/api/chats", headers=auth(a)).json()] == ["c2"]
+
+
+def test_migrated_chat_keeps_original_time(client):
+    a = register(client)
+    client.put("/api/chats/yeni", json={"title": "Yeni", "messages": []}, headers=auth(a))
+    client.put("/api/chats/eski", json={"title": "Eski", "messages": [], "at": 1_700_000_000_000}, headers=auth(a))
+    listed = client.get("/api/chats", headers=auth(a)).json()
+    assert [c["id"] for c in listed] == ["yeni", "eski"] and listed[1]["updated_at"].startswith("2023-11-14")

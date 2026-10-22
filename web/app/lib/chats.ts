@@ -8,7 +8,7 @@ import type { Conversation } from "../components/ChatPanel";
 export type ChatSummary = { id: string; title: string; at: number };
 
 const LOCAL_KEY = "ajansai_chats";
-const MIGRATED_KEY = "ajansai_chats_migrated";
+const MIGRATED_KEY = "ajansai_chats_migrated2";
 export const CHATS_EVENT = "ajansai:chats";
 
 /** Şu an ekranda açık olan sohbet (adres çubuğu güncellenince yeniden yüklenmesin diye). */
@@ -46,7 +46,10 @@ async function migrate() {
     if (localStorage.getItem(MIGRATED_KEY)) return;
     const list = localChats();
     for (const c of list.slice(0, 30)) {
-      await api(`/api/chats/${encodeURIComponent(c.id)}`, { method: "PUT", body: JSON.stringify({ title: c.title, messages: c.messages }) });
+      await api(`/api/chats/${encodeURIComponent(c.id)}`, {
+        method: "PUT",
+        body: JSON.stringify({ title: c.title, messages: c.messages, at: c.at }),
+      });
     }
     localStorage.setItem(MIGRATED_KEY, "1");
   } catch {
