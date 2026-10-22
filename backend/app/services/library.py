@@ -5,7 +5,7 @@ import uuid
 
 from sqlalchemy import and_, delete, select
 
-from app.db import get_engine, media, utcnow
+from app.db import get_engine, media, utcnow, video_tasks
 
 logger = logging.getLogger("ajansai.library")
 
@@ -31,13 +31,32 @@ def items(user_id: str, kind: str | None = None, limit: int = 60, before: str | 
     q = select(media).where(and_(*cond)).order_by(media.c.created_at.desc()).limit(max(1, min(limit, 200)))
     with get_engine().connect() as conn:
         rows = conn.execute(q).all()
-    return [
+        old_videos = []
+        if kind in (None, "video"):
+            # Kütüphane öncesi üretilen videolar
+            old_videos = conn.execute(
+                select(video_tasks).where(and_(video_tasks.c.user_id == user_id, video_tasks.c.status == "completed"))
+            ).all()
+    out = [
         {"id": r.id, "kind": r.kind, "url": r.url, "prompt": r.prompt, "source": r.source,
          "created_at": r.created_at.isoformat() + "Z"}
         for r in rows
     ]
+    known = {i["url"] for i in out}
+    for v in old_videos:
+        if v.video_url and v.video_url not in known:
+            out.append({"id": f"v-{v.id}", "kind": "video", "url": v.video_url, "prompt": v.prompt or "Video",
+                        "source": "video", "created_at": v.created_at.isoformat() + "Z"})
+    out.sort(key=lambda i: i["created_at"], reverse=True)
+    return out[:limit]
 
 
 def remove(user_id: str, item_id: str) -> None:
     with get_engine().begin() as conn:
+        if item_id.startswith("v-"):
+            from sqlalchemy import update
+
+            conn.execute(update(video_tasks).where(and_(video_tasks.c.id == item_id[2:], video_tasks.c.user_id == user_id))
+                         .values(status="hidden"))
+            return
         conn.execute(delete(media).where(and_(media.c.id == item_id, media.c.user_id == user_id)))
