@@ -33,7 +33,7 @@ def get_oauth_url(redirect_uri: str, state: str) -> str:
         params["response_type"] = "code"
         params["override_default_response_type"] = "true"
     else:
-        params["scope"] = "ads_management,ads_read,business_management,pages_show_list"
+        params["scope"] = "ads_management,ads_read,business_management,pages_show_list,pages_read_engagement,instagram_basic,pages_manage_ads"
     query = urlencode(params)
     return f"https://www.facebook.com/{META_API_VERSION}/dialog/oauth?{query}"
 
@@ -211,30 +211,90 @@ def describe_account(a: dict) -> dict:
 
 
 def _page_row(p: dict, source: str) -> dict:
-    ig = p.get("instagram_business_account") or {}
+    ig = p.get("instagram_business_account") or p.get("connected_instagram_account") or {}
     return {"id": p["id"], "name": p.get("name", ""), "instagram_id": ig.get("id"),
             "instagram_username": ig.get("username"), "source": source}
 
 
+PAGE_FIELDS = "id,name,instagram_business_account{id,username},connected_instagram_account{id,username}"
+
+
+def _all(path: str, token: str, **params) -> list[dict]:
+    """Sayfalı Graph listesini (en fazla 5 sayfa) toplar."""
+    out: list[dict] = []
+    params.setdefault("limit", 100)
+    after = None
+    for _ in range(5):
+        if after:
+            params["after"] = after
+        data = _graph("GET", path, token, **params)
+        out.extend(data.get("data", []))
+        after = ((data.get("paging") or {}).get("cursors") or {}).get("after")
+        if not after or not (data.get("paging") or {}).get("next"):
+            break
+    return out
+
+
 def list_pages(token: str, ad_account_id: str | None = None) -> list[dict]:
-    """Reklamda kullanılabilecek sayfalar: reklam hesabının tanıtabildiği sayfalar (önce) +
-    kullanıcının yönettiği sayfalar. Her sayfanın bağlı Instagram hesabı da döner."""
+    """Kullanıcının erişebildiği tüm Facebook sayfaları ve her birine bağlı Instagram hesabı.
+
+    Kaynaklar: reklam hesabının tanıtabildiği sayfalar, kullanıcının yönettiği sayfalar ve
+    kullanıcının işletme portföylerine (Business Manager) ait/erişimli sayfalar.
+    """
     found: dict[str, dict] = {}
-    fields = "id,name,instagram_business_account{id,username}"
+    tokens: dict[str, str] = {}
+
+    def add(rows, source):
+        for p in rows:
+            row = _page_row(p, source)
+            cur = found.get(p["id"])
+            if not cur:
+                found[p["id"]] = row
+            elif not cur.get("instagram_id") and row.get("instagram_id"):
+                cur.update(instagram_id=row["instagram_id"], instagram_username=row["instagram_username"])
+            if p.get("access_token"):
+                tokens[p["id"]] = p["access_token"]
+
+    errors = []
     if ad_account_id:
-        act = ad_account_id.removeprefix("act_")
         try:
-            for p in _graph("GET", f"act_{act}/promote_pages", token, fields=fields, limit=100).get("data", []):
-                found[p["id"]] = _page_row(p, "ad_account")
+            add(_all(f"act_{ad_account_id.removeprefix('act_')}/promote_pages", token, fields=PAGE_FIELDS), "ad_account")
+        except MetaError as e:
+            errors.append(e)
+    try:
+        add(_all("me/accounts", token, fields=PAGE_FIELDS + ",access_token"), "user")
+    except MetaError as e:
+        errors.append(e)
+    try:
+        for b in _all("me/businesses", token, fields="id,name"):
+            for edge in ("owned_pages", "client_pages"):
+                try:
+                    add(_all(f"{b['id']}/{edge}", token, fields=PAGE_FIELDS), "business")
+                except MetaError:
+                    pass
+    except MetaError:
+        pass
+    # Bağlı Instagram kullanıcı jetonuyla görünmüyorsa sayfa jetonuyla tekrar sorulur
+    for pid, row in found.items():
+        if row.get("instagram_id") or pid not in tokens:
+            continue
+        try:
+            p = _graph("GET", pid, tokens[pid], fields="instagram_business_account{id,username},connected_instagram_account{id,username}")
+            ig = p.get("instagram_business_account") or p.get("connected_instagram_account") or {}
+            if ig.get("id"):
+                row.update(instagram_id=ig["id"], instagram_username=ig.get("username"))
         except MetaError:
             pass
+    if not found and errors:
+        raise errors[0]
+    return sorted(found.values(), key=lambda r: (r["source"] != "ad_account", not r.get("instagram_id"), r["name"].lower()))
+
+
+def granted_permissions(token: str) -> list[str]:
     try:
-        for p in _graph("GET", "me/accounts", token, fields=fields, limit=100).get("data", []):
-            found.setdefault(p["id"], _page_row(p, "user"))
+        return [p["permission"] for p in _graph("GET", "me/permissions", token).get("data", []) if p.get("status") == "granted"]
     except MetaError:
-        if not found:
-            raise
-    return list(found.values())
+        return []
 
 
 def list_instagram_accounts(ad_account_id: str, token: str) -> list[dict]:
@@ -610,7 +670,7 @@ def setup_status(token: str) -> dict:
             "action": "Instagram'ı bağla", "url": "https://business.facebook.com/latest/settings/instagram_account",
         },
     ]
-    return {"ready": all(s["done"] for s in steps), "steps": steps}
+    return {"ready": all(s["done"] for s in steps), "steps": steps, "permissions": granted_permissions(token)}
 
 
 def page_whatsapp(token: str, page_id: str) -> dict:
