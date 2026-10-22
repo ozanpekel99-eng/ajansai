@@ -67,23 +67,80 @@ def _sniff_mime(data: bytes) -> str:
     return "image/png"
 
 
-def generate_image(prompt: str, aspect_ratio: str, reference_urls: list[str] | None = None) -> tuple[bytes, str]:
-    """(görsel baytları, mime) döndürür. aspect_ratio örn. "9:16".
+GEMINI_ASPECTS = {"1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"}
 
-    reference_urls verilirse model bu görselleri örnek alır (ürün, stil, kompozisyon).
-    """
+
+def _gemini_image(model: str, prompt: str, aspect_ratio: str, reference_urls: list[str] | None) -> bytes:
+    """Gemini görsel modelleri (Nano Banana) sohbet API'si üzerinden görsel üretir/düzenler."""
+    token = ai_gateway_token()
+    if not token:
+        raise MediaError("AI Gateway kimlik bilgisi yok.")
+    content = [{"type": "text", "text": prompt}]
+    content += [{"type": "image_url", "image_url": {"url": u}} for u in (reference_urls or [])]
+    body = {
+        "model": model,
+        "messages": [{"role": "user", "content": content}],
+        "modalities": ["text", "image"],
+    }
+    if aspect_ratio in GEMINI_ASPECTS:
+        body["providerOptions"] = {"google": {"imageConfig": {"aspectRatio": aspect_ratio}}}
+    try:
+        response = requests.post(
+            f"{config.AI_GATEWAY_BASE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=body,
+            timeout=120,
+        )
+    except requests.RequestException as e:
+        raise MediaError(f"AI Gateway'e ulaşılamadı: {e}") from e
+    if response.status_code >= 400:
+        raise MediaError(f"AI Gateway {response.status_code}: {response.text[:400]}")
+    try:
+        message = response.json()["choices"][0]["message"]
+    except (ValueError, KeyError, IndexError) as e:
+        raise MediaError(f"Beklenmeyen yanıt: {response.text[:200]}") from e
+    for image in message.get("images") or []:
+        url = (image.get("image_url") or {}).get("url") or ""
+        if url.startswith("data:"):
+            return base64.b64decode(url.split(",", 1)[1])
+    raise MediaError(f"Görsel dönmedi: {str(message.get('content'))[:200]}")
+
+
+def _image_endpoint(model: str, prompt: str, aspect_ratio: str, reference_urls: list[str] | None) -> bytes:
     body = {"prompt": prompt, "n": 1, "aspectRatio": aspect_ratio}
     if reference_urls:
         body["files"] = [{"type": "url", "url": u} for u in reference_urls]
-    data = _post("/image-model", config.IMAGE_MODEL, "image", body, timeout=150)
+    data = _post("/image-model", model, "image", body, timeout=150)
     images = data.get("images") or []
     if not images:
         raise MediaError(f"Görsel dönmedi: {str(data)[:300]}")
     raw = images[0]
     if raw.startswith("data:"):
         raw = raw.split(",", 1)[1]
-    payload = base64.b64decode(raw)
-    return payload, _sniff_mime(payload)
+    return base64.b64decode(raw)
+
+
+def generate_image(prompt: str, aspect_ratio: str, reference_urls: list[str] | None = None) -> tuple[bytes, str]:
+    """(görsel baytları, mime) döndürür. aspect_ratio örn. "9:16".
+
+    reference_urls verilirse model bu görselleri kullanır: düzenlemede ilk görsel düzenlenecek
+    görseldir; ürün/stil örnekleri de aynı listede gelir.
+    Sıra: Gemini 3.1 Flash Image → Gemini 3 Pro Image → Seedream.
+    """
+    errors = []
+    for model in (config.IMAGE_MODEL, config.IMAGE_MODEL_FALLBACK, config.IMAGE_MODEL_LAST):
+        if not model:
+            continue
+        try:
+            if model.startswith("google/gemini"):
+                payload = _gemini_image(model, prompt, aspect_ratio, reference_urls)
+            else:
+                payload = _image_endpoint(model, prompt, aspect_ratio, reference_urls)
+            return payload, _sniff_mime(payload)
+        except MediaError as e:
+            logger.warning("Görsel modeli %s başarısız: %s", model, e)
+            errors.append(f"{model}: {e}")
+    raise MediaError(" | ".join(errors)[:600])
 
 
 def start_video(

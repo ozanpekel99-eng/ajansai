@@ -8,7 +8,7 @@ import { onDownload } from "../../lib/download";
 import { readHistory } from "../../lib/history";
 import Icon from "../Icon";
 
-export type LibraryItem = { id: string; kind: "image" | "video"; url: string; prompt: string; source?: string; created_at: string };
+export type LibraryItem = { id: string; kind: "image" | "video"; url: string; prompt: string; source?: string; job_id?: string | null; created_at: string };
 
 const SOURCE: Record<string, string> = { gorsel: "Görsel aracı", video: "Video aracı", sohbet: "Sohbet" };
 

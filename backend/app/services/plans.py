@@ -20,7 +20,7 @@ Paketler $10 / $20 / $30 (aylık) + %20 KDV; yıllıkta %20 indirim, kredi her 3
 
 import math
 
-VIDEO_DURATIONS = (5, 7, 10)
+VIDEO_DURATIONS = (4, 6, 8)
 VIDEO_RESOLUTIONS = ("720p", "1080p", "4k")
 
 CREDIT_COSTS = {
@@ -32,17 +32,18 @@ CREDIT_COSTS = {
     "image": 4,
     "file": 3,  # sohbetten sunum / belge / tablo dosyası (Claude ile tasarımlı içerik)
     "ads_draft": 0,
-    # çözünürlük → süre (sn) → kredi
+    # çözünürlük → süre (sn) → kredi. Veo 3.1 maliyeti: 720p (Lite) $0,03/sn, 1080p (Fast) $0,10/sn,
+    # 4K $0,30/sn; sesli: $0,05 / $0,15 / $0,35. Kredi ~$0,04 → en az ~2,4 kat pay.
     "video": {
-        "720p": {"5": 12, "7": 17, "10": 24},
-        "1080p": {"5": 27, "7": 37, "10": 53},
-        "4k": {"5": 355, "7": 495, "10": 710},
+        "720p": {"4": 8, "6": 12, "8": 16},
+        "1080p": {"4": 25, "6": 36, "8": 48},
+        "4k": {"4": 72, "6": 108, "8": 144},
     },
-    # sesli video (4K'da ses fiyatı değişmez)
+    # sesli video
     "video_audio": {
-        "720p": {"5": 24, "7": 34, "10": 48},
-        "1080p": {"5": 53, "7": 75, "10": 106},
-        "4k": {"5": 355, "7": 495, "10": 710},
+        "720p": {"4": 12, "6": 18, "8": 24},
+        "1080p": {"4": 36, "6": 54, "8": 72},
+        "4k": {"4": 84, "6": 126, "8": 168},
     },
 }
 
@@ -185,9 +186,9 @@ def public_plan(plan_id: str) -> dict:
         "examples": {
             "messages": c // CREDIT_COSTS["chat_message"],  # dosyasız fikir sohbeti mesajı
             "images": c // CREDIT_COSTS["image"],
-            # 5 sn videolar, çözünürlüğe göre
+            # 6 sn videolar, çözünürlüğe göre
             "videos": {
-                res: (c // video_cost(5, res) if p["video_enabled"] else 0) for res in VIDEO_RESOLUTIONS
+                res: (c // video_cost(6, res) if p["video_enabled"] else 0) for res in VIDEO_RESOLUTIONS
             },
         },
     }

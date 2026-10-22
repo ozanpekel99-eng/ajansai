@@ -208,6 +208,18 @@ def _enable_media(monkeypatch):
 
     config.AI_GATEWAY_ENABLED = True
     monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", BLOB_TOKEN)
+    # Planlayıcı (LLM) testte çağrılmaz: istek olduğu gibi kullanılır
+    monkeypatch.setattr(content.media_planner, "plan_image",
+                        lambda req, aspect, edit=False, ref_count=0, previous_prompt=None: {"prompt": req, "note": ""})
+    monkeypatch.setattr(content.media_planner, "plan_video",
+                        lambda req, aspect, duration, has_start_frame, audio, previous_prompt=None:
+                        {"prompt": req, "frame_prompt": "" if has_start_frame else req, "note": ""})
+
+    def no_frame(*a, **k):
+        raise content.gateway_media.MediaError("testte görsel yok")
+
+    monkeypatch.setattr(content.gateway_media, "generate_image", no_frame)
+    monkeypatch.setattr(content, "_image_aspect_of", lambda url: None)
     return content
 
 
@@ -282,7 +294,7 @@ def test_video_costs_and_failed_job_refunded_once(client, monkeypatch):
         "/api/content/video",
         json={
             "concept": "x",
-            "duration": 7,
+            "duration": 8,
             "resolution": "1080p",
             "image_url": BLOB_URL + "a.png",
             "end_image_url": BLOB_URL + "b.png",
@@ -290,21 +302,21 @@ def test_video_costs_and_failed_job_refunded_once(client, monkeypatch):
         },
         headers=auth(token),
     ).json()
-    assert (r5["credits_spent"], r10["credits_spent"]) == (12, 37)
-    assert started == [(5, "720p", None, None, False, "9:16"), (7, "1080p", BLOB_URL + "a.png", BLOB_URL + "b.png", False, "16:9")]
-    assert _credits(client, token)["used"] == 49
+    assert (r5["credits_spent"], r10["credits_spent"]) == (12, 48)
+    assert started == [(6, "720p", None, None, False, "9:16"), (8, "1080p", BLOB_URL + "a.png", BLOB_URL + "b.png", False, "16:9")]
+    assert _credits(client, token)["used"] == 60
     # Desteklenmeyen süre/çözünürlük reddedilir
-    assert client.post("/api/content/video", json={"concept": "x", "duration": 6}, headers=auth(token)).status_code == 422
+    assert client.post("/api/content/video", json={"concept": "x", "duration": 5}, headers=auth(token)).status_code == 422
     assert client.post("/api/content/video", json={"concept": "x", "resolution": "8k"}, headers=auth(token)).status_code == 422
     # 4K, Başlangıç paketinin 200 kredisine sığmaz
-    r4k = client.post("/api/content/video", json={"concept": "x", "resolution": "4k"}, headers=auth(token))
-    assert r4k.status_code == 402 and "355 kredi" in r4k.json()["detail"]
+    r4k = client.post("/api/content/video", json={"concept": "x", "resolution": "4k", "duration": 8, "audio": True}, headers=auth(token))
+    assert r4k.status_code == 402 and "168" in r4k.json()["detail"]
 
     # Başarısız iş iki kez sorgulansa da kredi bir kez iade edilir
     for _ in range(2):
         st = client.get(f"/api/content/video/{r5['job_id']}", headers=auth(token)).json()
         assert st["status"] == "FAILED"
-    assert _credits(client, token)["used"] == 37
+    assert _credits(client, token)["used"] == 48
 
 
 def test_video_completes_and_is_cached(client, monkeypatch):
@@ -344,10 +356,10 @@ def test_video_audio_costs_more_and_foreign_urls_rejected(client, monkeypatch):
     _set_plan(_user_id(client, token), "pro")
     monkeypatch.setattr(content.gateway_media, "start_video", lambda *a, **k: {"model": "m", "operation": {}})
     r = client.post("/api/content/video", json={"concept": "x", "resolution": "1080p", "audio": True}, headers=auth(token))
-    assert r.json()["credits_spent"] == 53
+    assert r.json()["credits_spent"] == 54
     bad = client.post("/api/content/video", json={"concept": "x", "image_url": "https://kotu.site/a.png"}, headers=auth(token))
     assert bad.status_code == 400
-    assert _credits(client, token)["used"] == 53
+    assert _credits(client, token)["used"] == 54
 
 
 def test_image_with_reference_images(client, monkeypatch):
@@ -453,11 +465,11 @@ def test_describe_sample_for_video(client, monkeypatch):
 def test_plans_endpoint_shows_credit_examples(client):
     data = client.get("/api/plans/").json()
     assert data["costs"]["image"] == 4
-    assert data["costs"]["video"]["720p"] == {"5": 12, "7": 17, "10": 24}
-    assert data["costs"]["video"]["4k"]["10"] == 710
+    assert data["costs"]["video"]["720p"] == {"4": 8, "6": 12, "8": 16}
+    assert data["costs"]["video"]["4k"]["8"] == 144
     pro = data["plans"]["pro"]
     assert pro["credits"] == 500 and pro["examples"]["images"] == 125 and pro["price"] == 20 and pro["price_yearly"] == 192
-    assert pro["examples"]["videos"] == {"720p": 41, "1080p": 18, "4k": 1}
+    assert pro["examples"]["videos"] == {"720p": 41, "1080p": 13, "4k": 4}
     assert data["plans"]["ajans"]["name"] == "Advanced" and data["plans"]["ajans"]["credits"] == 1000 and data["plans"]["ajans"]["price_yearly"] == 288
     assert data["trial"]["examples"]["videos"]["720p"] == 0
 
@@ -475,17 +487,35 @@ def test_gateway_media_request_format(monkeypatch):
         return FakeResponse(200, {"operation": {"gatewayJobId": "job_1"}})
 
     monkeypatch.setattr(gateway_media.requests, "post", fake_post)
+    # Gemini (sohbet API'si) yanıt vermezse sıradaki modele geçilir; en son Seedream (görsel API'si)
+    def fake_chat_post(url, headers=None, json=None, timeout=None):
+        if url.endswith("/chat/completions"):
+            sent.setdefault("chat", []).append(json)
+            return FakeResponse(200, {"choices": [{"message": {"content": "", "images": [
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nxx").decode()}}]}}]})
+        return fake_post(url, headers, json, timeout)
+
+    monkeypatch.setattr(gateway_media.requests, "post", fake_chat_post)
+    data, mime = gateway_media.generate_image("kahve", "9:16", ["https://x/ref.png"])
+    assert mime == "image/png"
+    body = sent["chat"][0]
+    assert body["model"] == config.IMAGE_MODEL and body["modalities"] == ["text", "image"]
+    assert body["providerOptions"]["google"]["imageConfig"]["aspectRatio"] == "9:16"
+    assert body["messages"][0]["content"][1] == {"type": "image_url", "image_url": {"url": "https://x/ref.png"}}
+
+    monkeypatch.setattr(gateway_media.requests, "post", fake_post)
+    monkeypatch.setattr(gateway_media, "_gemini_image", lambda *a: (_ for _ in ()).throw(gateway_media.MediaError("yok")))
     data, mime = gateway_media.generate_image("kahve", "1:1")
     assert mime == "image/jpeg" and sent["url"].endswith("/v4/ai/image-model")
-    assert sent["headers"]["ai-model-id"] == config.IMAGE_MODEL
+    assert sent["headers"]["ai-model-id"] == config.IMAGE_MODEL_LAST
     assert sent["headers"]["ai-image-model-specification-version"] == "4"
     assert sent["headers"]["Authorization"] == "Bearer gw-key"
 
-    job = gateway_media.start_video("dalga", 7, "4k", "https://x/a.png")
-    assert job == {"model": "bytedance/seedance-2.0", "operation": {"gatewayJobId": "job_1"}}
-    assert sent["url"].endswith("/video-model/start") and sent["headers"]["ai-model-id"] == "bytedance/seedance-2.0"
+    job = gateway_media.start_video("dalga", 8, "4k", "https://x/a.png")
+    assert job == {"model": config.VIDEO_MODELS["4k"][0], "operation": {"gatewayJobId": "job_1"}}
+    assert sent["url"].endswith("/video-model/start") and sent["headers"]["ai-model-id"] == config.VIDEO_MODELS["4k"][0]
     assert sent["body"]["image"] == {"type": "url", "url": "https://x/a.png"}
-    assert sent["body"]["aspectRatio"] == "9:16" and sent["body"]["duration"] == 7
+    assert sent["body"]["aspectRatio"] == "9:16" and sent["body"]["duration"] == 8
     assert sent["body"]["resolution"] == "3840x2160"
 
 
@@ -851,3 +881,43 @@ def test_yearly_checkout_charges_discount_plus_vat_and_opens_365_days(client, mo
 
     days = (datetime.fromisoformat(usage["plan_expires_at"].rstrip("Z")) - datetime.utcnow()).days
     assert 363 <= days <= 365
+
+
+def test_image_revision_edits_previous_image(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    calls = []
+    monkeypatch.setattr(content.media_planner, "plan_image",
+                        lambda req, aspect, edit=False, ref_count=0, previous_prompt=None:
+                        {"prompt": f"{'EDIT' if edit else 'NEW'}:{req}:{previous_prompt}", "note": "düzelttim"})
+    monkeypatch.setattr(content.gateway_media, "generate_image",
+                        lambda prompt, aspect, refs=None: calls.append((prompt, aspect, refs)) or (b"\x89PNG\r\n\x1a\nx", "image/png"))
+    monkeypatch.setattr(content.storage, "save", lambda data, mime, prefix: BLOB_URL + "v.png")
+    token = register_paid(client)
+    r = client.post("/api/content/image", json={"concept": "kahve", "aspect_ratio": "ASPECT_4_5"}, headers=auth(token)).json()
+    assert r["prompt"] == "NEW:kahve:None" and r["note"] == "düzelttim" and calls[0][1] == "4:5"
+    r2 = client.post("/api/content/image", json={"concept": "yazıyı büyüt", "base_url": BLOB_URL + "v.png",
+                                                  "previous_prompt": r["prompt"]}, headers=auth(token)).json()
+    assert r2["prompt"].startswith("EDIT:yazıyı büyüt:NEW:kahve")
+    assert calls[1][2] == [BLOB_URL + "v.png"]  # düzenlenecek görsel ilk referans
+    bad = client.post("/api/content/image", json={"concept": "x", "base_url": "https://kotu.site/a.png"}, headers=auth(token))
+    assert bad.status_code == 400
+
+
+def test_video_revision_reuses_start_frame_and_prompt(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "pro")
+    started = []
+    monkeypatch.setattr(content.gateway_media, "start_video",
+                        lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16": started.append((p, i)) or {"model": "m", "operation": {"id": "op"}})
+    seen = []
+    monkeypatch.setattr(content.media_planner, "plan_video",
+                        lambda req, aspect, duration, has_start_frame, audio, previous_prompt=None:
+                        seen.append(previous_prompt) or {"prompt": f"P[{req}]", "frame_prompt": "", "note": ""})
+    first = client.post("/api/content/video", json={"concept": "tatlı", "image_url": BLOB_URL + "f.png"}, headers=auth(token)).json()
+    again = client.post("/api/content/video", json={"concept": "daha yavaş", "revise_of": first["job_id"]}, headers=auth(token)).json()
+    assert again["job_id"] and seen == [None, "P[tatlı]"]
+    assert started[1] == ("P[daha yavaş]", BLOB_URL + "f.png")  # aynı açılış karesi
+    other = register(client, "z@example.com")
+    _set_plan(_user_id(client, other), "pro")
+    assert client.post("/api/content/video", json={"concept": "x", "revise_of": first["job_id"]}, headers=auth(other)).status_code == 404

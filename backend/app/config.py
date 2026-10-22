@@ -84,17 +84,25 @@ ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
 ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 
 # --- Görsel / video (Vercel AI Gateway üzerinden, ayrı anahtar gerekmez) ---
-IMAGE_MODEL = _env("IMAGE_MODEL", "bytedance/seedream-5.0-pro")
+# Görsel: Gemini 3.1 Flash Image (Nano Banana 2) — ~9 sn, Türkçe yazıyı doğru basar, düzenlemede
+# görseli bozmadan yalnızca isteneni değiştirir. Olmazsa Gemini 3 Pro Image, en son Seedream.
+IMAGE_MODEL = _env("IMAGE_MODEL", "google/gemini-3.1-flash-image")
+IMAGE_MODEL_FALLBACK = _env("IMAGE_MODEL_FALLBACK", "google/gemini-3-pro-image")
+IMAGE_MODEL_LAST = _env("IMAGE_MODEL_LAST", "bytedance/seedream-5.0-lite")
+# İstemi (görsel/video) netleştiren hızlı model
+PLANNER_MODEL = _env("PLANNER_MODEL", "anthropic/claude-haiku-5.5")
 # Sohbet (ücretli paketler): Claude Sonnet 5.5 (mesaj başı ~$0,01-0,02); olmazsa Haiku 5.5.
 # Video eki varsa Gemini ile anlaşılır.
 CHAT_MODEL = _env("CHAT_MODEL", "anthropic/claude-sonnet-5.5")
 CHAT_VIDEO_MODEL = _env("CHAT_VIDEO_MODEL", "google/gemini-3.6-flash")
 # Çözünürlüğe göre video modeli ve sağlayıcıya gönderilen çözünürlük. Videolar
 # dikey (9:16) üretilir; çözünürlük sağlayıcının kademe adıyla verilir.
+# Veo 3.1: karşılaştırmada en gerçekçi fizik (yemek kesme, el hareketi) ve en hızlı (~50-80 sn).
+# Süreler 4 / 6 / 8 sn.
 VIDEO_MODELS = {
-    "720p": (_env("VIDEO_MODEL_720P", "bytedance/seedance-v1.5-pro"), "1280x720"),
-    "1080p": (_env("VIDEO_MODEL_1080P", "bytedance/seedance-v1.5-pro"), "1920x1080"),
-    "4k": (_env("VIDEO_MODEL_4K", "bytedance/seedance-2.0"), "3840x2160"),
+    "720p": (_env("VIDEO_MODEL_720P", "google/veo-3.1-lite-generate-001"), "1280x720"),
+    "1080p": (_env("VIDEO_MODEL_1080P", "google/veo-3.1-fast-generate-001"), "1920x1080"),
+    "4k": (_env("VIDEO_MODEL_4K", "google/veo-3.1-fast-generate-001"), "3840x2160"),
 }
 # --- Ücretsiz paket (üyelik gerektirmez; maliyeti sıfıra yakın) ---
 # Ücretsiz sağlayıcı zinciri (Groq / Cerebras, $0): Claude bütçesi dolunca. "sağlayıcı:model" listesi.

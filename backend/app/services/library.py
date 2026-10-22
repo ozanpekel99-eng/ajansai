@@ -33,12 +33,13 @@ def items(user_id: str, kind: str | None = None, limit: int = 60, before: str | 
         rows = conn.execute(q).all()
         old_videos = []
         if kind in (None, "video"):
-            # Kütüphane öncesi üretilen videolar
+            # Kütüphane öncesi üretilen videolar (ve revizyon için iş kimlikleri)
             old_videos = conn.execute(
                 select(video_tasks).where(and_(video_tasks.c.user_id == user_id, video_tasks.c.status == "completed"))
             ).all()
+    job_of = {v.video_url: v.id for v in old_videos if v.video_url}
     out = [
-        {"id": r.id, "kind": r.kind, "url": r.url, "prompt": r.prompt, "source": r.source,
+        {"id": r.id, "kind": r.kind, "url": r.url, "prompt": r.prompt, "source": r.source, "job_id": job_of.get(r.url),
          "created_at": r.created_at.isoformat() + "Z"}
         for r in rows
     ]
@@ -46,7 +47,7 @@ def items(user_id: str, kind: str | None = None, limit: int = 60, before: str | 
     for v in old_videos:
         if v.video_url and v.video_url not in known:
             out.append({"id": f"v-{v.id}", "kind": "video", "url": v.video_url, "prompt": v.prompt or "Video",
-                        "source": "video", "created_at": v.created_at.isoformat() + "Z"})
+                        "source": "video", "job_id": v.id, "created_at": v.created_at.isoformat() + "Z"})
     out.sort(key=lambda i: i["created_at"], reverse=True)
     return out[:limit]
 

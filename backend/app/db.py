@@ -79,6 +79,8 @@ video_tasks = Table(
     Column("video_url", Text, nullable=True),
     Column("error", Text, nullable=True),
     Column("prompt", String(500), nullable=True),
+    # Revizyon için: modele giden istem, açılış karesi ve ayarlar (JSON)
+    Column("plan", Text, nullable=True),
     Column("created_at", DateTime, nullable=False),
 )
 
@@ -274,7 +276,7 @@ def init_db() -> None:
             "extra_credits": "INTEGER NOT NULL DEFAULT 0",
         },
         "credit_events": {"extra": "INTEGER NOT NULL DEFAULT 0"},
-        "video_tasks": {"prompt": "VARCHAR(500)"},
+        "video_tasks": {"prompt": "VARCHAR(500)", "plan": "TEXT"},
         "payments": {
             "currency": "VARCHAR(3) NOT NULL DEFAULT 'TRY'",
             "billing": "VARCHAR(10) NOT NULL DEFAULT 'monthly'",

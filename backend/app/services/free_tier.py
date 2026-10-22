@@ -230,15 +230,19 @@ def split_video_request(text: str) -> tuple[str, dict | None]:
     parts = [p.strip() for p in m.group(1).split("|")]
     ref = next((p for p in parts if p.lower().startswith("ref=")), None)
     parts = [p for p in parts if p is not ref]
-    aspect, duration = "9:16", 5
-    while len(parts) > 1 and parts[0] in ("9:16", "1:1", "16:9", "5", "10", "7"):
+    aspect, duration = "9:16", 6
+    while len(parts) > 1 and parts[0] in ("9:16", "1:1", "16:9", "4", "5", "6", "7", "8", "10"):
         head = parts.pop(0)
         if ":" in head:
             aspect = head
         else:
             duration = int(head)
-    if duration not in (5, 7, 10):
-        duration = 5
+    # Eski süreler (5/7/10) en yakın Veo süresine çevrilir
+    duration = {5: 6, 7: 8, 10: 8}.get(duration, duration)
+    if duration not in (4, 6, 8):
+        duration = 6
+    if aspect == "1:1":
+        aspect = "9:16"
     prompt = " ".join(parts).strip()[:1500]
     req = {"aspect": aspect, "duration": duration, "prompt": prompt, "ref": ref.split("=", 1)[1].strip().lower().replace("gorsel", "görsel") if ref else None}
     return VIDEO_TAG.sub("", text).strip(), (req if prompt else None)

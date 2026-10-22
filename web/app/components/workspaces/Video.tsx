@@ -14,12 +14,11 @@ import Icon from "../Icon";
 import { CreditLine, EmptyResult, LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
 import { LibraryGrid } from "./Library";
 
-type Result = { url: string; concept: string };
-type Ratio = "9:16" | "16:9" | "1:1";
+type Result = { url: string; concept: string; jobId?: string };
+type Ratio = "9:16" | "16:9";
 
 const RATIOS: { value: Ratio; label: string; note: string }[] = [
   { value: "9:16", label: "9:16", note: "Reels, hikâye" },
-  { value: "1:1", label: "1:1", note: "Akış gönderisi" },
   { value: "16:9", label: "16:9", note: "YouTube, ekran" },
 ];
 
@@ -32,7 +31,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
     return g ? [{ id: "sohbet", url: g, content_type: "image/jpeg", name: "Sohbetteki görsel", kind: "image" }] : [];
   });
   const uploader = useUploader(["image"], 4, images.length, (f) => setImages((x) => [...x, f]));
-  const [duration, setDuration] = useState<VideoDuration>(5);
+  const [duration, setDuration] = useState<VideoDuration>(6);
   const [resolution, setResolution] = useState<VideoResolution>("720p");
   const [ratio, setRatio] = useState<Ratio>("9:16");
   const [audio, setAudio] = useState(false);
@@ -40,6 +39,9 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
   const [history, setHistory] = useState<HistoryEntry<Result>[]>([]);
+  const [note, setNote] = useState("");
+  const [frame, setFrame] = useState<string | null>(null);
+  const [revision, setRevision] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -54,11 +56,12 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
   const locked = featureLocked || (!!usage && usage.credits.remaining < cost);
 
   const poll = (jobId: string, text: string) => {
+    clearTimeout(timer.current);
     const check = async () => {
       try {
         const data = await api<{ status: string; video_url: string | null; error: string | null }>(`/api/content/video/${jobId}`);
         if (data.status === "SUCCEEDED" && data.video_url) {
-          const r = { url: data.video_url, concept: text };
+          const r = { url: data.video_url, concept: text, jobId };
           setResult(r);
           setStatus("idle");
           addHistory("video", text.slice(0, 80), r);
@@ -80,36 +83,47 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
     check();
   };
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  const start = async (body: object, text: string) => {
     setStatus("starting");
     setError("");
-    setResult(null);
+    setNote("");
+    setFrame(null);
     try {
-      const data = await api<{ job_id: string | null; error: string | null }>("/api/content/video", {
-        method: "POST",
-        body: JSON.stringify({
-          concept,
-          duration,
-          resolution,
-          aspect_ratio: ratio,
-          audio,
-          reference_urls: images.map((f) => f.url),
-        }),
-      });
+      const data = await api<{ job_id: string | null; error: string | null; note?: string; start_frame?: string | null }>(
+        "/api/content/video",
+        { method: "POST", body: JSON.stringify(body) },
+      );
       if (!data.job_id) {
         setError(data.error || "Video başlatılamadı, kredin iade edildi.");
         setStatus("idle");
-      } else {
-        setStatus("running");
-        poll(data.job_id, concept);
+        return false;
       }
+      setNote(data.note || "");
+      setFrame(data.start_frame || null);
+      setStatus("running");
+      poll(data.job_id, text);
+      return true;
     } catch (err) {
       setError((err as ApiError).message);
       setStatus("idle");
+      return false;
     } finally {
       refresh();
     }
+  };
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    setResult(null);
+    start({ concept, duration, resolution, aspect_ratio: ratio, audio, reference_urls: images.map((f) => f.url) }, concept);
+  };
+
+  // Önceki videonun açılış karesi ve istemi korunur; yalnızca istenen değişir.
+  const revise = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!result?.jobId || !revision.trim()) return;
+    const ok = await start({ concept: revision, duration, resolution, aspect_ratio: ratio, audio, revise_of: result.jobId }, revision);
+    if (ok) setRevision("");
   };
 
   if (tab === "history") {
@@ -117,7 +131,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
       <LibraryGrid
         kind="video"
         onOpen={(item) => {
-          setResult({ url: item.url, concept: item.prompt });
+          setResult({ url: item.url, concept: item.prompt, jobId: item.job_id || undefined });
           showCreate();
         }}
       />
@@ -126,7 +140,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
 
   const busy = status !== "idle";
   const perSecond = (r: VideoResolution) =>
-    (costs[audio ? "video_audio" : "video"][r]["5"] / 5).toLocaleString("tr-TR", { maximumFractionDigits: 1 });
+    (costs[audio ? "video_audio" : "video"][r]["6"] / 6).toLocaleString("tr-TR", { maximumFractionDigits: 1 });
 
   return (
     <div className="workspace">
@@ -179,7 +193,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
 
         <Toggle
           label="Ses üret"
-          note={resolution === "4k" ? "4K'da ek ücret yok" : "720p ve 1080p'de krediyi ikiye katlar"}
+          note="Ortam sesi ve efektler; krediyi yaklaşık 1,5 katına çıkarır"
           checked={audio}
           onChange={setAudio}
         />
@@ -221,18 +235,48 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
         </h2>
         {error && <div className="notice error">{error}</div>}
         {busy ? (
-          <EmptyResult
-            loading
-            text={
-              resolution === "4k"
-                ? "4K video üretiliyor. Bu 3–6 dakika sürebilir; sayfadan ayrılma."
-                : "Video üretiliyor. Bu genelde 1–3 dakika sürer; sayfadan ayrılma."
-            }
-          />
+          <>
+            {frame && (
+              <div className="media-result is-busy">
+                <img src={frame} alt="Açılış karesi" />
+                <span className="media-busy">Açılış karesi hazır, video üretiliyor…</span>
+              </div>
+            )}
+            <EmptyResult
+              loading
+              text={
+                status === "starting"
+                  ? "Sahne planlanıyor ve açılış karesi hazırlanıyor…"
+                  : resolution === "720p"
+                    ? "Video üretiliyor. Genelde 1 dakika sürer; sayfadan ayrılma."
+                    : "Video üretiliyor. Genelde 1–2 dakika sürer; sayfadan ayrılma."
+              }
+            />
+          </>
         ) : result ? (
-          <div className="media-result">
-            <video src={result.url} controls playsInline />
-          </div>
+          <>
+            <div className="media-result">
+              <video src={result.url} controls playsInline autoPlay muted loop />
+            </div>
+            {note && <p className="revise-note">{note}</p>}
+            {result.jobId && (
+              <form className="revise-box" onSubmit={revise}>
+                <label htmlFor="v-revise">Revize et</label>
+                <div className="inline-row">
+                  <input
+                    id="v-revise"
+                    value={revision}
+                    onChange={(e) => setRevision(e.target.value)}
+                    placeholder="Neyi değiştirelim? Örn. el daha yavaş hareket etsin, kamera yaklaşsın"
+                  />
+                  <button className="btn btn-primary btn-sm" type="submit" disabled={busy || locked || !revision.trim()}>
+                    {`Revize et · ${num(videoCredits(duration, resolution, costs, audio))} kredi`}
+                  </button>
+                </div>
+                <span className="hint">Aynı açılış karesi ve sahne korunur; yalnızca istediğin değişiklik uygulanır.</span>
+              </form>
+            )}
+          </>
         ) : (
           <EmptyResult text="Konseptini yaz ya da bir görsel yükle; video burada görünecek." />
         )}

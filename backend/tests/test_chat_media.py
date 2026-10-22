@@ -8,8 +8,8 @@ from .test_api import _enable_media, register_paid
 
 def test_split_video_request_and_image_aspect():
     text, req = free_tier.split_video_request("Hazırlıyorum.\n[[VIDEO: 16:9 | 10 | a drone shot over a beach at sunset]]")
-    assert text == "Hazırlıyorum." and req == {"aspect": "16:9", "duration": 10, "prompt": "a drone shot over a beach at sunset", "ref": None}
-    assert free_tier.split_video_request("[[VIDEO: coffee pouring]]")[1] == {"aspect": "9:16", "duration": 5, "prompt": "coffee pouring", "ref": None}
+    assert text == "Hazırlıyorum." and req == {"aspect": "16:9", "duration": 8, "prompt": "a drone shot over a beach at sunset", "ref": None}
+    assert free_tier.split_video_request("[[VIDEO: coffee pouring]]")[1] == {"aspect": "9:16", "duration": 6, "prompt": "coffee pouring", "ref": None}
     assert free_tier.split_video_request("[[VIDEO: 9:16 | 5 | ref=görsel-2 | milk pours]]")[1]["ref"] == "görsel-2"
     assert free_tier.image_aspect("9:16 | a latte on a table") == ("9:16", "a latte on a table")
     assert free_tier.image_aspect("a latte") == ("1:1", "a latte")
@@ -24,7 +24,7 @@ def test_paid_chat_suggests_video_page_instead_of_generating(client, monkeypatch
     data = r.json()
     assert r.status_code == 200, r.text
     assert data["reply"] == "Video sayfasında oluşturabilirsin." and data["credits_spent"] == 1
-    assert data["video"] == {"concept": "iced coffee pouring, slow motion", "aspect": "9:16", "duration": 5, "image_url": None, "enabled": True}
+    assert data["video"] == {"concept": "iced coffee pouring, slow motion", "aspect": "9:16", "duration": 6, "image_url": None, "enabled": True}
 
 
 def test_paid_chat_remembers_generated_image_for_video(client, monkeypatch):

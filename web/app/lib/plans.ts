@@ -53,21 +53,21 @@ export const DEFAULT_COSTS: CreditCosts = {
   image: 4,
   ads_draft: 0,
   video: {
-    "720p": { "5": 12, "7": 17, "10": 24 },
-    "1080p": { "5": 27, "7": 37, "10": 53 },
-    "4k": { "5": 355, "7": 495, "10": 710 },
+    "720p": { "4": 8, "6": 12, "8": 16 },
+    "1080p": { "4": 25, "6": 36, "8": 48 },
+    "4k": { "4": 72, "6": 108, "8": 144 },
   },
   video_audio: {
-    "720p": { "5": 24, "7": 34, "10": 48 },
-    "1080p": { "5": 53, "7": 75, "10": 106 },
-    "4k": { "5": 355, "7": 495, "10": 710 },
+    "720p": { "4": 12, "6": 18, "8": 24 },
+    "1080p": { "4": 36, "6": 54, "8": 72 },
+    "4k": { "4": 84, "6": 126, "8": 168 },
   },
 };
 
-export const VIDEO_DURATIONS: VideoDuration[] = [5, 7, 10];
+export const VIDEO_DURATIONS: VideoDuration[] = [4, 6, 8];
 export const VIDEO_RESOLUTIONS: { value: VideoResolution; label: string }[] = [
-  { value: "720p", label: "720p" },
-  { value: "1080p", label: "1080p" },
+  { value: "720p", label: "Standart 720p" },
+  { value: "1080p", label: "Yüksek kalite 1080p" },
   { value: "4k", label: "4K" },
 ];
 

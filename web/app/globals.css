@@ -3899,3 +3899,18 @@ table.data td.num {
 .btn-danger { background: #d93a3a; color: #fff; border: 0; }
 .btn-danger:hover { background: #c22f2f; }
 .debt { font-weight: 600; }
+
+/* Görsel revizyonu */
+.media-result { position: relative; }
+.media-result.is-busy img { opacity: .45; filter: blur(1px); transition: opacity .2s; }
+.media-busy { position: absolute; inset: auto 0 16px; margin: auto; width: max-content; padding: 6px 12px; border-radius: 999px; background: rgba(0,0,0,.7); color: #fff; font-size: 13px; }
+.revise-note { margin: 8px 0 0; font-size: 13px; color: var(--text-2); }
+.version-strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 2px; }
+.version-strip button { flex: 0 0 auto; width: 64px; border: 2px solid transparent; border-radius: 10px; padding: 0; background: none; color: inherit; cursor: pointer; text-align: center; }
+.version-strip button.active { border-color: var(--indigo); }
+.version-strip img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; display: block; }
+.version-strip span { display: block; font-size: 11px; color: var(--text-2); padding: 2px 0; }
+.revise-box { margin-top: 14px; display: grid; gap: 8px; }
+.revise-box label { font-weight: 600; font-size: 14px; }
+.revise-box .chip-row { flex-wrap: wrap; }
+.revise-box .chip { cursor: pointer; border: 0; }

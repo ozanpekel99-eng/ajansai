@@ -87,7 +87,7 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
 }
 
 export type VideoResolution = "720p" | "1080p" | "4k";
-export type VideoDuration = 5 | 7 | 10;
+export type VideoDuration = 4 | 6 | 8;
 
 export type CreditCosts = {
   idea_per_2: number;
@@ -98,7 +98,7 @@ export type CreditCosts = {
   describe: number;
   image: number;
   ads_draft: number;
-  /** çözünürlük → süre ("5" | "7" | "10") → kredi */
+  /** çözünürlük → süre ("4" | "6" | "8") → kredi */
   video: Record<VideoResolution, Record<string, number>>;
   video_audio: Record<VideoResolution, Record<string, number>>;
 };
