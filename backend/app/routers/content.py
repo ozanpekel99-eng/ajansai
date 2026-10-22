@@ -107,6 +107,9 @@ class VideoRequest(BaseModel):
     concept: str = Field(..., max_length=2000, examples=["Buzlu kahvenin bardağa dökülüşü, ağır çekim"])
     image_url: str | None = Field(None, max_length=2000, description="Başlangıç karesi (görselden video)")
     end_image_url: str | None = Field(None, max_length=2000, description="Bitiş karesi (isteğe bağlı)")
+    # Yüklenen görseller: 1 görsel → video ondan başlar; 2-4 görsel → görseller tek sahnede
+    # birleştirilip (Seedream, görsel kredisi) açılış karesi yapılır.
+    reference_urls: list[str] = Field(default_factory=list, max_length=4)
     duration: Literal[5, 7, 10] = 5
     resolution: Literal["720p", "1080p", "4k"] = "720p"
     aspect_ratio: Literal["9:16", "16:9", "1:1"] = "9:16"
@@ -122,13 +125,44 @@ def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
     """
     if not gateway_media.is_enabled():
         raise HTTPException(status_code=503, detail="Video üretimi henüz yapılandırılmadı.")
-    image_url = payload.image_url or None
+    refs = _own_urls([u for u in payload.reference_urls if u])
+    image_url = payload.image_url or (refs[0] if len(refs) == 1 else None)
     end_image_url = payload.end_image_url if image_url else None
     _own_urls([u for u in (image_url, end_image_url) if u])
+    extra, extra_event = 0, None
+    if len(refs) > 1:
+        need = video_cost(payload.duration, payload.resolution, payload.audio) + CREDIT_COSTS["image"]
+        if get_usage(user["id"])["credits"]["remaining"] < need:
+            raise HTTPException(status_code=402, detail=f"Bu video için {need} kredi gerekiyor (görselleri birleştirme dahil).")
+        image_url, extra, extra_event = _compose_frame(user, payload.concept, payload.aspect_ratio, refs)
+        if not image_url:
+            return {"job_id": None, "error": "Görseller birleştirilemedi, kredin iade edildi. Tekrar dene.", "credits_spent": 0}
     job_id, error, credits = _start_video_job(
         user, payload.concept, payload.duration, payload.resolution, image_url, end_image_url, payload.audio, payload.aspect_ratio
     )
-    return {"job_id": job_id, "error": error, "credits_spent": credits}
+    if not job_id and extra_event:
+        refund(extra_event)  # video başlamadıysa açılış karesinin kredisi de iade edilir
+        extra = 0
+    return {"job_id": job_id, "error": error, "credits_spent": credits + extra, "start_frame": image_url}
+
+
+def _compose_frame(user: dict, concept: str, aspect: str, refs: list[str]) -> tuple[str | None, int, str | None]:
+    """Birden çok görseli tek açılış karesinde birleştirir (Seedream). (adres, kredi, kredi kaydı)."""
+    cost = CREDIT_COSTS["image"]
+    event_id = _charge(user["id"], "image", cost, f"Video açılış karesi: {concept[:200]}")
+    prompt = (
+        f"Opening frame of a short vertical social media video: {concept}. Combine the products, people and places "
+        "from the reference images naturally into one coherent, photorealistic scene; keep the products exactly as "
+        "they look. Cinematic lighting, no text or logos added."
+    )
+    try:
+        data, mime = gateway_media.generate_image(prompt, aspect, refs)
+        url = storage.save(data, mime, f"gorsel/{user['id']}")
+    except (gateway_media.MediaError, storage.StorageError) as e:
+        logger.error("Açılış karesi üretilemedi: %s", e)
+        refund(event_id)
+        return None, 0, None
+    return url, cost, event_id
 
 
 def _start_video_job(user: dict, concept: str, duration: int, resolution: str, image_url: str | None,

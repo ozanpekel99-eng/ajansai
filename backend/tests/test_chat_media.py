@@ -57,3 +57,25 @@ def test_extract_ref_for_image_edit():
     url, prompt = free_tier.extract_ref("9:16 | ref=görsel-1 | the same latte, brighter", {"görsel-1": "u1"})
     assert url == "u1" and "ref" not in prompt and prompt.startswith("9:16")
     assert free_tier.image_aspect(prompt) == ("9:16", "the same latte, brighter")
+
+
+def test_video_with_multiple_images_composes_start_frame(client, monkeypatch):
+    from app.services import storage
+    from .test_api import BLOB_URL
+
+    _enable_media(monkeypatch)
+    calls = {}
+    monkeypatch.setattr(gateway_media, "generate_image", lambda prompt, aspect, refs: calls.update(refs=refs, aspect=aspect) or (b"\x89PNG\r\n\x1a\nx", "image/png"))
+    monkeypatch.setattr(storage, "save", lambda data, mime, folder, filename=None: BLOB_URL + "kare.png")
+    monkeypatch.setattr(gateway_media, "start_video", lambda prompt, d, r, image_url, e, a, asp: calls.update(start=image_url) or {"model": "m", "operation": {}})
+    token = register_paid(client, plan="pro")
+    refs = [BLOB_URL + "urun.png", BLOB_URL + "mekan.png"]
+    r = client.post("/api/content/video", json={"concept": "ürün masada dönüyor", "reference_urls": refs}, headers=auth(token))
+    assert r.status_code == 200, r.text
+    assert calls["refs"] == refs and calls["aspect"] == "9:16" and calls["start"] == BLOB_URL + "kare.png"
+    assert r.json()["credits_spent"] == 12 + 4 and r.json()["start_frame"] == BLOB_URL + "kare.png"
+
+    # Tek görsel: doğrudan başlangıç karesi, birleştirme yok
+    calls.clear()
+    r = client.post("/api/content/video", json={"concept": "x", "reference_urls": refs[:1]}, headers=auth(token))
+    assert calls == {"start": refs[0]} and r.json()["credits_spent"] == 12

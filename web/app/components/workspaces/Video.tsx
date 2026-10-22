@@ -8,11 +8,12 @@ import { ApiError, VideoDuration, VideoResolution, api } from "../../lib/api";
 import { HistoryEntry, addHistory, readHistory } from "../../lib/history";
 import { DEFAULT_COSTS, VIDEO_DURATIONS, VIDEO_RESOLUTIONS, num, videoCredits } from "../../lib/plans";
 import { useSession } from "../../lib/session";
-import { ChipSelect, ImageSlot, SampleToConcept, Toggle } from "../Controls";
+import { PendingFile, UploadProgress, useUploader } from "../Attachments";
+import { ChipSelect, SampleToConcept, Toggle } from "../Controls";
+import Icon from "../Icon";
 import { CreditLine, EmptyResult, HistoryList, LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
 
 type Result = { url: string; concept: string };
-type Mode = "text" | "image";
 type Ratio = "9:16" | "16:9" | "1:1";
 
 const RATIOS: { value: Ratio; label: string; note: string }[] = [
@@ -24,10 +25,12 @@ const RATIOS: { value: Ratio; label: string; note: string }[] = [
 export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
   const params = useSearchParams();
   const { usage, refresh } = useSession();
-  const [mode, setMode] = useState<Mode>(params.get("gorsel") ? "image" : "text");
   const [concept, setConcept] = useState(params.get("konsept") || "");
-  const [startFrame, setStartFrame] = useState(params.get("gorsel") || "");
-  const [endFrame, setEndFrame] = useState("");
+  const [images, setImages] = useState<PendingFile[]>(() => {
+    const g = params.get("gorsel");
+    return g ? [{ id: "sohbet", url: g, content_type: "image/jpeg", name: "Sohbetteki görsel", kind: "image" }] : [];
+  });
+  const uploader = useUploader(["image"], 4, images.length, (f) => setImages((x) => [...x, f]));
   const [duration, setDuration] = useState<VideoDuration>(5);
   const [resolution, setResolution] = useState<VideoResolution>("720p");
   const [ratio, setRatio] = useState<Ratio>("9:16");
@@ -44,9 +47,9 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
   }, []);
 
   const costs = usage?.costs ?? DEFAULT_COSTS;
-  const cost = videoCredits(duration, resolution, costs, audio);
+  const composeCost = images.length > 1 ? costs.image : 0;
+  const cost = videoCredits(duration, resolution, costs, audio) + composeCost;
   const featureLocked = !!usage && !usage.video_enabled;
-  const needsFrame = mode === "image" && !startFrame;
   const locked = featureLocked || (!!usage && usage.credits.remaining < cost);
 
   const poll = (jobId: string, text: string) => {
@@ -78,10 +81,6 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (needsFrame) {
-      setError("Görselden video için bir başlangıç karesi yükle.");
-      return;
-    }
     setStatus("starting");
     setError("");
     setResult(null);
@@ -94,8 +93,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
           resolution,
           aspect_ratio: ratio,
           audio,
-          image_url: mode === "image" ? startFrame || null : null,
-          end_image_url: mode === "image" ? endFrame || null : null,
+          reference_urls: images.map((f) => f.url),
         }),
       });
       if (!data.job_id) {
@@ -134,14 +132,6 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
       <form className="panel ws-panel" onSubmit={submit}>
         <div className="ws-title">
           <h2>Girdi</h2>
-          <div className="segmented small" role="tablist" aria-label="Video türü">
-            <button type="button" role="tab" aria-selected={mode === "text"} className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}>
-              Metinden
-            </button>
-            <button type="button" role="tab" aria-selected={mode === "image"} className={mode === "image" ? "active" : ""} onClick={() => setMode("image")}>
-              Görselden
-            </button>
-          </div>
         </div>
         {featureLocked ? <LockedNotice text="Video üretimi Başlangıç ve üzeri paketlerde açılır." /> : <NoCreditsNotice cost={cost} />}
 
@@ -158,16 +148,33 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
           <SampleToConcept target="video" onConcept={setConcept} />
         </div>
 
-        {mode === "image" && (
-          <div className="field">
-            <label>Başlangıç ve bitiş karesi</label>
-            <div className="slots">
-              <ImageSlot label="Başlangıç karesi" required url={startFrame} onChange={setStartFrame} />
-              <ImageSlot label="Bitiş karesi" url={endFrame} onChange={setEndFrame} />
-            </div>
-            <span className="hint">Video başlangıç karesindeki görselden başlar; bitiş karesi verirsen ona doğru ilerler.</span>
+        <div className="field">
+          <label>Görseller (isteğe bağlı)</label>
+          {uploader.field}
+          <div className="thumb-grid">
+            {images.map((f) => (
+              <figure key={f.id}>
+                <img src={f.url} alt={f.name} />
+                <button type="button" aria-label={`${f.name} kaldır`} onClick={() => setImages((x) => x.filter((y) => y.id !== f.id))}>
+                  <Icon name="close" size={12} />
+                </button>
+              </figure>
+            ))}
+            {images.length < 4 && (
+              <button type="button" className="thumb-add" onClick={uploader.pick} disabled={uploader.busy.length > 0}>
+                <Icon name="image" size={18} />
+                <span>{images.length ? "Görsel ekle" : "Görsel yükle"}</span>
+              </button>
+            )}
           </div>
-        )}
+          <UploadProgress busy={uploader.busy} />
+          <span className="hint">
+            {images.length > 1
+              ? `Görseller tek sahnede birleştirilip videonun açılış karesi yapılır (+${costs.image} kredi).`
+              : "En fazla 4 görsel, aynı anda birden fazla seçebilirsin. Tek görselde video o görselden başlar; birden fazlasında ürün, kişi ve mekân tek sahnede birleştirilir."}
+          </span>
+          {uploader.error && <small className="error-text">{uploader.error}</small>}
+        </div>
 
         <Toggle
           label="Ses üret"
@@ -195,7 +202,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
         </div>
 
         <div className="generate">
-          <button className="btn btn-primary btn-block" type="submit" disabled={busy || locked || needsFrame}>
+          <button className="btn btn-primary btn-block" type="submit" disabled={busy || locked || uploader.busy.length > 0}>
             {status === "starting" ? "Başlatılıyor…" : status === "running" ? "Video üretiliyor…" : `Video üret · ${num(cost)} kredi`}
           </button>
           {!featureLocked && <CreditLine cost={cost} />}
@@ -232,7 +239,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
           <strong>Fiyat</strong>
           <p>
             Kredi = süre × çözünürlük{audio ? " (sesli)" : ""}. Saniye başına: 720p {perSecond("720p")}, 1080p {perSecond("1080p")}, 4K{" "}
-            {perSecond("4k")} kredi. Üretim başarısız olursa kredi iade edilir; başlangıç ve bitiş karesi ek kredi harcamaz.
+            {perSecond("4k")} kredi. Tek görsel ek kredi harcamaz; birden fazla görsel birleştirilirse +{costs.image} kredi. Üretim başarısız olursa kredi iade edilir.
           </p>
         </div>
       </section>
