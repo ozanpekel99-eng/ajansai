@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { getChat, isShownChat, setShownChat } from "../lib/chats";
@@ -14,6 +14,9 @@ function ChatHome() {
   const fresh = params.get("yeni");
   const [chat, setChat] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(!!id);
+  // Yeni sohbet anahtarı: adres çubuğu ?c= ile güncellenince ekrandaki sohbet yeniden kurulmasın
+  const freshKey = useRef(fresh || "0");
+  if (fresh && fresh !== freshKey.current) freshKey.current = fresh;
 
   useEffect(() => {
     let alive = true;
@@ -38,7 +41,7 @@ function ChatHome() {
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return null;
-  return <FikirWorkspace key={chat?.id ?? `yeni-${fresh || ""}`} initial={chat} />;
+  return <FikirWorkspace key={chat?.id ?? `yeni-${freshKey.current}`} initial={chat} />;
 }
 
 export default function Home() {
