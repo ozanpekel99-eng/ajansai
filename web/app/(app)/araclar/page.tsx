@@ -70,7 +70,7 @@ export default function Tools() {
             <Icon name="gift" size={20} />
           </span>
           <div>
-            <h3>Pro ile reklam kampanyaları da burada</h3>
+            <h3>Seedream görsel, video ve reklam kampanyaları paketlerde</h3>
             <p>530 kredi ve Meta reklam entegrasyonu: örneğin 132 görsel ya da 44 kısa video.</p>
           </div>
           <button className="btn btn-light" onClick={() => openCheckout("pro")}>

@@ -16,7 +16,8 @@ export type Plan = {
   examples: { messages: number; images: number; videos: Record<VideoResolution, number> };
 };
 
-export type Pricing = { plans: Record<string, Plan>; trial: Plan; costs: CreditCosts };
+export type FreeLimits = { chat_per_day: number; chat_per_day_guest: number; images_per_month: number };
+export type Pricing = { plans: Record<string, Plan>; trial: Plan; costs: CreditCosts; free?: FreeLimits };
 
 let cache: Pricing | null = null;
 
@@ -43,6 +44,7 @@ export const DEFAULT_COSTS: CreditCosts = {
   idea_per_2: 1,
   chat_message: 1,
   chat_attachment: 1,
+  chat_pdf_pages: 10,
   describe: 1,
   image: 4,
   ads_draft: 0,

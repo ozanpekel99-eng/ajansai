@@ -51,7 +51,7 @@ export default function Faturalandirma() {
         <div className="big">{usage?.plan_name ?? "…"}</div>
         <div className="muted" style={{ fontSize: 14 }}>
           {trial
-            ? `Ücretsiz deneme: ${usage?.credits.total ?? 14} kredi`
+            ? "Ücretsiz paket: günde 20 fikir mesajı, ayda 6 görsel, sınırsız stok fotoğraf"
             : usage?.plan_expires_at
               ? `${fmtDate(usage.plan_expires_at)} tarihine kadar geçerli · ${daysLeft} gün kaldı`
               : ""}

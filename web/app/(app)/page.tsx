@@ -21,9 +21,9 @@ export default function Dashboard() {
   const done = steps.filter((s) => s.done).length;
 
   const stepCopy: Record<string, { text: string; action: React.ReactNode }> = {
-    account: { text: "Kayıt oldun, deneme paketin açıldı.", action: <span className="chip">Tamamlandı</span> },
+    account: { text: "Kayıt oldun, ücretsiz paketin açıldı.", action: <span className="chip">Tamamlandı</span> },
     idea: {
-      text: "İşletmeni anlat, dört platforma özel fikir al.",
+      text: "İşletmeni anlat, Instagram için fikir, caption ve hashtag al.",
       action: (
         <Link href="/araclar/fikir" className="btn btn-light btn-sm">
           Fikir üret
@@ -31,7 +31,7 @@ export default function Dashboard() {
       ),
     },
     plan: {
-      text: "Görsel ve video üretimi paketle açılır.",
+      text: "Yüksek kaliteli görsel ve video üretimi paketle açılır.",
       action: (
         <button className="btn btn-light btn-sm" onClick={() => openCheckout()}>
           Paketleri gör
@@ -91,8 +91,8 @@ export default function Dashboard() {
             <Icon name="gift" size={20} />
           </span>
           <div>
-            <h3>Görsel ve video üretimini aç</h3>
-            <p>Başlangıç paketi 200 kredi: örneğin 50 görsel ya da 16 kısa video.</p>
+            <h3>Seedream görsel ve video üretimini aç</h3>
+            <p>Ücretsiz pakette günde 20 fikir mesajı ve ayda 6 görsel var. Başlangıç paketi $10: 200 kredi, örneğin 50 görsel ya da 16 kısa video.</p>
           </div>
           <button className="btn btn-light" onClick={() => openCheckout("baslangic")}>
             Paketi seç

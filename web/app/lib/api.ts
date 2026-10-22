@@ -93,6 +93,7 @@ export type CreditCosts = {
   idea_per_2: number;
   chat_message: number;
   chat_attachment: number;
+  chat_pdf_pages?: number;
   describe: number;
   image: number;
   ads_draft: number;

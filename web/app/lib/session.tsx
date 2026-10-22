@@ -52,7 +52,8 @@ export function SessionProvider({
 
   useEffect(() => {
     if (!getToken()) {
-      window.location.href = "/login";
+      // Giriş yapmamış ziyaretçi ücretsiz araçlara gider; oradan üye olabilir.
+      window.location.href = "/ucretsiz";
       return;
     }
     setReady(true);
@@ -68,6 +69,14 @@ export function SessionProvider({
   );
 }
 
+function hasChats() {
+  try {
+    return JSON.parse(localStorage.getItem("ajansai_chats") || "[]").length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export function firstName(user: User | null) {
   if (!user) return "";
   return (user.name || user.email.split("@")[0]).split(" ")[0];
@@ -77,7 +86,7 @@ export function firstName(user: User | null) {
 export function onboardingSteps(usage: Usage | null, metaConnected: boolean) {
   return [
     { key: "account", title: "Hesabını oluştur", done: true },
-    { key: "idea", title: "İlk içerik fikrini üret", done: !!usage && usage.counts.idea > 0 },
+    { key: "idea", title: "İlk içerik fikrini üret", done: (!!usage && usage.counts.idea > 0) || hasChats() },
     { key: "plan", title: "Paketini seç", done: !!usage && usage.plan !== "deneme" },
     { key: "meta", title: "Meta reklam hesabını bağla", done: metaConnected },
   ];

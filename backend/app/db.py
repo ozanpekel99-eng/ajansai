@@ -129,6 +129,26 @@ meta_ads = Table(
     Column("created_at", DateTime, nullable=False),
 )
 
+# Ücretsiz paket kullanımı (kredisiz): kim (kullanıcı veya ziyaretçi IP özeti), ne zaman, ne.
+# Günlük/aylık sınırlar ve site geneli günlük tavan bu tablodan sayılır.
+free_events = Table(
+    "free_events",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("subject", String(80), nullable=False, index=True),  # u:<user_id> | ip:<özet>
+    Column("kind", String(16), nullable=False, index=True),  # chat | image | stock
+    Column("created_at", DateTime, nullable=False, index=True),
+)
+
+# Pexels arama sonuçları önbelleği (Pexels API saatlik istek sınırı için).
+stock_cache = Table(
+    "stock_cache",
+    metadata,
+    Column("key", String(300), primary_key=True),
+    Column("data", Text, nullable=False),
+    Column("created_at", DateTime, nullable=False),
+)
+
 # Uygulamanın kendi ürettiği ayarlar (ör. JWT_SECRET tanımlı değilse oluşturulan anahtar).
 app_settings = Table(
     "app_settings",

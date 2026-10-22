@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { logout } from "../lib/api";
+import { useFreeStatus } from "../lib/free";
 import { onboardingSteps, useSession } from "../lib/session";
 import Icon from "./Icon";
 
@@ -106,9 +108,33 @@ export default function Sidebar({ open, onNavigate }: { open: boolean; onNavigat
   );
 }
 
+function FreeQuotaCard({ onUpgrade }: { onUpgrade: () => void }) {
+  const { status, refresh } = useFreeStatus();
+  const pathname = usePathname();
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 60_000);
+    return () => clearInterval(t);
+  }, [pathname, refresh]);
+  return (
+    <div className="quota-card">
+      <strong>Ücretsiz paket</strong>
+      <div className="meta">
+        {status
+          ? `Bugün ${status.chat.remaining}/${status.chat.limit} mesaj · ${status.images.remaining}/${status.images.limit} görsel hakkın var`
+          : "Günlük fikir mesajı ve aylık görsel hakkı"}
+      </div>
+      <button className="btn btn-light btn-sm btn-block" onClick={onUpgrade}>
+        Paket seç
+      </button>
+    </div>
+  );
+}
+
 function QuotaCard({ onUpgrade }: { onUpgrade: () => void }) {
   const { usage } = useSession();
   if (!usage) return null;
+  if (usage.plan === "deneme") return <FreeQuotaCard onUpgrade={onUpgrade} />;
   const { total, remaining } = usage.credits;
   const trial = usage.plan === "deneme";
   return (

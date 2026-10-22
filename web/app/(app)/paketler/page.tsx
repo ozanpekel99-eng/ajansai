@@ -84,11 +84,21 @@ export default function Paketler() {
             })}
           </div>
 
-          {pricing.trial && (
-            <p className="muted" style={{ textAlign: "center", fontSize: 14, marginTop: 16 }}>
-              Kayıt olan herkes {pricing.trial.credits} kredilik ücretsiz deneme paketiyle başlar: fikir ve görsel üretebilir,
-              video ve reklam için paket gerekir.
-            </p>
+          {pricing.free && (
+            <section className="panel free-plan">
+              <div>
+                <h3>Ücretsiz paket</h3>
+                <p className="muted">
+                  Kayıt olan herkes bununla başlar, kart gerekmez. Üye olmadan da{" "}
+                  <a href="/ucretsiz">deneyebilirsin</a> (günde {pricing.free.chat_per_day_guest} mesaj).
+                </p>
+              </div>
+              <ul>
+                <li>Günde {pricing.free.chat_per_day} fikir sohbeti mesajı (yalnızca metin)</li>
+                <li>30 günde {pricing.free.images_per_month} ücretsiz AI görseli</li>
+                <li>Sınırsız telifsiz stok fotoğraf</li>
+              </ul>
+            </section>
           )}
 
           <section className="section">
@@ -113,7 +123,10 @@ export default function Paketler() {
                     <td className="num">
                       Mesaj başı {costs.chat_message}, her ek +{costs.chat_attachment}
                     </td>
-                    <td>Fikir, caption, hashtag ve reklam metni; fotoğraf, video ve belge ekleyerek örnek üzerinden çalışır</td>
+                    <td>
+                      Fikir, caption, hashtag ve reklam metni; fotoğraf, video ve belge ekleyerek örnek üzerinden çalışır.{" "}
+                      {costs.chat_pdf_pages ?? 10} sayfadan uzun PDF'lerde her {costs.chat_pdf_pages ?? 10} sayfa +1 kredi (en fazla 60 sayfa).
+                    </td>
                   </tr>
                   <tr>
                     <td>Örnekten konsept</td>
@@ -218,7 +231,7 @@ export default function Paketler() {
                 <thead>
                   <tr>
                     <th></th>
-                    {pricing.trial && <th>Deneme</th>}
+                    {pricing.trial && <th>Ücretsiz</th>}
                     {ids.map((id) => (
                       <th key={id}>{plans[id].name}</th>
                     ))}
@@ -227,9 +240,12 @@ export default function Paketler() {
                 <tbody>
                   {[
                     ["Fiyat (30 gün)", (p: Plan) => (p.price ? money(p.price, p.currency) : "Ücretsiz")],
-                    ["Kredi", (p: Plan) => num(p.credits)],
-                    ["Fikir sohbeti mesajı (yalnızca)", (p: Plan) => num(p.examples.messages)],
-                    ["Görsel (yalnızca)", (p: Plan) => num(p.examples.images)],
+                    ["Kredi", (p: Plan) => (p.credits ? num(p.credits) : "—")],
+                    ["Fikir sohbeti mesajı (yalnızca)", (p: Plan) => (p.credits ? num(p.examples.messages) : `Günde ${pricing.free?.chat_per_day ?? 20}`)],
+                    ["Dosya ekleyerek sohbet", (p: Plan) => (p.credits ? "Var" : "—")],
+                    ["Seedream görsel (yalnızca)", (p: Plan) => (p.credits ? num(p.examples.images) : "—")],
+                    ["Ücretsiz AI görseli (30 gün)", () => String(pricing.free?.images_per_month ?? 6)],
+                    ["Stok fotoğraf", () => "Sınırsız"],
                     ["5 sn 720p video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["720p"]) : "—")],
                     ["5 sn 1080p video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["1080p"]) : "—")],
                     ["5 sn 4K video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["4k"]) : "—")],

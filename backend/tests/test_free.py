@@ -1,0 +1,244 @@
+import base64
+
+from app import config
+from app.services import assistant, free_tier, storage
+from app.services.llm_service import LLMError
+
+from .conftest import auth, register
+from .test_api import BLOB_TOKEN, BLOB_URL, FakeResponse, _enable_media, register_paid
+
+IP_A = {"x-forwarded-for": "85.100.1.1, 10.0.0.1"}
+IP_B = {"x-forwarded-for": "85.100.1.2"}
+
+
+def _fake_chat(monkeypatch, seen=None):
+    def fake(model, messages, max_tokens=0):
+        if seen is not None:
+            seen.append({"model": model, "messages": messages, "max_tokens": max_tokens})
+        return "Ücretsiz fikir"
+
+    monkeypatch.setattr(free_tier, "chat_completion", fake)
+
+
+def _msg(text="Kafem için fikir"):
+    return {"messages": [{"role": "user", "content": text}]}
+
+
+def test_guest_chat_uses_haiku_and_daily_limit_per_ip(client, monkeypatch):
+    seen = []
+    _fake_chat(monkeypatch, seen)
+    monkeypatch.setattr(config, "FREE_CHAT_PER_DAY_ANON", 2)
+    for _ in range(2):
+        r = client.post("/api/free/chat", json=_msg(), headers=IP_A)
+        assert r.status_code == 200, r.text
+    assert r.json()["reply"] == "Ücretsiz fikir"
+    assert r.json()["free"]["chat"] == {"used": 2, "limit": 2, "remaining": 0}
+    assert seen[0]["model"] == config.FREE_CHAT_MODEL == "anthropic/claude-haiku-5.5"
+    assert seen[0]["max_tokens"] <= 1200
+
+    r = client.post("/api/free/chat", json=_msg(), headers=IP_A)
+    assert r.status_code == 429 and "Ücretsiz üye olursan" in r.json()["detail"]
+    # Başka bir IP etkilenmez
+    assert client.post("/api/free/chat", json=_msg(), headers=IP_B).status_code == 200
+
+
+def test_signed_in_free_user_has_own_limit(client, monkeypatch):
+    _fake_chat(monkeypatch)
+    monkeypatch.setattr(config, "FREE_CHAT_PER_DAY_ANON", 1)
+    monkeypatch.setattr(config, "FREE_CHAT_PER_DAY_USER", 3)
+    token = register(client)
+    for _ in range(3):
+        assert client.post("/api/free/chat", json=_msg(), headers={**IP_A, **auth(token)}).status_code == 200
+    assert client.post("/api/free/chat", json=_msg(), headers={**IP_A, **auth(token)}).status_code == 429
+    # Kullanıcı hakkı ziyaretçi hakkından ayrı sayılır
+    assert client.post("/api/free/chat", json=_msg(), headers=IP_A).status_code == 200
+    status = client.get("/api/free/status", headers=auth(token)).json()
+    assert status["signed_in"] is True and status["chat"]["remaining"] == 0
+
+
+def test_free_chat_failure_does_not_use_quota_and_is_text_only(client, monkeypatch):
+    def broken(*a, **k):
+        raise LLMError("kapalı")
+
+    monkeypatch.setattr(free_tier, "chat_completion", broken)
+    r = client.post("/api/free/chat", json=_msg(), headers=IP_A)
+    assert r.status_code == 503
+    assert client.get("/api/free/status", headers=IP_A).json()["chat"]["used"] == 0
+    assert client.post("/api/free/chat", json=_msg("  "), headers=IP_A).status_code == 400
+
+
+def test_free_chat_sends_short_history(client, monkeypatch):
+    seen = []
+    _fake_chat(monkeypatch, seen)
+    history = []
+    for i in range(15):
+        history += [{"role": "user", "content": f"soru {i} " + "x" * 5000}, {"role": "assistant", "content": f"cevap {i}"}]
+    history.append({"role": "user", "content": "son soru"})
+    assert client.post("/api/free/chat", json={"messages": history}, headers=IP_A).status_code == 200
+    sent = seen[0]["messages"]
+    assert sent[0]["role"] == "system" and len(sent) == 1 + free_tier.HISTORY_MESSAGES
+    assert all(len(m["content"]) <= free_tier.MESSAGE_CHARS for m in sent[1:])
+    assert sent[-1]["content"] == "son soru"
+
+
+def _enable_free_images(monkeypatch, calls):
+    monkeypatch.setattr(config, "CLOUDFLARE_ACCOUNT_ID", "acc123")
+    monkeypatch.setattr(config, "CLOUDFLARE_AI_TOKEN", "cf-token")
+    monkeypatch.setattr(free_tier, "chat_completion", lambda model, messages, max_tokens=0: "a fridge in a white kitchen")
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        calls.append({"url": url, "headers": headers, "json": json})
+        return FakeResponse(200, {"success": True, "result": {"image": base64.b64encode(b"\xff\xd8\xffjpg").decode()}})
+
+    monkeypatch.setattr(free_tier.requests, "post", fake_post)
+
+
+def test_free_images_monthly_limit_and_cloudflare_request(client, monkeypatch):
+    calls = []
+    _enable_free_images(monkeypatch, calls)
+    monkeypatch.setattr(config, "FREE_IMAGES_PER_MONTH", 2)
+    for _ in range(2):
+        r = client.post("/api/free/image", json={"concept": "beyaz mutfakta buzdolabı"}, headers=IP_A)
+        assert r.status_code == 200, r.text
+        assert r.json()["image_url"].startswith("data:image/jpeg;base64,")
+    assert r.json()["free"]["images"]["remaining"] == 0
+    assert calls[0]["url"].endswith("/accounts/acc123/ai/run/@cf/black-forest-labs/flux-1-schnell")
+    assert calls[0]["headers"]["Authorization"] == "Bearer cf-token"
+    assert calls[0]["json"]["prompt"] == "a fridge in a white kitchen"  # İngilizceye çevrilmiş istem
+
+    r = client.post("/api/free/image", json={"concept": "beyaz mutfakta buzdolabı"}, headers=IP_A)
+    assert r.status_code == 429 and "Stok kütüphanesinden" in r.json()["detail"]
+    assert len(calls) == 2
+
+
+def test_free_images_site_wide_daily_cap(client, monkeypatch):
+    _enable_free_images(monkeypatch, [])
+    monkeypatch.setattr(config, "FREE_IMAGES_PER_DAY_TOTAL", 1)
+    assert client.post("/api/free/image", json={"concept": "kahve fincanı"}, headers=IP_A).status_code == 200
+    r = client.post("/api/free/image", json={"concept": "kahve fincanı"}, headers=IP_B)
+    assert r.status_code == 429 and "kotası doldu" in r.json()["detail"]
+
+
+def test_free_image_failure_returns_quota(client, monkeypatch):
+    _enable_free_images(monkeypatch, [])
+    monkeypatch.setattr(free_tier.requests, "post", lambda *a, **k: FakeResponse(500, {"errors": ["x"]}))
+    r = client.post("/api/free/image", json={"concept": "kahve fincanı"}, headers=IP_A)
+    assert r.status_code == 200 and r.json()["image_url"] is None
+    assert r.json()["free"]["images"]["used"] == 0
+
+
+def test_free_image_disabled_without_cloudflare(client):
+    assert client.post("/api/free/image", json={"concept": "kahve fincanı"}).status_code == 503
+
+
+PEXELS_PHOTO = {
+    "id": 42,
+    "width": 4000,
+    "height": 3000,
+    "url": "https://www.pexels.com/photo/kahve-42/",
+    "photographer": "Ayşe",
+    "photographer_url": "https://www.pexels.com/@ayse",
+    "avg_color": "#886644",
+    "alt": "Kahve fincanı",
+    "src": {
+        "medium": "https://images.pexels.com/photos/42/m.jpeg",
+        "large": "https://images.pexels.com/photos/42/l.jpeg",
+        "large2x": "https://images.pexels.com/photos/42/l2x.jpeg",
+    },
+}
+
+
+def test_stock_search_is_cached(client, monkeypatch):
+    monkeypatch.setattr(config, "PEXELS_API_KEY", "pexels-key")
+    calls = []
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        calls.append({"url": url, "headers": headers, "params": params})
+        return FakeResponse(200, {"photos": [PEXELS_PHOTO], "next_page": "x"})
+
+    monkeypatch.setattr(free_tier.requests, "get", fake_get)
+    r = client.get("/api/free/stock", params={"q": "kahve", "orientation": "square"}, headers=IP_A)
+    assert r.status_code == 200, r.text
+    photo = r.json()["photos"][0]
+    assert photo["download"].endswith("l2x.jpeg") and photo["photographer"] == "Ayşe" and r.json()["has_more"]
+    assert calls[0]["headers"]["Authorization"] == "pexels-key"
+    assert calls[0]["params"]["locale"] == "tr-TR" and calls[0]["params"]["orientation"] == "square"
+    # Aynı arama önbellekten gelir
+    client.get("/api/free/stock", params={"q": "Kahve ", "orientation": "square"}, headers=IP_B)
+    assert len(calls) == 1
+
+
+def test_stock_save_requires_login_and_copies_to_blob(client, monkeypatch):
+    monkeypatch.setattr(config, "PEXELS_API_KEY", "pexels-key")
+    monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", BLOB_TOKEN)
+    assert client.post("/api/free/stock/save", json={"photo_id": 42}).status_code == 401
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        if "api.pexels.com" in url:
+            assert url.endswith("/photos/42")
+            return FakeResponse(200, PEXELS_PHOTO)
+        assert url == "https://images.pexels.com/photos/42/l2x.jpeg"
+        r = FakeResponse(200, {})
+        r.content = b"\xff\xd8\xffjpeg"
+        return r
+
+    monkeypatch.setattr(free_tier.requests, "get", fake_get)
+    saved = {}
+    monkeypatch.setattr(storage, "save", lambda d, m, f: saved.update(data=d, folder=f) or BLOB_URL + "stok.jpg")
+    token = register(client)
+    r = client.post("/api/free/stock/save", json={"photo_id": 42}, headers=auth(token))
+    assert r.status_code == 200, r.text
+    assert r.json()["url"] == BLOB_URL + "stok.jpg" and saved["folder"].startswith("stok/")
+
+
+def test_stock_rejects_foreign_download_host(client, monkeypatch):
+    monkeypatch.setattr(config, "PEXELS_API_KEY", "pexels-key")
+    monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", BLOB_TOKEN)
+    bad = {**PEXELS_PHOTO, "src": {"large2x": "https://evil.example.com/x.jpg"}}
+    monkeypatch.setattr(free_tier.requests, "get", lambda url, **k: FakeResponse(200, bad))
+    token = register(client)
+    assert client.post("/api/free/stock/save", json={"photo_id": 42}, headers=auth(token)).status_code == 503
+
+
+def test_free_plan_listed_with_limits(client):
+    data = client.get("/api/plans/").json()
+    assert data["trial"]["name"] == "Ücretsiz" and data["trial"]["credits"] == 0
+    assert data["free"] == {"chat_per_day": 20, "chat_per_day_guest": 10, "images_per_month": 6}
+
+
+# ---------------- Ücretli sohbette maliyet sınırları ----------------
+
+def test_paid_chat_charges_long_pdfs_by_pages(client, monkeypatch):
+    _enable_media(monkeypatch)
+    pdf = b"%PDF-1.4 " + b"<< /Type /Page >> " * 25 + b"<< /Type /Pages /Count 25 >>"
+    monkeypatch.setattr(storage, "fetch", lambda url, max_bytes=0: pdf)
+    monkeypatch.setattr(assistant, "chat_completion", lambda model, messages, max_tokens=0: "ok")
+    token = register_paid(client)
+    att = {"url": BLOB_URL + "k.pdf", "content_type": "application/pdf", "name": "k.pdf"}
+    r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "özetle", "attachments": [att]}]}, headers=auth(token))
+    # mesaj 1 + ek 1 + 25 sayfa için 2 ek kredi
+    assert r.status_code == 200 and r.json()["credits_spent"] == 4
+
+    huge = b"%PDF-1.4 " + b"<< /Type /Page >> " * 61
+    monkeypatch.setattr(storage, "fetch", lambda url, max_bytes=0: huge)
+    r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "özetle", "attachments": [att]}]}, headers=auth(token))
+    assert r.status_code == 400 and "60 sayfalık" in r.json()["detail"]
+
+
+def test_paid_chat_trims_history_and_limits_reply(client, monkeypatch):
+    _enable_media(monkeypatch)
+    seen = {}
+    monkeypatch.setattr(assistant, "chat_completion", lambda model, messages, max_tokens=0: seen.update(m=messages, t=max_tokens) or "ok")
+    token = register_paid(client)
+    history = []
+    for i in range(19):
+        history += [{"role": "user", "content": "u" * 9000}, {"role": "assistant", "content": "a" * 9000}]
+    history = history[-39:]
+    history.append({"role": "user", "content": "son"})
+    r = client.post("/api/content/chat", json={"messages": history}, headers=auth(token))
+    assert r.status_code == 200, r.text
+    sent = seen["m"][1:]
+    assert seen["t"] == assistant.MAX_REPLY_TOKENS
+    assert sent[0]["role"] == "user" and sent[-1]["content"] == "son"
+    assert sum(len(m["content"]) for m in sent[:-1]) <= assistant.HISTORY_CHARS
+    assert all(len(m["content"]) <= assistant.OLD_MESSAGE_CHARS for m in sent)

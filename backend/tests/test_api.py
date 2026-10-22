@@ -57,6 +57,17 @@ def _user_id(client, token):
     return client.get("/api/auth/me", headers=auth(token)).json()["user"]["id"]
 
 
+def register_paid(client, plan="baslangic", **kw):
+    token = register(client, **kw)
+    with get_engine().begin() as conn:
+        conn.execute(
+            update(users)
+            .where(users.c.id == _user_id(client, token))
+            .values(plan=plan, plan_expires_at=utcnow() + timedelta(days=30))
+        )
+    return token
+
+
 # ---------------- Kimlik doğrulama ----------------
 
 def test_register_login_me(client):
@@ -103,7 +114,7 @@ def test_ideas_via_omniroute(client, monkeypatch):
         return FakeResponse(200, {"choices": [{"message": {"content": text}}]})
 
     monkeypatch.setattr(llm_service.requests, "post", fake_post)
-    token = register(client)
+    token = register_paid(client)
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
     assert r.status_code == 200, r.text
     assert r.json()["provider"] == "omniroute"
@@ -124,7 +135,7 @@ def test_ideas_fall_back_to_anthropic_when_omniroute_down(client, monkeypatch):
     monkeypatch.setattr(llm_service.requests, "post", broken_post)
     monkeypatch.setattr(llm_service, "_call_anthropic", lambda s, u, m: json.dumps(IDEAS_JSON))
 
-    token = register(client)
+    token = register_paid(client)
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
     assert r.status_code == 200
     assert r.json()["provider"] == "anthropic"
@@ -135,7 +146,7 @@ def _credits(client, token):
 
 
 def test_ideas_503_and_refund_when_no_ai(client):
-    token = register(client)
+    token = register_paid(client)
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
     assert r.status_code == 503
     assert _credits(client, token)["used"] == 0
@@ -149,22 +160,21 @@ def _fake_ideas(monkeypatch):
 
 def test_idea_cost_is_one_credit_per_two_ideas(client, monkeypatch):
     _fake_ideas(monkeypatch)
-    token = register(client)
+    token = register_paid(client)
     r = client.post("/api/content/ideas", json={**IDEA_BODY, "idea_count": 6}, headers=auth(token))
     assert r.status_code == 200 and r.json()["credits_spent"] == 3
     r = client.post("/api/content/ideas", json={**IDEA_BODY, "idea_count": 1}, headers=auth(token))
     assert r.json()["credits_spent"] == 1
     c = _credits(client, token)
-    assert c == {"total": 14, "used": 4, "remaining": 10}
+    assert c == {"total": 200, "used": 4, "remaining": 196}
     events = client.get("/api/plans/history", headers=auth(token)).json()["events"]
     assert [e["credits"] for e in events] == [1, 3] and events[0]["label"] == "İçerik fikri"
 
 
-def test_trial_credits_run_out(client, monkeypatch):
+def test_free_plan_has_no_credits(client, monkeypatch):
     _fake_ideas(monkeypatch)
     token = register(client)
-    for _ in range(7):  # 7 x 2 kredi = 14
-        assert client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token)).status_code == 200
+    assert _credits(client, token) == {"total": 0, "used": 0, "remaining": 0}
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
     assert r.status_code == 402 and "Kredin yetmiyor" in r.json()["detail"]
 
@@ -173,7 +183,7 @@ def test_unparseable_ai_answer_refunds(client, monkeypatch):
     from app.services import claude_service
 
     monkeypatch.setattr(claude_service, "complete", lambda *a, **k: ("üzgünüm, yapamam", "test"))
-    token = register(client)
+    token = register_paid(client)
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
     assert r.json()["error"]
     assert _credits(client, token)["used"] == 0
@@ -201,7 +211,7 @@ def _enable_media(monkeypatch):
     return content
 
 
-def test_trial_can_make_images_and_pays_four_credits(client, monkeypatch):
+def test_paid_plan_makes_images_and_pays_four_credits(client, monkeypatch):
     content = _enable_media(monkeypatch)
     calls = {}
 
@@ -211,7 +221,7 @@ def test_trial_can_make_images_and_pays_four_credits(client, monkeypatch):
 
     monkeypatch.setattr(content.gateway_media, "generate_image", fake_image)
     monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", None)  # depo yoksa data URL döner
-    token = register(client)
+    token = register_paid(client)
     r = client.post("/api/content/image", json={"concept": "kahve", "aspect_ratio": "ASPECT_9_16"}, headers=auth(token))
     assert r.status_code == 200, r.text
     assert r.json()["image_url"].startswith("data:image/png;base64,")
@@ -231,7 +241,7 @@ def test_image_saved_to_blob_when_configured(client, monkeypatch):
     from app.services import storage
 
     monkeypatch.setattr(storage.requests, "put", fake_put)
-    token = register(client)
+    token = register_paid(client)
     r = client.post("/api/content/image", json={"concept": "kahve"}, headers=auth(token))
     assert r.json()["image_url"].startswith("https://store.public.blob.vercel-storage.com/gorsel/")
     assert sent["params"]["pathname"].endswith(".jpg")
@@ -245,7 +255,7 @@ def test_image_failure_refunds_credits(client, monkeypatch):
         raise content.gateway_media.MediaError("kapalı")
 
     monkeypatch.setattr(content.gateway_media, "generate_image", broken)
-    token = register(client)
+    token = register_paid(client)
     r = client.post("/api/content/image", json={"concept": "kahve"}, headers=auth(token))
     assert r.status_code == 200 and r.json()["image_url"] is None
     assert _credits(client, token)["used"] == 0
@@ -345,7 +355,7 @@ def test_image_with_reference_images(client, monkeypatch):
     seen = {}
     monkeypatch.setattr(content.gateway_media, "generate_image", lambda p, a, r=None: seen.update(refs=r) or (b"\x89PNG\r\n\x1a\n", "image/png"))
     monkeypatch.setattr(content.storage, "save", lambda d, m, f: "https://storeabc123.public.blob.vercel-storage.com/gorsel/x.png")
-    token = register(client)
+    token = register_paid(client)
     r = client.post("/api/content/image", json={"concept": "aynı ürün, beyaz fon", "reference_urls": [BLOB_URL + "urun.jpg"]}, headers=auth(token))
     assert r.status_code == 200 and seen["refs"] == [BLOB_URL + "urun.jpg"]
     assert client.post("/api/content/image", json={"concept": "x", "reference_urls": ["https://baska.com/a.jpg"]}, headers=auth(token)).status_code == 400
@@ -377,7 +387,7 @@ def test_chat_with_attachments(client, monkeypatch):
     sent = {}
     monkeypatch.setattr(assistant.storage, "fetch", lambda url, max_bytes=0: b"video-bytes" if url.endswith(".mp4") else b"%PDF-1.4")
     monkeypatch.setattr(assistant, "chat_completion", lambda model, messages, max_tokens=0: sent.update(model=model, messages=messages) or "Harika bir video!")
-    token = register(client)
+    token = register_paid(client)
     r = client.post(
         "/api/content/chat",
         json={
@@ -412,7 +422,7 @@ def test_chat_text_only_uses_claude_and_refunds_on_error(client, monkeypatch):
     from app.services.llm_service import LLMError
 
     monkeypatch.setattr(assistant, "chat_completion", lambda model, messages, max_tokens=0: (_ for _ in ()).throw(LLMError("kapalı")))
-    token = register(client)
+    token = register_paid(client)
     r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Fikir ver"}]}, headers=auth(token))
     assert r.status_code == 503
     assert _credits(client, token)["used"] == 0
@@ -425,7 +435,7 @@ def test_describe_sample_for_video(client, monkeypatch):
 
     monkeypatch.setattr(assistant.storage, "fetch", lambda url, max_bytes=0: b"\xff\xd8\xff")
     monkeypatch.setattr(assistant, "chat_completion", lambda model, messages, max_tokens=0: " Buzdolabı kapağı açılıyor. ")
-    token = register(client)
+    token = register_paid(client)
     r = client.post(
         "/api/content/describe",
         json={"attachment": {"url": BLOB_URL + "a.jpg", "content_type": "image/jpeg", "name": "a.jpg"}, "target": "video"},
@@ -647,7 +657,7 @@ def test_ideas_via_vercel_ai_gateway_with_oidc_header(client, monkeypatch):
         return FakeResponse(200, {"choices": [{"message": {"content": __import__("json").dumps(IDEAS_JSON)}}]})
 
     monkeypatch.setattr(llm_service.requests, "post", fake_post)
-    token = register(client)
+    token = register_paid(client)
     headers = {**auth(token), "x-vercel-oidc-token": "oidc-123"}
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=headers)
     assert r.status_code == 200, r.text
@@ -668,7 +678,7 @@ def test_omniroute_failure_falls_back_to_ai_gateway(client, monkeypatch):
         return FakeResponse(200, {"choices": [{"message": {"content": __import__("json").dumps(IDEAS_JSON)}}]})
 
     monkeypatch.setattr(llm_service.requests, "post", fake_post)
-    token = register(client)
+    token = register_paid(client)
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
     assert r.json()["provider"] == "ai_gateway"
 

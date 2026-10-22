@@ -93,3 +93,13 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
         return get_user(user_id)
     except (ValueError, UserNotFoundError):
         raise unauthorized
+
+
+def get_optional_user(credentials: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict | None:
+    """Giriş yapılmışsa kullanıcıyı, yapılmamışsa None döndürür (ücretsiz araçlar için)."""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    try:
+        return get_user(decode_token(credentials.credentials))
+    except (ValueError, UserNotFoundError):
+        return None

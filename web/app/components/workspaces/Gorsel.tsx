@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 import { ApiError, api } from "../../lib/api";
+import { StockPhoto, useFreeStatus } from "../../lib/free";
 import { HistoryEntry, addHistory, readHistory } from "../../lib/history";
 import { useSession } from "../../lib/session";
 import { FileChips, PendingFile, UploadProgress, useUploader } from "../Attachments";
 import { ChipSelect, SampleToConcept } from "../Controls";
+import { FreeImagePanel, StockLibrary } from "../FreeTools";
 import Icon from "../Icon";
-import { CreditLine, EmptyResult, HistoryList, NoCreditsNotice, WorkspaceProps } from "./common";
+import { CreditLine, EmptyResult, HistoryList, LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
 
 const RATIOS = [
   { value: "ASPECT_1_1", label: "Kare 1:1" },
@@ -20,10 +22,20 @@ const RATIOS = [
 ];
 
 type Result = { url: string; concept: string };
+type Mode = "pro" | "ucretsiz" | "stok";
+
+const MODES: { value: Mode; label: string }[] = [
+  { value: "pro", label: "Seedream · 4 kredi" },
+  { value: "ucretsiz", label: "Ücretsiz AI" },
+  { value: "stok", label: "Stok fotoğraf" },
+];
 
 export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
   const params = useSearchParams();
-  const { usage, refresh } = useSession();
+  const { usage, refresh, openCheckout } = useSession();
+  const free = useFreeStatus();
+  const freePlan = usage?.plan === "deneme";
+  const [mode, setMode] = useState<Mode | null>((params.get("mod") as Mode) || null);
   const [concept, setConcept] = useState(params.get("konsept") || "");
   const [ratio, setRatio] = useState("ASPECT_1_1");
   const [refs, setRefs] = useState<PendingFile[]>([]);
@@ -34,9 +46,12 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
   const [history, setHistory] = useState<HistoryEntry<Result>[]>([]);
 
   useEffect(() => setHistory(readHistory<Result>("gorsel")), []);
+  useEffect(() => {
+    if (usage && mode === null) setMode(usage.plan === "deneme" ? "ucretsiz" : "pro");
+  }, [usage, mode]);
 
   const cost = usage?.costs.image ?? 4;
-  const locked = !!usage && usage.credits.remaining < cost;
+  const locked = !!usage && (usage.plan === "deneme" || usage.credits.remaining < cost);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -66,15 +81,101 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
   if (tab === "history") {
     return <HistoryList items={history} onOpen={(item) => {
           setResult(item.data);
+          setMode("pro");
           showCreate();
         }} />;
   }
 
+  const remember = (url: string, title: string) => {
+    addHistory("gorsel", title.slice(0, 80), { url, concept: title });
+    setHistory(readHistory("gorsel"));
+  };
+
+  const toVideo = (url: string, text: string) => (
+    <Link className="btn btn-ghost btn-sm" href={`/araclar/video?konsept=${encodeURIComponent(text)}&gorsel=${encodeURIComponent(url)}`}>
+      Videoya çevir
+    </Link>
+  );
+
+  const modeRow = (
+    <div className="mode-row">
+      <div className="tabs" role="tablist" aria-label="Görsel kaynağı">
+        {MODES.map((m) => (
+          <button key={m.value} type="button" role="tab" aria-selected={mode === m.value} className={mode === m.value ? "active" : ""} onClick={() => setMode(m.value)}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <span className="hint">
+        {mode === "pro"
+          ? "En yüksek kalite; ürün fotoğrafını örnek alabilir."
+          : mode === "ucretsiz"
+            ? free.status
+              ? `Kredi harcamaz · 30 günde ${free.status.images.limit} görsel, ${free.status.images.remaining} hakkın var.`
+              : "Kredi harcamaz."
+            : "Telifsiz fotoğraflar, sınırsız ve ücretsiz."}
+      </span>
+    </div>
+  );
+
+  if (mode === null) return null;
+
+  if (mode === "ucretsiz") {
+    return (
+      <>
+        {modeRow}
+        <FreeImagePanel
+          status={free.status}
+          onStatus={free.setStatus}
+          initialConcept={concept}
+          onCreated={(url, text) => url.startsWith("https://") && remember(url, text)}
+          resultActions={(url, text) => (usage?.video_enabled && url.startsWith("https://") ? toVideo(url, text) : null)}
+          upsell={
+            <button type="button" className="btn btn-light btn-sm" onClick={() => openCheckout("baslangic")}>
+              Paket seç
+            </button>
+          }
+        />
+      </>
+    );
+  }
+
+  if (mode === "stok") {
+    return (
+      <>
+        {modeRow}
+        <StockLibrary
+          enabled={free.status ? free.status.stock_enabled : true}
+          onSave={async (photo: StockPhoto) => {
+            const data = await api<{ url: string }>("/api/free/stock/save", {
+              method: "POST",
+              body: JSON.stringify({ photo_id: photo.id }),
+            });
+            remember(data.url, photo.alt || `Stok fotoğraf · ${photo.photographer}`);
+            return data.url;
+          }}
+          saveLabel="Görsellerime ekle"
+          savedActions={(url, photo) => (
+            <>
+              <span className="chip">Görsellerine eklendi</span>
+              {usage?.video_enabled && toVideo(url, photo.alt || "")}
+            </>
+          )}
+        />
+      </>
+    );
+  }
+
   return (
+    <>
+    {modeRow}
+    {freePlan && (
+      <LockedNotice text="Seedream ile yüksek kaliteli üretim ücretli paketlerde (görsel başı 4 kredi). Ücretsiz AI ve stok fotoğrafları kullanmaya devam edebilirsin." />
+    )}
     <div className="workspace">
       <form className="panel ws-panel" onSubmit={submit}>
         <h2>Girdi</h2>
-        <NoCreditsNotice cost={cost} />
+        {!freePlan && <NoCreditsNotice cost={cost} />}
         <div className="field">
           <label htmlFor="g-concept">Konsept</label>
           <textarea
@@ -143,5 +244,6 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
         )}
       </section>
     </div>
+    </>
   );
 }

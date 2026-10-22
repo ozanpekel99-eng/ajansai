@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.security import get_current_user
+from app import config
 from app.services.plans import CREDIT_COSTS, PLANS, public_plan
 from app.services.usage_service import get_usage, list_events
 
@@ -14,6 +15,11 @@ def list_plans():
         "plans": {pid: public_plan(pid) for pid, p in PLANS.items() if p["purchasable"]},
         "trial": public_plan("deneme"),
         "costs": CREDIT_COSTS,
+        "free": {
+            "chat_per_day": config.FREE_CHAT_PER_DAY_USER,
+            "chat_per_day_guest": config.FREE_CHAT_PER_DAY_ANON,
+            "images_per_month": config.FREE_IMAGES_PER_MONTH,
+        },
     }
 
 

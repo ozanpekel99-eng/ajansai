@@ -23,7 +23,13 @@ SYSTEM_PROMPT = """Sen ajansAI'sın: Türkiye'deki küçük ve orta ölçekli i�
 - Görsel veya video üretilmesi uygun olduğunda, kullanıcı doğrudan kullanabilsin diye kısa bir "Görsel/Video konsepti:" satırı ekle.
 - Markdown kullan: başlıklar, kalın yazı ve listeler serbest."""
 
-MAX_TEXT_CHARS = 60_000
+MAX_TEXT_CHARS = 30_000
+# Maliyet sınırı: modele en fazla bu kadar geçmiş gider, yanıt bu uzunlukla sınırlı.
+HISTORY_MESSAGES = 12
+HISTORY_CHARS = 16_000
+OLD_MESSAGE_CHARS = 4_000
+MAX_REPLY_TOKENS = 1800
+MAX_PDF_PAGES = 60
 
 
 def _docx_text(data: bytes) -> str:
@@ -51,11 +57,42 @@ def _attachment_part(att: dict) -> tuple[dict, bool]:
     return {"type": "text", "text": f"--- Ek belge: {name} ---\n{text[:MAX_TEXT_CHARS]}\n--- Belge sonu ---"}, False
 
 
+def pdf_pages(data: bytes) -> int:
+    """PDF sayfa sayısını kabaca sayar (her sayfa nesnesi bir '/Type /Page' içerir).
+
+    Sıkıştırılmış nesne akışlarında sayfalar görünmeyebilir; o durumda dosya
+    boyutundan tahmin edilir (~150 KB / sayfa).
+    """
+    counted = len(re.findall(rb"/Type\s*/Page(?![a-zA-Z])", data))
+    return max(1, counted, -(-len(data) // 150_000))
+
+
+def _trim_history(history: list[dict]) -> list[dict]:
+    """Son mesajlar korunur; eski mesajlar kısaltılır, toplam karakter bütçesi aşılmaz."""
+    recent = history[-HISTORY_MESSAGES:]
+    kept: list[dict] = []
+    budget = HISTORY_CHARS
+    for i, msg in enumerate(reversed(recent)):
+        content = msg.get("content") or ""
+        if i > 0:
+            content = content[:OLD_MESSAGE_CHARS]
+            if len(content) > budget:
+                break
+            budget -= len(content)
+        kept.append({**msg, "content": content})
+    kept.reverse()
+    # Model geçmişin kullanıcı mesajıyla başlamasını bekler.
+    while len(kept) > 1 and kept[0]["role"] != "user":
+        kept.pop(0)
+    return kept
+
+
 def reply(history: list[dict]) -> tuple[str, str]:
     """Sohbet geçmişine yanıt verir. (metin, kullanılan_model) döndürür.
 
     Geçmişteki eski eklerin yalnızca adı gönderilir; dosyaların kendisi son mesajla gider.
     """
+    history = _trim_history(history)
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     has_video = False
     last = len(history) - 1
@@ -76,7 +113,7 @@ def reply(history: list[dict]) -> tuple[str, str]:
         messages.append({"role": "user", "content": parts})
 
     model = config.CHAT_VIDEO_MODEL if has_video else config.CHAT_MODEL
-    return chat_completion(model, messages, max_tokens=3000), model
+    return chat_completion(model, messages, max_tokens=MAX_REPLY_TOKENS), model
 
 
 DESCRIBE_PROMPT = {

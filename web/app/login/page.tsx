@@ -42,7 +42,7 @@ export default function Login() {
         <p>
           {mode === "login"
             ? "İçerik fikirlerine, görsellerine ve paketine ulaşmak için giriş yap."
-            : "Ücretsiz 14 krediyle başla: fikir ve görsel üret, kart gerekmez."}
+            : "Ücretsiz başla: günde 20 fikir mesajı, ayda 6 görsel ve stok fotoğraf kütüphanesi. Kart gerekmez."}
         </p>
 
         <form onSubmit={submit}>
@@ -74,6 +74,10 @@ export default function Login() {
             {loading ? "Bekle…" : mode === "login" ? "Giriş yap" : "Hesap oluştur"}
           </button>
         </form>
+
+        <div className="switch-link">
+          <a href="/ucretsiz">Üye olmadan dene</a>
+        </div>
 
         <div className="switch-link">
           {mode === "login" ? "Hesabın yok mu? " : "Zaten hesabın var mı? "}

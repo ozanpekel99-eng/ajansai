@@ -13,7 +13,7 @@ kredi düşer. Kredi maliyetleri sağlayıcı maliyetine göre belirlendi
   token = 3840×2160×24 fps×sn / 1024 ≈ 194.400/sn → ≈ $0.78/sn (en kötü durum)
 
 Paketler $10 / $25 / $49; KDV ve iyzico komisyonu düşüldükten sonra ~%65-75 brüt marj bırakır.
-Deneme paketi satın alınamaz; yeni kayıt olan herkes bununla başlar.
+Ücretsiz paket (id: deneme) satın alınamaz; yeni kayıt olan herkes bununla başlar.
 """
 
 import math
@@ -25,6 +25,7 @@ CREDIT_COSTS = {
     "idea_per_2": 1,  # her 2 fikir için (eski form akışı)
     "chat_message": 1,  # fikir sohbetinde her mesaj
     "chat_attachment": 1,  # mesaja eklenen her dosya
+    "chat_pdf_pages": 10,  # PDF ekinde her 10 sayfa 1 kredi (ilk 10 sayfa eke dahil)
     "describe": 1,  # örnek görsel/videodan konsept çıkarma
     "image": 4,
     "ads_draft": 0,
@@ -43,10 +44,12 @@ CREDIT_COSTS = {
 }
 
 PLANS = {
+    # Ücretsiz paket: kredi yok; Haiku ile fikir sohbeti, ayda 6 ücretsiz AI görseli ve
+    # stok fotoğraf kütüphanesi kredisiz kullanılır (bkz. services/free_tier.py).
     "deneme": {
-        "name": "Deneme",
+        "name": "Ücretsiz",
         "price": 0,
-        "credits": 14,
+        "credits": 0,
         "video_enabled": False,
         "ads_enabled": False,
         "purchasable": False,
@@ -101,8 +104,15 @@ def video_cost(duration: int, resolution: str = "720p", audio: bool = False) -> 
     return CREDIT_COSTS["video_audio" if audio else "video"][resolution][str(duration)]
 
 
-def chat_cost(attachments: int) -> int:
-    return CREDIT_COSTS["chat_message"] + attachments * CREDIT_COSTS["chat_attachment"]
+def pdf_extra_credits(pages: int) -> int:
+    """İlk 10 sayfa ek ücretine dahil; sonraki her 10 sayfa +1 kredi."""
+    per = CREDIT_COSTS["chat_pdf_pages"]
+    return max(0, math.ceil(pages / per) - 1)
+
+
+def chat_cost(attachments: int, pdf_pages: list[int] | None = None) -> int:
+    extra = sum(pdf_extra_credits(p) for p in (pdf_pages or []))
+    return CREDIT_COSTS["chat_message"] + attachments * CREDIT_COSTS["chat_attachment"] + extra
 
 
 def public_plan(plan_id: str) -> dict:

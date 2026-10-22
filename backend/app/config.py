@@ -19,6 +19,13 @@ def _bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _int(name: str, default: int) -> int:
+    try:
+        return int(_env(name, str(default)))
+    except ValueError:
+        return default
+
+
 ENVIRONMENT = _env("ENVIRONMENT", "development")
 IS_PRODUCTION = ENVIRONMENT == "production"
 
@@ -80,6 +87,22 @@ VIDEO_MODELS = {
     "1080p": (_env("VIDEO_MODEL_1080P", "bytedance/seedance-v1.5-pro"), "1920x1080"),
     "4k": (_env("VIDEO_MODEL_4K", "bytedance/seedance-2.0"), "3840x2160"),
 }
+# --- Ücretsiz paket (üyelik gerektirmez; maliyeti sıfıra yakın) ---
+# Fikir sohbeti Claude Haiku 5.5 ile (mesaj başı ~$0,0007).
+FREE_CHAT_MODEL = _env("FREE_CHAT_MODEL", "anthropic/claude-haiku-5.5")
+FREE_CHAT_PER_DAY_USER = _int("FREE_CHAT_PER_DAY_USER", 20)
+FREE_CHAT_PER_DAY_ANON = _int("FREE_CHAT_PER_DAY_ANON", 10)
+FREE_CHAT_PER_DAY_TOTAL = _int("FREE_CHAT_PER_DAY_TOTAL", 5000)  # tüm site, günlük tavan
+# Ücretsiz görsel: Cloudflare Workers AI (FLUX.1 schnell). Günlük 10.000 neuron ücretsiz;
+# 1024px görsel ~58 neuron → tavan 150/gün ile ücretsiz kotanın içinde kalırız.
+CLOUDFLARE_ACCOUNT_ID = _env("CLOUDFLARE_ACCOUNT_ID")
+CLOUDFLARE_AI_TOKEN = _env("CLOUDFLARE_AI_TOKEN")
+FREE_IMAGE_MODEL = _env("FREE_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnell")
+FREE_IMAGES_PER_MONTH = _int("FREE_IMAGES_PER_MONTH", 6)
+FREE_IMAGES_PER_DAY_TOTAL = _int("FREE_IMAGES_PER_DAY_TOTAL", 150)
+# Stok fotoğraf kütüphanesi (Pexels, ücretsiz API anahtarı)
+PEXELS_API_KEY = _env("PEXELS_API_KEY")
+
 # Üretilen dosyaların saklandığı Vercel Blob deposu (projeye bağlanınca otomatik gelir)
 BLOB_READ_WRITE_TOKEN = _env("BLOB_READ_WRITE_TOKEN")
 

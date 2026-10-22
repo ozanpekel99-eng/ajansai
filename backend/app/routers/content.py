@@ -248,7 +248,20 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=400, detail=f"{att.name}: bu dosya türü desteklenmiyor.")
     _own_urls([a.url for a in last.attachments])
 
-    credits = chat_cost(len(last.attachments))
+    pages = []
+    for att in last.attachments:
+        if att.content_type == "application/pdf":
+            try:
+                n = assistant.pdf_pages(storage.fetch(att.url))
+            except storage.StorageError as e:
+                raise HTTPException(status_code=400, detail=f"{att.name}: {e}")
+            if n > assistant.MAX_PDF_PAGES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{att.name} {n} sayfa; en fazla {assistant.MAX_PDF_PAGES} sayfalık PDF ekleyebilirsin.",
+                )
+            pages.append(n)
+    credits = chat_cost(len(last.attachments), pages)
     event_id = _charge(user["id"], "chat", credits, last.content.strip()[:200] or "Dosya incelemesi")
     try:
         text, model = assistant.reply([m.model_dump() for m in payload.messages[-20:]])
