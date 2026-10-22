@@ -144,6 +144,13 @@ def meta_setup(user: dict = Depends(get_current_user)):
     return _meta_call(meta.setup_status, _get_token(user["id"]))
 
 
+@router.get("/meta/whatsapp")
+def meta_whatsapp(page_id: str, user: dict = Depends(get_current_user)):
+    """Seçilen sayfaya bağlı WhatsApp numarası."""
+    _require_ads(user)
+    return _meta_call(meta.page_whatsapp, _get_token(user["id"]), page_id)
+
+
 @router.get("/meta/pages")
 def meta_pages(ad_account_id: str | None = None, user: dict = Depends(get_current_user)):
     _require_ads(user)
@@ -184,7 +191,7 @@ class CreateAdRequest(BaseModel):
     page_id: str = Field(..., max_length=50)
     instagram_user_id: str | None = Field(None, max_length=50)
     name: str = Field(..., min_length=2, max_length=150)
-    objective: Literal["traffic", "whatsapp", "awareness"]
+    objective: Literal["profile", "traffic", "whatsapp", "instagram_dm", "awareness"]
     daily_budget: float = Field(..., gt=0, le=1_000_000)
     currency: str = Field("TRY", max_length=3)
     start_date: date | None = None
@@ -213,8 +220,10 @@ def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_us
     _require_ads(user)
     if payload.age_min > payload.age_max:
         raise HTTPException(status_code=400, detail="Minimum yaş, maksimum yaştan büyük olamaz.")
-    if payload.objective != "whatsapp" and not payload.link:
+    if payload.objective in ("traffic", "awareness") and not payload.link:
         raise HTTPException(status_code=400, detail="Bu reklam amacı için bir web sitesi bağlantısı gerekli.")
+    if payload.objective in ("profile", "instagram_dm") and not payload.instagram_user_id:
+        raise HTTPException(status_code=400, detail="Bu reklam için bir Instagram hesabı seçmelisin.")
     if payload.call_to_action not in CTA_TYPES:
         raise HTTPException(status_code=400, detail="Geçersiz buton türü.")
     if not storage.is_own_blob_url(payload.media.url):
@@ -330,7 +339,7 @@ def meta_pause_ad(record_id: str, user: dict = Depends(get_current_user)):
 
 class AdCopyRequest(BaseModel):
     brief: str = Field(..., min_length=3, max_length=1500)
-    objective: Literal["traffic", "whatsapp", "awareness"] = "traffic"
+    objective: Literal["profile", "traffic", "whatsapp", "instagram_dm", "awareness"] = "traffic"
 
 
 @router.post("/meta/ad-copy")

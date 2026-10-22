@@ -146,8 +146,10 @@ INSTAGRAM_POSITIONS = ["stream", "story", "reels", "explore"]
 
 OBJECTIVES = {
     # amaç: (kampanya objective, reklam seti optimization_goal, destination_type)
+    "profile": ("OUTCOME_TRAFFIC", "VISIT_INSTAGRAM_PROFILE", "INSTAGRAM_PROFILE"),
     "traffic": ("OUTCOME_TRAFFIC", "LINK_CLICKS", "WEBSITE"),
     "whatsapp": ("OUTCOME_ENGAGEMENT", "CONVERSATIONS", "WHATSAPP"),
+    "instagram_dm": ("OUTCOME_ENGAGEMENT", "CONVERSATIONS", "INSTAGRAM_DIRECT"),
     "awareness": ("OUTCOME_AWARENESS", "REACH", None),
 }
 
@@ -366,7 +368,7 @@ def create_instagram_ad(
         }
         if destination:
             adset_body["destination_type"] = destination
-        if objective == "whatsapp":
+        if objective in ("whatsapp", "instagram_dm", "profile"):
             adset_body["promoted_object"] = {"page_id": page_id}
         if start_time:
             adset_body["start_time"] = start_time
@@ -379,6 +381,12 @@ def create_instagram_ad(
         if objective == "whatsapp":
             cta = {"type": "WHATSAPP_MESSAGE", "value": {"app_destination": "WHATSAPP"}}
             target_link = "https://api.whatsapp.com/send"
+        elif objective == "instagram_dm":
+            cta = {"type": "INSTAGRAM_MESSAGE", "value": {"app_destination": "INSTAGRAM_DIRECT"}}
+            target_link = "https://www.instagram.com/"
+        elif objective == "profile":
+            target_link = link or "https://www.instagram.com/"
+            cta = {"type": "VIEW_INSTAGRAM_PROFILE", "value": {"link": target_link}}
         else:
             target_link = link
             cta = {"type": call_to_action, "value": {"link": target_link}}
@@ -517,3 +525,18 @@ def setup_status(token: str) -> dict:
         },
     ]
     return {"ready": all(s["done"] for s in steps), "steps": steps}
+
+
+def page_whatsapp(token: str, page_id: str) -> dict:
+    """Sayfaya bağlı WhatsApp numarası (yoksa bağlama bağlantısı)."""
+    number = None
+    try:
+        page = _graph("GET", page_id, token, fields="whatsapp_number")
+        number = page.get("whatsapp_number") or None
+    except MetaError as e:
+        logger.info("WhatsApp numarası okunamadı (%s): %s", page_id, e)
+    return {
+        "number": number,
+        "connect_url": "https://business.facebook.com/latest/settings/whatsapp_account",
+        "help": "Facebook sayfanın ayarlarında Bağlı hesaplar > WhatsApp bölümünden numaranı bağla; doğrulama kodu WhatsApp'a gelir.",
+    }

@@ -16,7 +16,8 @@ type Page = { id: string; name: string; instagram_id?: string | null; instagram_
 type IgAccount = { id: string; username: string; page_id?: string | null };
 type Loc = { key: string; name: string; type: "country" | "region" | "city"; country_code?: string | null; region?: string | null };
 type Media = { url: string; kind: "image" | "video" };
-type Objective = "traffic" | "whatsapp" | "awareness";
+type Objective = "profile" | "traffic" | "whatsapp" | "instagram_dm" | "awareness";
+type Goal = "traffic" | "message" | "awareness";
 type Insights = { spend: number; impressions: number; reach: number; clicks: number; ctr: number; cpc: number; conversations: number };
 type AdRow = {
   id: string;
@@ -34,10 +35,22 @@ type AdRow = {
 };
 
 const OBJECTIVES: { value: Objective; label: string; note: string }[] = [
-  { value: "traffic", label: "Web sitesi trafiği", note: "Sitene tıklama getirir" },
-  { value: "whatsapp", label: "WhatsApp mesajı", note: "Sana WhatsApp'tan yazarlar" },
+  { value: "profile", label: "Trafik (Profil ziyareti)", note: "Instagram profiline ziyaret getirir" },
+  { value: "traffic", label: "Trafik (Web sitesi)", note: "Sitene tıklama getirir" },
+  { value: "whatsapp", label: "Mesaj (WhatsApp)", note: "Sana WhatsApp'tan yazarlar" },
+  { value: "instagram_dm", label: "Mesaj (Instagram DM)", note: "Sana Instagram'dan mesaj atarlar" },
   { value: "awareness", label: "Bilinirlik", note: "Olabildiğince çok kişiye gösterir" },
 ];
+
+const GOALS: { value: Goal; label: string; note: string }[] = [
+  { value: "traffic", label: "Trafik (Profil ziyareti)", note: "Instagram profiline ya da web sitene ziyaret getirir" },
+  { value: "message", label: "Mesaj", note: "WhatsApp'tan ya da Instagram DM'den sana yazarlar" },
+  { value: "awareness", label: "Bilinirlik", note: "Olabildiğince çok kişiye gösterir" },
+];
+
+const goalOf = (o: Objective): Goal => (o === "profile" || o === "traffic" ? "traffic" : o === "awareness" ? "awareness" : "message");
+const isMessage = (o: Objective) => o === "whatsapp" || o === "instagram_dm";
+const needsLink = (o: Objective) => o === "traffic" || o === "awareness";
 
 const CTAS = [
   { value: "LEARN_MORE", label: "Daha fazla bilgi" },
@@ -215,7 +228,9 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
   const [accountId, setAccountId] = useState("");
   const [pageId, setPageId] = useState("");
   const [igId, setIgId] = useState("");
-  const [objective, setObjective] = useState<Objective>("traffic");
+  const [objective, setObjective] = useState<Objective>("profile");
+  const [wa, setWa] = useState<{ number: string | null; connect_url: string; help: string } | null>(null);
+  const [waLoading, setWaLoading] = useState(false);
   const [name, setName] = useState("");
   const [budget, setBudget] = useState("250");
   const [startDate, setStartDate] = useState(today());
@@ -236,6 +251,20 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
   const [loadError, setLoadError] = useState("");
 
   const account = accounts.find((a) => a.account_id === accountId);
+  const igUsername = igAccounts.find((a) => a.id === igId)?.username || "";
+
+  const checkWa = () => {
+    if (!pageId) return;
+    setWaLoading(true);
+    api<{ number: string | null; connect_url: string; help: string }>(`/api/ads/meta/whatsapp?page_id=${pageId}`)
+      .then(setWa)
+      .catch(() => setWa(null))
+      .finally(() => setWaLoading(false));
+  };
+
+  useEffect(() => {
+    if (objective === "whatsapp" && pageId) checkWa();
+  }, [objective, pageId]); // eslint-disable-line react-hooks/exhaustive-deps
   const currency = account?.currency || "TRY";
 
   const usable = (a: AdAccount) => a.usable ?? a.account_status === 1;
@@ -331,7 +360,7 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
           media,
           primary_text: primaryText,
           headline,
-          link: objective === "whatsapp" ? null : link,
+          link: needsLink(objective) ? link : objective === "profile" && igUsername ? `https://www.instagram.com/${igUsername}/` : null,
           call_to_action: cta,
         }),
       });
@@ -428,19 +457,67 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
         <section className="panel ws-panel">
           <h2>2. Amaç</h2>
           <div className="objective-cards">
-            {OBJECTIVES.map((o) => (
+            {GOALS.map((g) => (
               <button
                 type="button"
-                key={o.value}
-                className={objective === o.value ? "active" : ""}
-                aria-pressed={objective === o.value}
-                onClick={() => setObjective(o.value)}
+                key={g.value}
+                className={goalOf(objective) === g.value ? "active" : ""}
+                aria-pressed={goalOf(objective) === g.value}
+                onClick={() => setObjective(g.value === "traffic" ? "profile" : g.value === "message" ? "whatsapp" : "awareness")}
               >
-                <strong>{o.label}</strong>
-                <small>{o.note}</small>
+                <strong>{g.label}</strong>
+                <small>{g.note}</small>
               </button>
             ))}
           </div>
+          {goalOf(objective) === "traffic" && (
+            <div className="field">
+              <label>Ziyaretçiler nereye gitsin?</label>
+              <div className="segmented small" role="tablist">
+                <button type="button" className={objective === "profile" ? "active" : ""} onClick={() => setObjective("profile")}>
+                  Instagram profili
+                </button>
+                <button type="button" className={objective === "traffic" ? "active" : ""} onClick={() => setObjective("traffic")}>
+                  Web sitesi
+                </button>
+              </div>
+              {objective === "profile" && !igId && <span className="error-text">Profil ziyareti için yukarıdan bir Instagram hesabı seç.</span>}
+            </div>
+          )}
+          {goalOf(objective) === "message" && (
+            <div className="field">
+              <label>Mesajlar nereden gelsin?</label>
+              <div className="segmented small" role="tablist">
+                <button type="button" className={objective === "whatsapp" ? "active" : ""} onClick={() => setObjective("whatsapp")}>
+                  WhatsApp
+                </button>
+                <button type="button" className={objective === "instagram_dm" ? "active" : ""} onClick={() => setObjective("instagram_dm")}>
+                  Instagram DM
+                </button>
+              </div>
+              {objective === "whatsapp" &&
+                (waLoading ? (
+                  <span className="hint">WhatsApp numarası kontrol ediliyor…</span>
+                ) : wa?.number ? (
+                  <span className="hint">
+                    Bağlı WhatsApp numarası: <strong>{wa.number}</strong>
+                  </span>
+                ) : wa ? (
+                  <div className="notice" style={{ marginTop: 8 }}>
+                    <span>Bu Facebook sayfasına bağlı WhatsApp numarası bulunamadı. {wa.help}</span>
+                    <span style={{ display: "flex", gap: 6 }}>
+                      <a className="btn btn-primary btn-sm" href={wa.connect_url} target="_blank" rel="noreferrer">
+                        WhatsApp&apos;ı bağla
+                      </a>
+                      <button type="button" className="btn btn-light btn-sm" onClick={checkWa}>
+                        Tekrar kontrol et
+                      </button>
+                    </span>
+                  </div>
+                ) : null)}
+              {objective === "instagram_dm" && !igId && <span className="error-text">Instagram DM için yukarıdan bir Instagram hesabı seç.</span>}
+            </div>
+          )}
           <div className="field">
             <label htmlFor="ad-name">Kampanya adı</label>
             <input id="ad-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Kasım buzdolabı kampanyası" />
@@ -542,20 +619,26 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
               <label htmlFor="ad-headline">Başlık</label>
               <input id="ad-headline" value={headline} onChange={(e) => setHeadline(e.target.value)} maxLength={120} />
             </div>
-            {objective !== "whatsapp" && (
+            {needsLink(objective) && (
               <div className="field">
                 <label>Buton</label>
                 <ChipSelect icon="arrowUp" label="Buton" value={cta} onChange={setCta} options={CTAS} />
               </div>
             )}
           </div>
-          {objective !== "whatsapp" ? (
+          {needsLink(objective) ? (
             <div className="field">
               <label htmlFor="ad-link">Web sitesi bağlantısı</label>
               <input id="ad-link" required inputMode="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://www.siten.com/kampanya" />
             </div>
           ) : (
-            <span className="hint">Buton "WhatsApp'tan mesaj gönder" olur; Facebook sayfana bağlı WhatsApp numarası kullanılır.</span>
+            <span className="hint">
+              {objective === "whatsapp"
+                ? "Buton \"WhatsApp'tan mesaj gönder\" olur; Facebook sayfana bağlı WhatsApp numarası kullanılır."
+                : objective === "instagram_dm"
+                  ? "Buton \"Mesaj gönder\" olur; mesajlar Instagram DM kutuna gelir."
+                  : "Reklama tıklayan kişi Instagram profiline gider."}
+            </span>
           )}
         </section>
       </div>
@@ -583,7 +666,15 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
               )}
             </div>
             <div className="ig-cta">
-              <span>{objective === "whatsapp" ? "WhatsApp'tan mesaj gönder" : CTAS.find((c) => c.value === cta)?.label}</span>
+              <span>
+                {objective === "whatsapp"
+                  ? "WhatsApp'tan mesaj gönder"
+                  : objective === "instagram_dm"
+                    ? "Mesaj gönder"
+                    : objective === "profile"
+                      ? "Profili ziyaret et"
+                      : CTAS.find((c) => c.value === cta)?.label}
+              </span>
               <Icon name="arrowLeft" size={14} />
             </div>
             <p className="ig-text">
@@ -778,7 +869,7 @@ function AdList() {
                       <span>
                         <b>{i.impressions.toLocaleString("tr-TR")}</b> gösterim
                       </span>
-                      {ad.objective === "whatsapp" ? (
+                      {isMessage(ad.objective) ? (
                         <span>
                           <b>{i.conversations}</b> mesaj
                         </span>
