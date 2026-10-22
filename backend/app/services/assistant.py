@@ -12,7 +12,7 @@ import zipfile
 
 from app import config
 from app.services import storage
-from app.services.llm_service import chat_completion
+from app.services.llm_service import LLMError, chat_completion, free_chat_completion
 
 SYSTEM_PROMPT = """Sen ajansAI'sın: Türkiye'deki küçük ve orta ölçekli işletmeler için sosyal medya ve reklam asistanı.
 - Her zaman Türkçe, samimi ve net yaz. Gereksiz giriş cümleleri kurma, doğrudan işe yarayan içerik ver.
@@ -113,7 +113,15 @@ def reply(history: list[dict]) -> tuple[str, str]:
         messages.append({"role": "user", "content": parts})
 
     model = config.CHAT_VIDEO_MODEL if has_video else config.CHAT_MODEL
-    return chat_completion(model, messages, max_tokens=MAX_REPLY_TOKENS), model
+    text_only = all(isinstance(m["content"], str) for m in messages)
+    try:
+        return chat_completion(model, messages, max_tokens=MAX_REPLY_TOKENS), model
+    except LLMError:
+        # AI Gateway'e ulaşılamazsa (ör. ödeme yöntemi yok) dosyasız mesajlar
+        # ücretsiz sağlayıcı zinciriyle yanıtlanır; dosyalı mesajlar hata verir.
+        if not text_only:
+            raise
+        return free_chat_completion(messages, max_tokens=MAX_REPLY_TOKENS)
 
 
 DESCRIBE_PROMPT = {

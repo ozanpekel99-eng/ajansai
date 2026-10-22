@@ -324,3 +324,16 @@ def test_pixabay_preferred_for_stock(client, monkeypatch):
     token = register(client)
     r = client.post("/api/free/stock/save", json={"photo_id": 77}, headers=auth(token))
     assert r.status_code == 200 and calls[-2][1]["id"] == 77
+
+
+def test_paid_text_chat_falls_back_to_free_chain(client, monkeypatch):
+    _enable_media(monkeypatch)
+
+    def gateway_down(model, messages, max_tokens=0):
+        raise LLMError("ödeme yöntemi yok")
+
+    monkeypatch.setattr(assistant, "chat_completion", gateway_down)
+    monkeypatch.setattr(assistant, "free_chat_completion", lambda messages, max_tokens=0: ("Groq yanıtı", "groq:openai/gpt-oss-120b"))
+    token = register_paid(client)
+    r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Fikir ver"}]}, headers=auth(token))
+    assert r.status_code == 200 and r.json()["reply"] == "Groq yanıtı"
