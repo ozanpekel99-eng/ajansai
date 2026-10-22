@@ -94,7 +94,7 @@ export default function Login() {
         <div className="tile" style={{ top: "38%", left: "34%", width: 180, height: 90 }} />
         <div className="tile w" style={{ top: "8%", right: "10%", width: 28, height: 28 }} />
         <div className="tile" style={{ top: "48%", right: "12%", width: 72, height: 160 }} />
-        <p className="quote">Fikirden reklama, işletmenin sosyal medyası tek yerde.</p>
+        <p className="quote">Sohbet et, görselini üret, reklamını yayınla. Hepsi tek yerde.</p>
       </div>
     </div>
   );
