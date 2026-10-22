@@ -48,6 +48,25 @@ PALETTES = {
 DEFAULT_PALETTE = "gece"
 
 
+def _lum(c) -> float:
+    def ch(v):
+        v /= 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
+    r, g, b = c
+    return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
+
+
+def _readable_on_light(accent, dark):
+    """Açık zeminde okunması zor (çok parlak) vurgu rengini koyulaştırır."""
+    color = accent
+    for _ in range(8):
+        if _lum(color) <= 0.30:
+            break
+        color = tuple(int(a * 0.82 + d * 0.18) for a, d in zip(color, dark))
+    return color
+
+
 class Theme:
     def __init__(self, spec_theme: dict | None):
         spec_theme = spec_theme if isinstance(spec_theme, dict) else {}
@@ -63,8 +82,9 @@ class Theme:
         if dark:
             return {"bg": c["dark"], "surf": c["dsurf"], "line": c["dline"], "text": (245, 241, 234),
                     "muted": (160, 168, 180), "accent": c["accent"], "accent2": c["accent2"], "dark": True}
+        acc = _readable_on_light(c["accent"], c["dark"])
         return {"bg": c["light"], "surf": c["lsurf"], "line": c["lline"], "text": c["dark"],
-                "muted": (95, 100, 112), "accent": c["accent"], "accent2": c["accent"], "dark": False}
+                "muted": (95, 100, 112), "accent": acc, "accent2": acc, "dark": False}
 
 
 # ---------------- Yazı ölçümü ----------------
