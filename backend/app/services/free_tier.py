@@ -179,6 +179,7 @@ VIDEO_TOOL_NOTE = (
     "bu satırı ekleme; video üretemeyeceğini söyleme, satırı eklemen yeterli."
 )
 FORCE_VIDEO_NOTE = "\n- Kullanıcı bu mesajda 'Video oluştur' seçeneğini kullandı: mutlaka en sona [[VIDEO: ...]] satırını ekle."
+SYSTEM_NOTE = re.compile(r"\[Sistem notu:[^\]]*\]", re.IGNORECASE)
 VIDEO_TAG = re.compile(r"\[\[\s*V[İI]DEO\s*:\s*(.+?)\]\]", re.IGNORECASE | re.DOTALL)
 
 
@@ -290,7 +291,7 @@ def finish_reply(text: str, messages: list[dict], paid: bool = False) -> tuple[s
             logger.error("Web araması yapılamadı: %s", e)
             rest = web_search.SEARCH_TAG.sub("", text).strip()
             text = rest or "Şu an internette arama yapamadım. Biraz sonra tekrar dener misin?"
-    text = VIDEO_TAG.sub("", text).strip()
+    text = SYSTEM_NOTE.sub("", VIDEO_TAG.sub("", text)).strip()
     text, file_request = documents.split_file_request(text)
     text, image_prompt = split_image_request(text)
     return text, image_prompt, sources, file_request

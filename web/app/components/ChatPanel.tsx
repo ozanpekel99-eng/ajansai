@@ -140,7 +140,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
           mode,
           messages: next.map((m) => ({
             role: m.role,
-            content: m.content,
+            content: m.role === "assistant" ? m.content + historyNote(m) : m.content,
             attachments: (m.attachments || []).map(({ url, content_type, name }) => ({ url, content_type, name })),
           })),
         }),
@@ -655,4 +655,14 @@ function VideoCard({ video, onUpdate }: { video: ChatVideo; onUpdate: (v: ChatVi
       </a>
     </figure>
   );
+}
+
+/** Önceki yanıtta sistemin yaptığı işler (görsel, arama, dosya, video) modele not olarak iletilir. */
+function historyNote(m: Msg): string {
+  const notes: string[] = [];
+  if (m.sources?.length) notes.push(`bu yanıt web aramasıyla yazıldı (kaynaklar: ${m.sources.map((s) => hostOf(s.url)).join(", ")})`);
+  if (m.images?.length) notes.push(`${m.images.length} görsel üretilip kullanıcıya gösterildi`);
+  if (m.files?.length) notes.push(`dosya oluşturulup kullanıcıya verildi: ${m.files.map((f) => f.name).join(", ")}`);
+  if (m.videos?.length) notes.push(m.videos.some((v) => v.url) ? "video üretilip kullanıcıya gösterildi" : "video üretimi başlatıldı");
+  return notes.length ? `\n\n[Sistem notu: ${notes.join("; ")}.]` : "";
 }
