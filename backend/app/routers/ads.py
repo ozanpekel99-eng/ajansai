@@ -389,3 +389,27 @@ def meta_ad_copy(payload: AdCopyRequest, user: dict = Depends(get_current_user))
         refund(event_id)
         raise HTTPException(status_code=503, detail="Reklam metni yazılamadı, kredin iade edildi. Tekrar dene.")
     return {"primary_text": data["primary_text"][:2000], "headline": (data.get("headline") or "")[:120]}
+
+
+@router.get("/meta/debug-page")
+def meta_debug_page(page_id: str, user: dict = Depends(get_current_user)):
+    """Geçici teşhis: sayfanın Instagram bağlantısını farklı yollardan sorar."""
+    _require_ads(user)
+    token = _get_token(user["id"])
+    out = {}
+    for name, path, fields in [
+        ("page", page_id, "id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username},tasks"),
+        ("ig_accounts", f"{page_id}/instagram_accounts", "id,username"),
+        ("page_backed", f"{page_id}/page_backed_instagram_accounts", "id,username"),
+        ("perms", "me/permissions", None),
+        ("biz_ig", "me/businesses", "id,name,owned_instagram_accounts.limit(50){id,username},client_instagram_accounts.limit(50){id,username},instagram_business_accounts.limit(50){id,username}"),
+    ]:
+        try:
+            params = {"fields": fields} if fields else {}
+            r = meta._graph("GET", path, token, **params)
+            if isinstance(r, dict) and "access_token" in r:
+                r["access_token"] = "…"
+            out[name] = r
+        except Exception as e:  # noqa: BLE001
+            out[name] = f"HATA: {e}"
+    return out
