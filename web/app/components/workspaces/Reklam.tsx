@@ -894,7 +894,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
           </div>
           <div className="field">
             <label htmlFor="ad-text">Ana metin</label>
-            <textarea id="ad-text" required={mode !== "post"} rows={4} value={primaryText} onChange={(e) => setPrimaryText(e.target.value)} maxLength={2000} />
+            <textarea id="ad-text" required rows={4} value={primaryText} onChange={(e) => setPrimaryText(e.target.value)} maxLength={2000} />
           </div>
             </>
           )}
