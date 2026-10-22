@@ -171,7 +171,7 @@ export default function ReklamWorkspace(_: WorkspaceProps) {
         </button>
       </div>
       <SetupChecklist onReconnect={connect} />
-      {view === "new" ? <NewAd onCreated={() => setView("list")} /> : <AdList />}
+      {view === "new" ? <NewAd onCreated={() => setView("list")} onReconnect={connect} /> : <AdList />}
     </>
   );
 }
@@ -250,7 +250,10 @@ function SetupChecklist({ onReconnect }: { onReconnect: () => void }) {
 
 /* ---------------- Yeni reklam ---------------- */
 
-function NewAd({ onCreated }: { onCreated: () => void }) {
+const IG_LINK_URL = (pageId: string) => `https://business.facebook.com/latest/settings/instagram_account?asset_id=${pageId}`;
+const PAGE_CREATE_URL = "https://www.facebook.com/pages/create";
+
+function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect: () => void }) {
   const { refresh } = useSession();
   const [accounts, setAccounts] = useState<AdAccount[]>([]);
   const [pages, setPages] = useState<Page[]>([]);
@@ -282,8 +285,71 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+  // Meta penceresi açıkken (sayfa oluşturma / Instagram bağlama) arka planda kontrol edilir
+  const [watching, setWatching] = useState<null | "page" | "ig">(null);
+  const [watchMiss, setWatchMiss] = useState<null | "page" | "ig">(null);
+  const watchTimer = useRef<ReturnType<typeof setInterval>>();
+  useEffect(() => () => clearInterval(watchTimer.current), []);
 
   const account = accounts.find((a) => a.account_id === accountId);
+  const page = pages.find((p) => p.id === pageId);
+  // Yalnızca seçili sayfaya bağlı Instagram hesapları gösterilir
+  const pageIg: IgAccount[] = [
+    ...(page?.instagram_id ? [{ id: page.instagram_id, username: page.instagram_username || "", page_id: page.id }] : []),
+    ...igAccounts.filter((a) => a.page_id === pageId && a.id !== page?.instagram_id),
+  ];
+
+  const loadPages = () =>
+    api<{ pages: Page[] }>(`/api/ads/meta/pages${accountId ? `?ad_account_id=${accountId}` : ""}`).then((d) => {
+      setPages(d.pages);
+      return d.pages;
+    });
+
+  const choosePage = (id: string, list: Page[] = pages) => {
+    setPageId(id);
+    const pg = list.find((x) => x.id === id);
+    const ig = igAccounts.find((a) => a.page_id === id) || (pg?.instagram_id ? { id: pg.instagram_id } : null);
+    setIgId(ig?.id || "");
+  };
+
+  // Meta'nın sayfasını küçük bir pencerede açar; kullanıcı ajansAI'dan ayrılmaz.
+  // Pencere açıkken birkaç saniyede bir yeni sayfa / bağlanan Instagram kontrol edilir.
+  const watchMeta = (kind: "page" | "ig") => {
+    const url = kind === "page" ? PAGE_CREATE_URL : IG_LINK_URL(pageId);
+    const w = window.open(url, "meta-setup", "width=1080,height=820,menubar=no,toolbar=no");
+    if (!w) window.open(url, "_blank");
+    const known = new Set(pages.map((p) => p.id));
+    const target = pageId;
+    let afterClose = 0;
+    setWatchMiss(null);
+    setWatching(kind);
+    clearInterval(watchTimer.current);
+    watchTimer.current = setInterval(async () => {
+      let list: Page[] = [];
+      try {
+        list = await loadPages();
+      } catch {
+        return;
+      }
+      const fresh = list.find((p) => !known.has(p.id));
+      const linked = list.find((p) => p.id === target)?.instagram_id;
+      const done = kind === "page" ? fresh : linked;
+      if (done) {
+        clearInterval(watchTimer.current);
+        setWatching(null);
+        if (kind === "page" && fresh) choosePage(fresh.id, list);
+        if (kind === "ig" && linked) setIgId(linked);
+        try { w?.close(); } catch { /* pencere zaten kapalı */ }
+        return;
+      }
+      if (!w || w.closed) afterClose += 1;
+      if (afterClose >= 3) {
+        clearInterval(watchTimer.current);
+        setWatching(null);
+        setWatchMiss(kind);
+      }
+    }, 4000);
+  };
   const igUsername = igAccounts.find((a) => a.id === igId)?.username || "";
 
   const checkWa = () => {
@@ -468,12 +534,7 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
               <select
                 id="ad-page"
                 value={pageId}
-                onChange={(e) => {
-                  setPageId(e.target.value);
-                  const pg = pages.find((x) => x.id === e.target.value);
-                  const ig = igAccounts.find((a) => a.page_id === pg?.id) || igAccounts.find((a) => a.id === pg?.instagram_id);
-                  if (ig) setIgId(ig.id);
-                }}
+                onChange={(e) => choosePage(e.target.value)}
                 required
               >
                 {!pages.length && <option value="">Sayfa bulunamadı</option>}
@@ -490,14 +551,10 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
               <select
                 id="ad-ig"
                 value={igId}
-                onChange={(e) => {
-                  setIgId(e.target.value);
-                  const linked = igAccounts.find((a) => a.id === e.target.value)?.page_id;
-                  if (linked) setPageId(linked);
-                }}
+                onChange={(e) => setIgId(e.target.value)}
               >
-                <option value="">Sayfa adına yayınla</option>
-                {igAccounts.map((a) => (
+                <option value="">{pageIg.length ? "Sayfa adına yayınla" : "Bağlı Instagram yok"}</option>
+                {pageIg.map((a) => (
                   <option key={a.id} value={a.id}>
                     @{a.username}
                   </option>
@@ -505,9 +562,49 @@ function NewAd({ onCreated }: { onCreated: () => void }) {
               </select>
             </div>
           </div>
+          {pageId && !pageIg.length && (
+            <div className="notice setup-inline">
+              <span>
+                <strong>{page?.name}</strong> sayfasına bağlı bir Instagram hesabı yok. Bağlarsan reklam Instagram hesabının adıyla görünür;
+                bağlamazsan sayfa adıyla yayınlanır.
+              </span>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => watchMeta("ig")} disabled={watching === "ig"}>
+                {watching === "ig" ? "Bağlantı bekleniyor…" : "Instagram'ı bu sayfaya bağla"}
+              </button>
+            </div>
+          )}
+          {watching && (
+            <div className="notice">
+              {watching === "page"
+                ? "Açılan Meta penceresinde sayfanı oluştur. Sayfa hazır olunca burada otomatik seçilir; bu sekmeden ayrılmana gerek yok."
+                : "Açılan Meta penceresinde Instagram hesabınla giriş yapıp bağla. Bağlanınca burada otomatik seçilir."}
+            </div>
+          )}
+          {watchMiss && (
+            <div className="notice setup-inline">
+              <span>
+                {watchMiss === "page" ? "Yeni sayfan henüz görünmüyor." : "Instagram bağlantısı henüz görünmüyor."} Meta, ajansAI&apos;a yeni
+                varlıklara erişim izni vermemiş olabilir: izinleri yenileyip ekranda yeni sayfayı / Instagram&apos;ı da işaretle.
+              </span>
+              <span style={{ display: "flex", gap: 6 }}>
+                <button type="button" className="btn btn-light btn-sm" onClick={() => { setWatchMiss(null); loadPages().then((l) => pageId || !l[0] || choosePage(l[0].id, l)); }}>
+                  Tekrar kontrol et
+                </button>
+                <button type="button" className="btn btn-primary btn-sm" onClick={onReconnect}>
+                  İzinleri yenile
+                </button>
+              </span>
+            </div>
+          )}
           <span className="hint">
-            Reklam yalnızca Instagram&apos;da gösterilir: akış, hikâye, Reels ve keşfet. Aradığın sayfa ya da Instagram listede yoksa Meta izin
-            ekranında seçilmemiştir; &quot;Meta bağlantısını kaldır&quot; deyip yeniden bağlanırken hepsini işaretle.
+            Listede {pages.length} sayfa var.{" "}
+            <button type="button" className="link-btn" onClick={() => watchMeta("page")} disabled={watching === "page"}>
+              {pages.length ? "Yeni Facebook sayfası aç" : "Facebook sayfan yok mu? Buradan aç"}
+            </button>
+            {" · "}
+            <button type="button" className="link-btn" onClick={onReconnect}>
+              Aradığın sayfa yoksa izinleri yenile
+            </button>
           </span>
         </section>
 

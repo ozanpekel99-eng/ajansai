@@ -3887,3 +3887,5 @@ table.data td.num {
 .ad-phone-foot p { margin: 0; font-size: 12.5px; line-height: 1.4; max-height: 3.6em; overflow: hidden; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
 .ad-phone-cta { display: block; text-align: center; background: #fff; color: #111; border-radius: 8px; padding: 9px; font-size: 13px; font-weight: 600; }
 .ad-phone.reels .ad-phone-cta { background: rgba(255,255,255,.2); color: #fff; text-align: left; }
+.notice.setup-inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.notice.setup-inline > span:first-child { flex: 1 1 260px; }
