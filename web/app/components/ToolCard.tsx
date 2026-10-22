@@ -18,13 +18,6 @@ export default function ToolCard({ tool }: { tool: Tool }) {
     </>
   );
 
-  if (!tool.ready) {
-    return (
-      <div className="tool-card soon" aria-disabled="true">
-        {inner}
-      </div>
-    );
-  }
   return (
     <Link href={`/araclar/${tool.slug}`} className="tool-card">
       {inner}

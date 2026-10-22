@@ -5,8 +5,8 @@ export default function Poster({ tool, showTag = true }: { tool: Tool; showTag?:
   return (
     <div className={`poster poster-${tool.slug}`} aria-hidden="true">
       {showTag && (
-        <span className={`chip tag ${tool.ready ? "chip-indigo" : "chip-muted"}`}>
-          {tool.ready ? KIND_LABEL[tool.kind] : "Yakında"}
+        <span className={`chip tag chip-indigo`}>
+          {KIND_LABEL[tool.kind]}
         </span>
       )}
       <Art slug={tool.slug} />
@@ -48,33 +48,6 @@ function Art({ slug }: { slug: string }) {
           <i className="ring r1" />
           <i className="ring r2" />
           <i className="ring r3" />
-        </>
-      );
-    case "caption":
-      return (
-        <div className="lines">
-          <span />
-          <span />
-          <span />
-          <span />
-        </div>
-      );
-    case "hashtag":
-      return <b>#</b>;
-    case "takvim":
-      return (
-        <div className="cal">
-          {Array.from({ length: 28 }).map((_, i) => (
-            <span key={i} className={i === 11 || i === 19 ? "on" : ""} />
-          ))}
-        </div>
-      );
-    case "reklam-metni":
-      return (
-        <>
-          <i className="bubble" />
-          <i className="tail" />
-          <i className="bar" />
         </>
       );
     default:

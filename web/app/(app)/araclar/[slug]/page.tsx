@@ -28,7 +28,7 @@ export default function ToolPage() {
     return (
       <div className="page">
         <div className="panel empty">
-          <h3>{tool ? `${tool.name} yakında geliyor` : "Bu araç bulunamadı"}</h3>
+          <h3>Bu araç bulunamadı</h3>
           <p>Şimdilik diğer araçları kullanabilirsin.</p>
           <p>
             <Link href="/araclar" className="btn btn-ghost btn-sm">

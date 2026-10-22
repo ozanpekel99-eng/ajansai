@@ -1,5 +1,4 @@
 // ajansAI araçları: vitrin, kartlar ve araç sayfaları bu listeden beslenir.
-// `ready: false` olanlar "Yakında" olarak gösterilir ve açılamaz.
 
 export type ToolKind = "metin" | "gorsel" | "video" | "reklam";
 export type QuotaKind = "ideas" | "image" | "video" | null;
@@ -65,46 +64,6 @@ export const TOOLS: Tool[] = [
     costLabel: "Kredi harcamaz",
     ready: true,
     plan: "Pro",
-  },
-  {
-    slug: "reklam-metni",
-    name: "Reklam Metni",
-    kind: "metin",
-    short: "Meta reklamları için birincil metin, başlık ve açıklama varyasyonları.",
-    long: "",
-    quota: "ideas",
-    costLabel: "Kredi bilgisi yakında",
-    ready: false,
-  },
-  {
-    slug: "caption",
-    name: "Caption Yazarı",
-    kind: "metin",
-    short: "Görselini veya konunu yaz, markanın tonunda caption alternatifleri al.",
-    long: "",
-    quota: "ideas",
-    costLabel: "Kredi bilgisi yakında",
-    ready: false,
-  },
-  {
-    slug: "hashtag",
-    name: "Hashtag Önerisi",
-    kind: "metin",
-    short: "Şehir, sektör ve ürüne göre karışık hashtag setleri.",
-    long: "",
-    quota: "ideas",
-    costLabel: "Kredi bilgisi yakında",
-    ready: false,
-  },
-  {
-    slug: "takvim",
-    name: "İçerik Takvimi",
-    kind: "metin",
-    short: "Bir aylık paylaşım planı: gün, format ve konu başlıklarıyla.",
-    long: "",
-    quota: "ideas",
-    costLabel: "Kredi bilgisi yakında",
-    ready: false,
   },
 ];
 
