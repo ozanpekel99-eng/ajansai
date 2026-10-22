@@ -121,7 +121,7 @@ def _mint_client_secret(model: str) -> dict:
 
     token = ai_gateway_token()
     if not (config.AI_GATEWAY_ENABLED and token):
-        raise HTTPException(status_code=503, detail="Gerçek zamanlı ses şu an kullanılamıyor.")
+        raise HTTPException(status_code=503, detail="Gerçek zamanlı ses şu an kullanılamıyor (kimlik yok).")
     try:
         r = requests.post(
             "https://ai-gateway.vercel.sh/v1/realtime/client-secrets",
@@ -139,7 +139,7 @@ def _mint_client_secret(model: str) -> dict:
         raise HTTPException(status_code=503, detail="Gerçek zamanlı ses şu an kullanılamıyor.")
     if r.status_code != 200:
         logger.error("Realtime anahtarı reddedildi %s: %s", r.status_code, r.text[:300])
-        raise HTTPException(status_code=503, detail="Gerçek zamanlı ses şu an kullanılamıyor.")
+        raise HTTPException(status_code=503, detail=f"Gerçek zamanlı ses şu an kullanılamıyor (kod {r.status_code}: {r.text[:160]}).")
     return r.json()
 
 
