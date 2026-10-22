@@ -130,10 +130,10 @@ GEMINI_TTS_VOICE = _env("GEMINI_TTS_VOICE", "Sulafat")
 TTS_STYLE = _env("TTS_STYLE", "sıcak, doğal ve samimi; günlük sohbet eder gibi, akıcı ve canlı")
 TTS_VOICE = _env("TTS_VOICE", "tr-TR-Chirp3-HD-Achernar")
 # Ücretsiz paket ve misafir: site geneli günlük tavan ve kişi başı günlük hak (~1000 karakter ≈ 1 dk ses)
-TTS_DAILY_CHARS = _int("TTS_DAILY_CHARS", 30000)
-TTS_CHARS_PER_DAY_SUBJECT = _int("TTS_CHARS_PER_DAY_SUBJECT", 3000)
-# Ücretli paketler: her 1000 karakter (~1 dk ses) 1 kredi; kişi başı günlük güvenlik tavanı
-TTS_CHARS_PER_CREDIT = _int("TTS_CHARS_PER_CREDIT", 1000)
+TTS_DAILY_CHARS = _int("TTS_DAILY_CHARS", 20000)
+TTS_CHARS_PER_DAY_SUBJECT = _int("TTS_CHARS_PER_DAY_SUBJECT", 1500)
+# Ücretli paketler: her 500 karakter (~35 sn ses) 1 kredi; kişi başı günlük güvenlik tavanı
+TTS_CHARS_PER_CREDIT = _int("TTS_CHARS_PER_CREDIT", 500)
 TTS_PAID_CHARS_PER_DAY = _int("TTS_PAID_CHARS_PER_DAY", 60000)
 
 # Sohbette canlı web araması: Groq yerleşik araması (GROQ_API_KEY ile) ya da Tavily

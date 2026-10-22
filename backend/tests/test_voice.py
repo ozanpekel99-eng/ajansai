@@ -89,9 +89,9 @@ def test_stream_returns_pcm_and_paid_users_pay_per_1000_chars(client, monkeypatc
 
     token = register_paid(client, plan="pro")
     used = lambda: client.get("/api/plans/usage", headers=auth(token)).json()["credits"]["used"]
-    for _ in range(3):  # 3 x 400 = 1200 karakter → 1 kredi
+    for _ in range(3):  # 3 x 400 = 1200 karakter → 2 kredi (500 karakter = 1 kredi)
         assert client.post("/api/voice/stream", json={"text": "a" * 400}, headers=auth(token)).status_code == 200
-    assert used() == 1
+    assert used() == 2
 
 
 def test_stream_failure_refunds(client, monkeypatch):

@@ -145,6 +145,16 @@ export default function Paketler() {
                     </td>
                   </tr>
                   <tr>
+                    <td>Dosya (sunum, PDF, Word, Excel)</td>
+                    <td className="num">{costs.file ?? 3}</td>
+                    <td>Sohbetten tasarımlı sunum, belge veya tablo dosyası</td>
+                  </tr>
+                  <tr>
+                    <td>Doğal sesli okuma</td>
+                    <td className="num">1</td>
+                    <td>Her ~500 karakter (yaklaşık 35 saniye ses) 1 kredi; ücretsiz pakette günde ~1,5 dakika ücretsiz</td>
+                  </tr>
+                  <tr>
                     <td>Örnekten konsept</td>
                     <td className="num">{costs.describe}</td>
                     <td>Yüklediğin görsel veya videoya bakıp aynı tarzda yeni görsel/video için konsept yazar</td>
