@@ -154,19 +154,19 @@ def create_campaign_draft(
 # kampanya silinir, hesapta yarım kayıt kalmaz.
 
 
-INSTAGRAM_POSITIONS = ["stream", "story", "reels", "explore"]
+# Keşfet (explore) Meta API'de kullanımdan kaldırıldı
+INSTAGRAM_POSITIONS = ["stream", "story", "reels"]
 
 # Arayüzdeki yerleşim seçenekleri → Meta yerleşimleri
 PLACEMENTS = {
     "instagram_feed": ("instagram", "stream"),
     "instagram_story": ("instagram", "story"),
     "instagram_reels": ("instagram", "reels"),
-    "instagram_explore": ("instagram", "explore"),
     "facebook_feed": ("facebook", "feed"),
     "facebook_story": ("facebook", "story"),
     "facebook_reels": ("facebook", "facebook_reels"),
 }
-DEFAULT_PLACEMENTS = ["instagram_feed", "instagram_story", "instagram_reels", "instagram_explore"]
+DEFAULT_PLACEMENTS = ["instagram_feed", "instagram_story", "instagram_reels"]
 VERTICAL = {"story", "reels", "facebook_reels"}  # 9:16 dikey görsel kullanılan yerleşimler
 
 OBJECTIVES = {

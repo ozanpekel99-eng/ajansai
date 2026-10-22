@@ -88,7 +88,7 @@ const AGES = Array.from({ length: 48 }, (_, i) => i + 18);
 const today = () => new Date().toISOString().slice(0, 10);
 
 type Placement =
-  | "instagram_feed" | "instagram_story" | "instagram_reels" | "instagram_explore"
+  | "instagram_feed" | "instagram_story" | "instagram_reels"
   | "facebook_feed" | "facebook_story" | "facebook_reels";
 const PLACEMENT_GROUPS: { platform: "instagram" | "facebook"; label: string; items: { value: Placement; label: string }[] }[] = [
   {
@@ -98,7 +98,6 @@ const PLACEMENT_GROUPS: { platform: "instagram" | "facebook"; label: string; ite
       { value: "instagram_feed", label: "Akış (gönderi)" },
       { value: "instagram_story", label: "Hikâye" },
       { value: "instagram_reels", label: "Reels" },
-      { value: "instagram_explore", label: "Keşfet" },
     ],
   },
   {
@@ -112,7 +111,7 @@ const PLACEMENT_GROUPS: { platform: "instagram" | "facebook"; label: string; ite
   },
 ];
 const ALL_PLACEMENTS = PLACEMENT_GROUPS.flatMap((g) => g.items);
-const DEFAULT_PLACEMENTS: Placement[] = ["instagram_feed", "instagram_story", "instagram_reels", "instagram_explore"];
+const DEFAULT_PLACEMENTS: Placement[] = ["instagram_feed", "instagram_story", "instagram_reels"];
 const isVertical = (p: Placement) => /story|reels/.test(p);
 // Profil ziyareti ve Instagram DM yalnızca Instagram'da çalışır
 const igOnly = (o: Objective) => o === "profile" || o === "instagram_dm";
@@ -872,7 +871,7 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
           {mode === "single" && (
             <>
               <MediaPicker
-                title="Gönderi görseli · akış ve keşfet"
+                title="Gönderi görseli · akış"
                 hint="Kare (1:1) veya dikdörtgen (4:5) en iyisi."
                 value={media}
                 onChange={setMedia}

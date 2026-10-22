@@ -803,7 +803,7 @@ def test_create_instagram_only_ad(client, monkeypatch):
     adset = next(d for m, p, d in calls if p.endswith("/adsets"))
     t = adset["targeting"]
     assert t["publisher_platforms"] == ["instagram"]
-    assert set(t["instagram_positions"]) == {"stream", "story", "reels", "explore"}
+    assert set(t["instagram_positions"]) == {"stream", "story", "reels"}
     assert t["geo_locations"] == {"cities": [{"key": "2520", "radius": 10, "distance_unit": "kilometer"}]}
     assert adset["daily_budget"] == 25000 and adset["status"] == "PAUSED" and adset["optimization_goal"] == "LINK_CLICKS"
     creative = next(d for m, p, d in calls if p.endswith("/adcreatives"))

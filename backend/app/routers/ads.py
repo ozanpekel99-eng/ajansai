@@ -260,6 +260,7 @@ def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_us
         raise HTTPException(status_code=400, detail="Bu reklam için bir Instagram hesabı seçmelisin.")
     if payload.call_to_action not in CTA_TYPES:
         raise HTTPException(status_code=400, detail="Geçersiz buton türü.")
+    payload.placements = [p for p in payload.placements if p != "instagram_explore"]  # eski arayüzlerden gelebilir
     bad = [p for p in payload.placements if p not in meta.PLACEMENTS]
     if bad or not payload.placements:
         raise HTTPException(status_code=400, detail="En az bir geçerli reklam alanı seç.")
@@ -279,7 +280,7 @@ def meta_create_ad(payload: CreateAdRequest, user: dict = Depends(get_current_us
     if payload.source_post:
         # Mevcut gönderi yalnızca kendi platformunun alanlarında yayınlanır
         own_platform = [p for p in placements if p.startswith(payload.source_post.platform)]
-        defaults = (["instagram_feed", "instagram_story", "instagram_reels", "instagram_explore"]
+        defaults = (["instagram_feed", "instagram_story", "instagram_reels"]
                     if payload.source_post.platform == "instagram" else ["facebook_feed"])
         placements = own_platform or defaults
     if payload.budget_type == "lifetime" and not payload.end_date:
