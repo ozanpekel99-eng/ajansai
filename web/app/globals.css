@@ -3046,3 +3046,11 @@ table.data td.num {
 .md tr:last-child td {
   border-bottom: none;
 }
+
+.md blockquote {
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--indigo);
+  background: var(--surface);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}

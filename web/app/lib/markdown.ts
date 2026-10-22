@@ -62,6 +62,9 @@ export function renderMarkdown(src: string): string {
         list = kind;
       }
       out.push(`<li>${inline((ul || ol)![1])}</li>`);
+    } else if (/^\s*>\s?/.test(line)) {
+      close();
+      out.push(`<blockquote>${inline(line.replace(/^\s*>\s?/, ""))}</blockquote>`);
     } else if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
       close();
       out.push("<hr/>");
