@@ -22,7 +22,7 @@ logger = logging.getLogger("ajansai.voice")
 
 @router.get("/status")
 def status():
-    return {"natural_voice": tts.enabled(), "streaming": bool(config.GEMINI_API_KEY)}
+    return {"natural_voice": tts.enabled(), "streaming": bool(config.GEMINI_API_KEY) or tts.gateway_enabled()}
 
 
 class SpeakRequest(BaseModel):
@@ -77,7 +77,7 @@ def speak(payload: SpeakRequest, request: Request, user: dict | None = Depends(g
 @router.post("/stream")
 def stream(payload: SpeakRequest, request: Request, user: dict | None = Depends(get_optional_user)):
     """Akışlı doğal ses: 24 kHz 16-bit mono PCM (audio/L16). İlk ses ~1 sn'de gelir."""
-    if not config.GEMINI_API_KEY:
+    if not (config.GEMINI_API_KEY or tts.gateway_enabled()):
         raise HTTPException(status_code=503, detail="Akışlı ses kullanılamıyor.")
     text = payload.text.strip()[: tts.MAX_CHARS]
     taken, event = _start(text, request, user)

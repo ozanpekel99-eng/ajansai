@@ -30,7 +30,7 @@ class TTSUnavailable(Exception):
 
 
 def enabled() -> bool:
-    return bool(config.GEMINI_API_KEY or config.GOOGLE_TTS_API_KEY)
+    return bool(config.GEMINI_API_KEY or config.GOOGLE_TTS_API_KEY or gateway_enabled())
 
 
 def _add(key: str, chars: int, limit: int) -> bool:
@@ -209,8 +209,60 @@ def paid_chars_today(subject: str) -> int:
     return row[0] if row else 0
 
 
+def gateway_enabled() -> bool:
+    from app.services.llm_service import gateway_ready
+
+    return bool(config.GATEWAY_TTS_MODEL) and gateway_ready()
+
+
+def _gateway(text: str, fmt: str = "pcm") -> bytes:
+    """Vercel AI Gateway üzerinden Gemini TTS (ödeme Vercel kredisinden). pcm: 24 kHz 16-bit mono."""
+    from app.services import gateway_media
+    from app.services.llm_service import record_spend
+
+    try:
+        r = requests.post(
+            f"{gateway_media.BASE_URL}/speech-model",
+            headers=gateway_media._headers(config.GATEWAY_TTS_MODEL, "speech"),
+            json={"text": text, "voice": config.GEMINI_TTS_VOICE, "instructions": config.TTS_STYLE, "outputFormat": fmt},
+            timeout=60,
+        )
+    except (requests.RequestException, gateway_media.MediaError) as e:
+        raise TTSUnavailable(f"Gateway ses: {e}") from e
+    if r.status_code != 200:
+        raise TTSUnavailable(f"Gateway ses {r.status_code}: {r.text[:200]}")
+    try:
+        audio = base64.b64decode(r.json().get("audio") or "")
+    except ValueError as e:
+        raise TTSUnavailable("Gateway ses yanıtı okunamadı") from e
+    if not audio:
+        raise TTSUnavailable("Gateway ses boş döndü")
+    seconds = (len(audio) - (44 if audio[:4] == b"RIFF" else 0)) / 48000
+    record_spend(config.GATEWAY_TTS_MODEL, None, usd=seconds * 25 * config.TTS_USD_PER_M_AUDIO_TOKENS / 1_000_000)
+    return audio
+
+
 def stream_pcm(text: str):
-    """Gemini TTS akışı: 24 kHz, 16-bit mono PCM parçaları üretir (ilk ses ~1 sn'de gelir)."""
+    """24 kHz, 16-bit mono PCM parçaları üretir.
+
+    Önce Vercel AI Gateway (tek parça, ücretli ve güvenilir); olmazsa Gemini API akışı (ücretsiz katman).
+    """
+    if gateway_enabled():
+        try:
+            pcm = _gateway(text, "pcm")
+            if pcm[:4] == b"RIFF":
+                pcm = pcm[44:]
+            yield pcm
+            return
+        except TTSUnavailable as e:
+            logger.warning("Gateway sesi olmadı, Gemini API deneniyor: %s", e)
+    if not config.GEMINI_API_KEY:
+        raise TTSUnavailable("Doğal ses sağlayıcısı yok")
+    yield from _gemini_stream(text)
+
+
+def _gemini_stream(text: str):
+    """Gemini API akışı (ücretsiz katmanda günlük istek sınırı düşük)."""
     r = requests.post(
         f"{GEMINI_URL}/models/{config.GEMINI_TTS_MODEL}:streamGenerateContent",
         params={"alt": "sse"},
@@ -252,7 +304,11 @@ def stream_pcm(text: str):
 def synthesize_raw(text: str) -> tuple[bytes, str]:
     """Kota ayırmadan sesi üretir (kotayı çağıran yönetir)."""
     errors = []
-    providers = ([_gemini] if config.GEMINI_API_KEY else []) + ([_google_cloud] if config.GOOGLE_TTS_API_KEY else [])
+    providers = (
+        ([lambda t: (_gateway(t, "wav"), "audio/wav")] if gateway_enabled() else [])
+        + ([_gemini] if config.GEMINI_API_KEY else [])
+        + ([_google_cloud] if config.GOOGLE_TTS_API_KEY else [])
+    )
     for provider in providers:
         try:
             return provider(text)

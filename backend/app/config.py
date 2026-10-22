@@ -126,6 +126,9 @@ GOOGLE_TTS_API_KEY = _env("GOOGLE_TTS_API_KEY")
 # Daha doğal ses: Gemini TTS (Google AI Studio API anahtarı, ücretsiz katman). Tanımlıysa önce bu denenir.
 GEMINI_API_KEY = _env("GEMINI_API_KEY")
 GEMINI_TTS_MODEL = _env("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts")
+# Öncelikli yol: aynı Gemini sesi Vercel AI Gateway'den (Vercel kredisiyle ödenir). Boş bırakılırsa kapalı.
+GATEWAY_TTS_MODEL = _env("GATEWAY_TTS_MODEL", "google/gemini-3.8-flash-tts")
+TTS_USD_PER_M_AUDIO_TOKENS = float(_env("TTS_USD_PER_M_AUDIO_TOKENS", "9"))  # 2027'de 18
 GEMINI_TTS_VOICE = _env("GEMINI_TTS_VOICE", "Sulafat")
 TTS_STYLE = _env("TTS_STYLE", "sıcak, doğal ve samimi; günlük sohbet eder gibi, akıcı ve canlı")
 TTS_VOICE = _env("TTS_VOICE", "tr-TR-Chirp3-HD-Achernar")

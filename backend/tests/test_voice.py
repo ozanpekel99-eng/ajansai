@@ -101,3 +101,24 @@ def test_stream_failure_refunds(client, monkeypatch):
     token = register_paid(client, plan="pro")
     assert client.post("/api/voice/stream", json={"text": "a" * 50}, headers=auth(token)).status_code == 503
     assert client.get("/api/plans/usage", headers=auth(token)).json()["credits"]["used"] == 0
+
+
+def test_stream_prefers_vercel_gateway(client, monkeypatch):
+    from app.services import llm_service
+
+    monkeypatch.setattr(llm_service, "gateway_ready", lambda: True)
+    monkeypatch.setattr(config, "AI_GATEWAY_API_KEY", "vk")
+    pcm = b"\x05\x00" * 2400
+    sent = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None, **k):
+        sent.update(url=url, headers=headers, json=json)
+        return FakeResponse(200, {"audio": base64.b64encode(pcm).decode()})
+
+    monkeypatch.setattr(tts.requests, "post", fake_post)
+    r = client.post("/api/voice/stream", json={"text": "Merhaba"})
+    assert r.status_code == 200 and r.content == pcm
+    assert sent["url"].endswith("/v4/ai/speech-model") and sent["headers"]["ai-model-id"] == "google/gemini-3.8-flash-tts"
+    assert sent["headers"]["ai-speech-model-specification-version"] == "4"
+    assert sent["json"]["outputFormat"] == "pcm" and sent["json"]["voice"] == "Sulafat"
+    assert llm_service.spent_today() > 0

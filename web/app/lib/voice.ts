@@ -25,10 +25,11 @@ function chunks(text: string, max = 600): string[] {
   }
   if (cur.trim()) out.push(cur.trim());
   // İlk parça kısa olsun ki ses hızlı başlasın
-  if (out[0] && out[0].length > 220) {
+  // İlk parça kısa olsun ki ses ~1-2 sn'de başlasın; sonrakiler çalarken hazırlanır
+  if (out[0] && out[0].length > 130) {
     const first = out[0];
-    const cut = first.lastIndexOf(" ", 220);
-    if (cut > 60) out.splice(0, 1, first.slice(0, cut), first.slice(cut + 1));
+    const cut = first.lastIndexOf(" ", 130);
+    if (cut > 40) out.splice(0, 1, first.slice(0, cut), first.slice(cut + 1));
   }
   return out;
 }
