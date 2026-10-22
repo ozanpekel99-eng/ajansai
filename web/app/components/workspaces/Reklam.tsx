@@ -85,7 +85,7 @@ export default function ReklamWorkspace(_: WorkspaceProps) {
   };
 
   if (usage && !usage.ads_enabled) {
-    return <LockedNotice text="Meta reklam entegrasyonu Pro ve Ajans paketlerinde açılır." plan="pro" />;
+    return <LockedNotice text="Meta reklam entegrasyonu Pro ve Advanced paketlerinde açılır." plan="pro" />;
   }
 
   if (!metaConnected) {

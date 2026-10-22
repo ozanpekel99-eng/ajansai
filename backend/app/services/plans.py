@@ -13,7 +13,7 @@ kredi düşer. Kredi maliyetleri sağlayıcı maliyetine göre belirlendi
 - Video 4K (Seedance 2.0): token ile ücretlenir, $4 / 1M token;
   token = 3840×2160×24 fps×sn / 1024 ≈ 194.400/sn → ≈ $0.78/sn (en kötü durum)
 
-Paketler $10 / $25 / $49; KDV ve iyzico komisyonu düşüldükten sonra ~%65-75 brüt marj bırakır.
+Paketler $10 / $20 / $30 (aylık) + %20 KDV; yıllıkta %20 indirim, kredi her 30 günde yenilenir.
 Ücretsiz paket (id: deneme) satın alınamaz; yeni kayıt olan herkes bununla başlar.
 """
 
@@ -65,16 +65,17 @@ PLANS = {
     },
     "pro": {
         "name": "Pro",
-        "price": 25,
-        "credits": 530,
+        "price": 20,
+        "credits": 500,
         "video_enabled": True,
         "ads_enabled": True,
         "purchasable": True,
     },
+    # id "ajans" eski kayıtlarla uyum için korunuyor; görünen adı Advanced
     "ajans": {
-        "name": "Ajans",
-        "price": 49,
-        "credits": 930,
+        "name": "Advanced",
+        "price": 30,
+        "credits": 1000,
         "video_enabled": True,
         "ads_enabled": True,
         "purchasable": True,
@@ -87,6 +88,13 @@ CURRENCY = "USD"
 
 FREE_PLAN = "deneme"
 PLAN_DURATION_DAYS = 30
+
+# Fiyatlar KDV hariçtir; ödemede KDV eklenerek tahsil edilir.
+VAT_RATE = 20  # %
+BILLING_CYCLES = {
+    "monthly": {"days": 30, "months": 1, "discount": 0},
+    "yearly": {"days": 365, "months": 12, "discount": 20},  # %20 indirim
+}
 
 
 def get_plan(plan_id: str) -> dict:
@@ -116,6 +124,18 @@ def chat_cost(attachments: int, pdf_pages: list[int] | None = None) -> int:
     return CREDIT_COSTS["chat_message"] + attachments * CREDIT_COSTS["chat_attachment"] + extra
 
 
+def cycle_price(plan_id: str, billing: str = "monthly") -> float:
+    """KDV hariç dönem fiyatı (yıllıkta 12 ay × %20 indirim)."""
+    c = BILLING_CYCLES[billing]
+    return round(get_plan(plan_id)["price"] * c["months"] * (100 - c["discount"]) / 100, 2)
+
+
+def price_breakdown(plan_id: str, billing: str = "monthly") -> dict:
+    net = cycle_price(plan_id, billing)
+    vat = round(net * VAT_RATE / 100, 2)
+    return {"net": net, "vat": vat, "vat_rate": VAT_RATE, "total": round(net + vat, 2), "currency": CURRENCY}
+
+
 def public_plan(plan_id: str) -> dict:
     """Arayüze gönderilen paket bilgisi: kredi ve o krediyle neler yapılabileceği."""
     p = get_plan(plan_id)
@@ -125,6 +145,9 @@ def public_plan(plan_id: str) -> dict:
         "name": p["name"],
         "price": p["price"],
         "currency": CURRENCY,
+        "price_yearly": cycle_price(plan_id, "yearly") if p["price"] else 0,
+        "yearly_discount": BILLING_CYCLES["yearly"]["discount"],
+        "vat_rate": VAT_RATE,
         "credits": c,
         "video_enabled": p["video_enabled"],
         "ads_enabled": p["ads_enabled"],

@@ -9,6 +9,10 @@ export type Plan = {
   name: string;
   price: number;
   currency: string;
+  /** KDV hariç yıllık fiyat (%20 indirimli) */
+  price_yearly: number;
+  yearly_discount: number;
+  vat_rate: number;
   credits: number;
   video_enabled: boolean;
   ads_enabled: boolean;
@@ -91,3 +95,15 @@ export const PLAN_ORDER = ["baslangic", "pro", "ajans"];
 
 /** Kayıtta seçilen ücretli paket: kayıttan sonra panelde ödeme penceresi bununla açılır. */
 export const PENDING_PLAN_KEY = "ajansai_signup_plan";
+
+export type Cycle = "monthly" | "yearly";
+
+/** KDV hariç dönem fiyatı. */
+export function cyclePrice(p: Plan, cycle: Cycle) {
+  return cycle === "yearly" ? p.price_yearly : p.price;
+}
+
+/** Yıllık pakette aylık karşılığı. */
+export function perMonth(p: Plan, cycle: Cycle) {
+  return cycle === "yearly" ? Math.round((p.price_yearly / 12) * 100) / 100 : p.price;
+}

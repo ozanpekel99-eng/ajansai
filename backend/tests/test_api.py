@@ -450,8 +450,9 @@ def test_plans_endpoint_shows_credit_examples(client):
     assert data["costs"]["video"]["720p"] == {"5": 12, "7": 17, "10": 24}
     assert data["costs"]["video"]["4k"]["10"] == 710
     pro = data["plans"]["pro"]
-    assert pro["credits"] == 530 and pro["examples"]["images"] == 132
-    assert pro["examples"]["videos"] == {"720p": 44, "1080p": 19, "4k": 1}
+    assert pro["credits"] == 500 and pro["examples"]["images"] == 125 and pro["price"] == 20 and pro["price_yearly"] == 192
+    assert pro["examples"]["videos"] == {"720p": 41, "1080p": 18, "4k": 1}
+    assert data["plans"]["ajans"]["name"] == "Advanced" and data["plans"]["ajans"]["credits"] == 1000 and data["plans"]["ajans"]["price_yearly"] == 288
     assert data["trial"]["examples"]["videos"]["720p"] == 0
 
 
@@ -533,7 +534,7 @@ BILLING = {"name": "Ozan", "surname": "Pekel", "phone": "0535 000 00 00", "city"
 
 def test_payment_success_activates_plan_once(client, monkeypatch):
     sent = _enable_iyzico(
-        monkeypatch, {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "25.00", "currency": "USD", "paymentId": "p1"}
+        monkeypatch, {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "24.00", "currency": "USD", "paymentId": "p1"}
     )
     token = register(client)
 
@@ -541,7 +542,7 @@ def test_payment_success_activates_plan_once(client, monkeypatch):
     assert r.status_code == 200, r.text
     assert r.json()["payment_page_url"].endswith("tok-1")
     init_payload = sent[0][1]
-    assert init_payload["price"] == "25.00" and init_payload["paidPrice"] == "25.00"
+    assert init_payload["price"] == "24.00" and init_payload["paidPrice"] == "24.00"  # $20 + %20 KDV
     assert init_payload["currency"] == "USD"
     assert init_payload["buyer"]["gsmNumber"] == "+905350000000"
     assert init_payload["callbackUrl"].endswith("/api/payments/iyzico/callback")
@@ -566,11 +567,11 @@ def test_payment_success_activates_plan_once(client, monkeypatch):
 @pytest.mark.parametrize(
     "result",
     [
-        {"status": "success", "paymentStatus": "FAILURE", "paidPrice": "25.00", "currency": "USD"},
+        {"status": "success", "paymentStatus": "FAILURE", "paidPrice": "24.00", "currency": "USD"},
         {"status": "failure", "errorMessage": "Kart reddedildi"},
         {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "1.00", "currency": "USD"},  # eksik tutar
         {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "25.00", "currency": "TRY"},  # yanlış para birimi
-        {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "25.00", "currency": "USD", "basketId": "baska-sepet"},
+        {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "24.00", "currency": "USD", "basketId": "baska-sepet"},
     ],
 )
 def test_payment_failure_does_not_activate(client, monkeypatch, result):
@@ -613,7 +614,7 @@ def test_payment_list_shows_only_own_payments(client, monkeypatch):
     assert client.get("/api/payments/", headers=auth(b)).json()["payments"] == []
     items = client.get("/api/payments/", headers=auth(a)).json()["payments"]
     assert len(items) == 1
-    assert items[0]["plan_name"] == "Pro" and items[0]["amount"] == 25 and items[0]["currency"] == "USD"
+    assert items[0]["plan_name"] == "Pro" and items[0]["amount"] == 24 and items[0]["currency"] == "USD"
     assert items[0]["status"] == "pending"
 
 
@@ -814,3 +815,33 @@ def test_ad_requires_link_and_own_media(client, monkeypatch):
     assert r.status_code == 400
     r = client.post("/api/ads/meta/ads", json={**AD_BODY, "media": {"url": "https://baska.site/a.jpg", "kind": "image"}}, headers=auth(token))
     assert r.status_code == 400
+
+
+def test_yearly_checkout_charges_discount_plus_vat_and_opens_365_days(client, monkeypatch):
+    from app.routers import payments as pr
+
+    q = client.get("/api/payments/quote", params={"plan_id": "ajans", "cycle": "yearly"}).json()
+    assert q == {"plan_id": "ajans", "cycle": "yearly", "net": 288.0, "vat": 57.6, "vat_rate": 20, "total": 345.6, "currency": "USD"}
+    monkeypatch.setattr(config, "IYZICO_API_KEY", "k")
+    monkeypatch.setattr(config, "IYZICO_SECRET_KEY", "s")
+    sent = {}
+
+    def fake_init(**kw):
+        sent.update(kw)
+        return {"token": "tok-y", "payment_page_url": "https://iyzico/pay"}
+
+    monkeypatch.setattr(pr.iyzico_service, "initialize_checkout", fake_init)
+    token = register(client)
+    billing = {"name": "Ozan", "surname": "P", "phone": "05350000000", "city": "Tekirdağ", "address": "Çorlu merkez 1"}
+    r = client.post("/api/payments/checkout", json={"plan_id": "ajans", "cycle": "yearly", "billing": billing}, headers=auth(token))
+    assert r.status_code == 200, r.text
+    assert str(sent["amount"]) == "345.6" and "yıllık" in sent["plan_name"]
+    monkeypatch.setattr(pr.iyzico_service, "retrieve_checkout", lambda t, c: {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "345.60", "currency": "USD", "basketId": c, "paymentId": "y1"})
+    monkeypatch.setattr(pr.iyzico_service, "is_successful_payment", lambda result, **kw: True)
+    client.post("/api/payments/iyzico/callback", data={"token": "tok-y"}, follow_redirects=False)
+    usage = client.get("/api/plans/usage", headers=auth(token)).json()
+    assert usage["plan"] == "ajans" and usage["credits"]["total"] == 1000
+    from datetime import datetime
+
+    days = (datetime.fromisoformat(usage["plan_expires_at"].rstrip("Z")) - datetime.utcnow()).days
+    assert 363 <= days <= 365

@@ -93,6 +93,7 @@ payments = Table(
     Column("plan_id", String(32), nullable=False),
     Column("amount_try", Numeric(10, 2), nullable=False),  # tutar; birimi `currency`
     Column("currency", String(3), nullable=False, default="TRY", server_default="TRY"),
+    Column("billing", String(10), nullable=False, default="monthly", server_default="monthly"),  # monthly | yearly
     Column("status", String(16), nullable=False),  # pending | success | failure
     Column("iyzico_token", String(200), nullable=True, unique=True),
     Column("iyzico_payment_id", String(100), nullable=True),
@@ -205,7 +206,10 @@ def init_db() -> None:
     # Eski kurulumlara sonradan eklenen sütunlar (create_all mevcut tabloya sütun eklemez).
     migrations = {
         "users": {"credits_used": "INTEGER NOT NULL DEFAULT 0"},
-        "payments": {"currency": "VARCHAR(3) NOT NULL DEFAULT 'TRY'"},
+        "payments": {
+            "currency": "VARCHAR(3) NOT NULL DEFAULT 'TRY'",
+            "billing": "VARCHAR(10) NOT NULL DEFAULT 'monthly'",
+        },
     }
     for table, cols in migrations.items():
         existing = {c["name"] for c in inspect(engine).get_columns(table)}

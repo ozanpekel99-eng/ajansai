@@ -71,7 +71,7 @@ export default function Tools() {
           </span>
           <div>
             <h3>Seedream görsel, video ve reklam kampanyaları paketlerde</h3>
-            <p>530 kredi ve Meta reklam entegrasyonu: örneğin 132 görsel ya da 44 kısa video.</p>
+            <p>Pro $20 + KDV: 500 kredi ve Meta reklam entegrasyonu; örneğin 125 görsel ya da 41 kısa video.</p>
           </div>
           <button className="btn btn-light" onClick={() => openCheckout("pro")}>
             Pro'ya geç

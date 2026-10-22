@@ -3172,3 +3172,18 @@ table.data td.num {
   justify-content: flex-end;
   gap: 8px;
 }
+
+.cycle-tabs {
+  display: flex;
+  margin-bottom: 12px;
+}
+
+.cycle-tabs button {
+  flex: 1;
+}
+
+.cycle-switch {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 24px;
+}

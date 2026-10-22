@@ -39,7 +39,7 @@ export default function Dashboard() {
       ),
     },
     meta: {
-      text: "Kampanya taslaklarını buradan oluştur. Pro ve Ajans paketlerinde.",
+      text: "Kampanya taslaklarını buradan oluştur. Pro ve Advanced paketlerinde.",
       action: (
         <Link href="/araclar/reklam" className="btn btn-ghost btn-sm">
           Bağla

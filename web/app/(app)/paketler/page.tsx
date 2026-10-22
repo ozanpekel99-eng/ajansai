@@ -1,7 +1,9 @@
 "use client";
 
 import { CreditCosts } from "../../lib/api";
-import { PLAN_ORDER, Plan, VIDEO_DURATIONS, VIDEO_RESOLUTIONS, num, money, usePricing } from "../../lib/plans";
+import { useState } from "react";
+
+import { Cycle, PLAN_ORDER, Plan, VIDEO_DURATIONS, VIDEO_RESOLUTIONS, num, money, perMonth, usePricing } from "../../lib/plans";
 import { useSession } from "../../lib/session";
 
 const PITCH: Record<string, string> = {
@@ -25,16 +27,27 @@ export default function Paketler() {
   const plans = pricing?.plans;
   const costs = pricing?.costs;
   const ids = PLAN_ORDER.filter((id) => plans?.[id]);
+  const [cycle, setCycle] = useState<Cycle>("monthly");
 
   return (
     <div className="page">
       <section className="price-hero">
         <h1>İşine uyan paketi seç</h1>
         <p>
-          Her paket 30 günlük bir kredi bakiyesi verir. Fikir, görsel ve video ürettikçe krediden düşer; ne üreteceğine
-          sen karar verirsin. Otomatik yenilenmez; ödeme iyzico ile dolar (USD) olarak, kartından güncel kurla alınır.
+          Her paket 30 günlük bir kredi bakiyesi verir. Sohbet, görsel ve video ürettikçe krediden düşer; ne üreteceğine
+          sen karar verirsin. Fiyatlara %20 KDV eklenir. Otomatik yenilenmez; ödeme iyzico ile dolar (USD) olarak, kartından güncel kurla alınır.
         </p>
       </section>
+      <div className="cycle-switch">
+        <div className="tabs" role="tablist" aria-label="Ödeme dönemi">
+          <button type="button" role="tab" aria-selected={cycle === "monthly"} className={cycle === "monthly" ? "active" : ""} onClick={() => setCycle("monthly")}>
+            Aylık
+          </button>
+          <button type="button" role="tab" aria-selected={cycle === "yearly"} className={cycle === "yearly" ? "active" : ""} onClick={() => setCycle("yearly")}>
+            Yıllık · %20 indirim
+          </button>
+        </div>
+      </div>
 
       {pricing === null ? (
         <div className="plans">
@@ -59,10 +72,13 @@ export default function Paketler() {
                   <h2>{p.name}</h2>
                   <p className="muted" style={{ margin: 0, fontSize: 14 }}>{PITCH[id]}</p>
                   <div className="amount">
-                    {money(p.price, p.currency)} <small>/ 30 gün</small>
+                    {money(perMonth(p, cycle), p.currency)} <small>/ ay + KDV</small>
                   </div>
+                  <p className="plan-sub" style={{ marginTop: -6 }}>
+                    {cycle === "yearly" ? `Yıllık ${money(p.price_yearly, p.currency)} + KDV tek ödeme` : "30 gün geçerli"}
+                  </p>
                   <div className="credit-badge">
-                    <strong>{num(p.credits)}</strong> kredi
+                    <strong>{num(p.credits)}</strong> kredi / ay
                   </div>
                   <p className="plan-sub">Bu krediyle yalnızca birini yaparsan:</p>
                   <ul>
@@ -75,7 +91,7 @@ export default function Paketler() {
                   </ul>
                   <button
                     className={`btn btn-block ${id === "pro" ? "btn-primary" : "btn-light"}`}
-                    onClick={() => openCheckout(id)}
+                    onClick={() => openCheckout(`${id}:${cycle}`)}
                   >
                     {current ? "30 gün uzat" : `${p.name} paketini al`}
                   </button>
@@ -146,7 +162,7 @@ export default function Paketler() {
                   <tr>
                     <td>Meta reklam taslağı</td>
                     <td className="num">{costs.ads_draft === 0 ? "Ücretsiz" : costs.ads_draft}</td>
-                    <td>Instagram için duraklatılmış kampanya taslağı (Pro ve Ajans)</td>
+                    <td>Instagram için duraklatılmış kampanya taslağı (Pro ve Advanced)</td>
                   </tr>
                 </tbody>
               </table>
@@ -239,7 +255,8 @@ export default function Paketler() {
                 </thead>
                 <tbody>
                   {[
-                    ["Fiyat (30 gün)", (p: Plan) => (p.price ? money(p.price, p.currency) : "Ücretsiz")],
+                    ["Aylık fiyat (+KDV)", (p: Plan) => (p.price ? money(p.price, p.currency) : "Ücretsiz")],
+                    ["Yıllık fiyat (+KDV, %20 indirimli)", (p: Plan) => (p.price ? money(p.price_yearly, p.currency) : "—")],
                     ["Kredi", (p: Plan) => (p.credits ? num(p.credits) : "—")],
                     ["Sohbet mesajı (yalnızca)", (p: Plan) => (p.credits ? num(p.examples.messages) : `Günde ${pricing.free?.chat_per_day ?? 20}`)],
                     ["Dosya ekleyerek sohbet", (p: Plan) => (p.credits ? "Var" : "—")],

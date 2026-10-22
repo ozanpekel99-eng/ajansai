@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { api } from "../lib/api";
-import { PLAN_ORDER, money, usePlans } from "../lib/plans";
+import { Cycle, PLAN_ORDER, cyclePrice, money, perMonth, usePlans } from "../lib/plans";
 import Icon from "./Icon";
 
 const BILLING_KEY = "ajansai_billing";
@@ -29,7 +29,9 @@ export default function CheckoutModal({
   onClose: () => void;
 }) {
   const plans = usePlans();
-  const [planId, setPlanId] = useState(initialPlan || (currentPlan && currentPlan !== "deneme" ? currentPlan : "pro"));
+  const [planArg, cycleArg] = (initialPlan || "").split(":");
+  const [cycle, setCycle] = useState<Cycle>(cycleArg === "yearly" ? "yearly" : "monthly");
+  const [planId, setPlanId] = useState(planArg || (currentPlan && currentPlan !== "deneme" ? currentPlan : "pro"));
   const [billing, setBilling] = useState<Billing>({ name: "", surname: "", phone: "", city: "", address: "" });
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState("");
@@ -43,6 +45,10 @@ export default function CheckoutModal({
 
   const update = (key: keyof Billing, value: string) => setBilling((b) => ({ ...b, [key]: value }));
   const plan = plans?.[planId];
+  const net = plan ? cyclePrice(plan, cycle) : 0;
+  const vatRate = plan?.vat_rate ?? 20;
+  const vat = Math.round(net * vatRate) / 100;
+  const total = Math.round((net + vat) * 100) / 100;
 
   const pay = async (e: FormEvent) => {
     e.preventDefault();
@@ -56,7 +62,7 @@ export default function CheckoutModal({
       }
       const data = await api<{ payment_page_url: string }>("/api/payments/checkout", {
         method: "POST",
-        body: JSON.stringify({ plan_id: planId, billing }),
+        body: JSON.stringify({ plan_id: planId, cycle, billing }),
       });
       window.location.href = data.payment_page_url;
     } catch (err: any) {
@@ -75,6 +81,15 @@ export default function CheckoutModal({
           </button>
         </div>
 
+        <div className="tabs cycle-tabs" role="tablist" aria-label="Ödeme dönemi">
+          <button type="button" role="tab" aria-selected={cycle === "monthly"} className={cycle === "monthly" ? "active" : ""} onClick={() => setCycle("monthly")}>
+            Aylık
+          </button>
+          <button type="button" role="tab" aria-selected={cycle === "yearly"} className={cycle === "yearly" ? "active" : ""} onClick={() => setCycle("yearly")}>
+            Yıllık · %{plan?.yearly_discount ?? 20} indirim
+          </button>
+        </div>
+
         <div className="plan-pick">
           {PLAN_ORDER.filter((id) => plans?.[id]).map((id) => (
             <button
@@ -85,7 +100,9 @@ export default function CheckoutModal({
               aria-pressed={planId === id}
             >
               <strong>{plans![id].name}</strong>
-              <span>{money(plans![id].price, plans![id].currency)} · {plans![id].credits} kredi</span>
+              <span>
+                {money(perMonth(plans![id], cycle), plans![id].currency)}/ay + KDV · {plans![id].credits} kredi/ay
+              </span>
             </button>
           ))}
         </div>
@@ -118,12 +135,20 @@ export default function CheckoutModal({
         {plan && (
           <div className="summary">
             <div>
-              <span className="muted">{plan.name} paketi, 30 gün</span>
-              <span>{money(plan.price, plan.currency)}</span>
+              <span className="muted">
+                {plan.name} paketi, {cycle === "yearly" ? "12 ay" : "30 gün"}
+              </span>
+              <span>{money(net, plan.currency)}</span>
+            </div>
+            <div>
+              <span className="muted">KDV (%{vatRate})</span>
+              <span>{money(vat, plan.currency)}</span>
             </div>
             <div>
               <span className="muted">Dahil</span>
-              <span>{plan.credits.toLocaleString("tr-TR")} kredi</span>
+              <span>
+                Her 30 günde {plan.credits.toLocaleString("tr-TR")} kredi{cycle === "yearly" ? " (12 kez yenilenir)" : ""}
+              </span>
             </div>
             <div>
               <span className="muted">Örneğin</span>
@@ -132,8 +157,8 @@ export default function CheckoutModal({
               </span>
             </div>
             <div className="total">
-              <span>Ödenecek tutar</span>
-              <span>{money(plan.price, plan.currency)}</span>
+              <span>Ödenecek tutar (KDV dahil)</span>
+              <span>{money(total, plan.currency)}</span>
             </div>
           </div>
         )}
@@ -142,7 +167,7 @@ export default function CheckoutModal({
 
         <button className="btn btn-primary btn-block" type="submit" disabled={paying || !plan}>
           <Icon name="lock" size={16} />
-          {paying ? "Ödeme sayfası açılıyor…" : plan ? `${money(plan.price, plan.currency)} öde` : "Paket seç"}
+          {paying ? "Ödeme sayfası açılıyor…" : plan ? `${money(total, plan.currency)} öde` : "Paket seç"}
         </button>
         <p className="secure-note">Ödeme dolar (USD) olarak alınır; TL kartlarda tutar bankanın güncel kuruyla çevrilir. Kart bilgilerin iyzico'nun güvenli sayfasında alınır, ajansAI saklamaz.</p>
       </form>

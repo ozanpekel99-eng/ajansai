@@ -191,7 +191,7 @@ def list_events(user_id: str, limit: int = 50) -> list[dict]:
     ]
 
 
-def activate_plan(user_id: str, plan_id: str) -> None:
+def activate_plan(user_id: str, plan_id: str, days: int = PLAN_DURATION_DAYS) -> None:
     """Başarılı ödemeden sonra çağrılır: paketi 30 gün için açar, krediyi yeniler.
 
     Aynı paketi süresi bitmeden yenileyen kullanıcının kalan günleri korunur.
@@ -206,7 +206,7 @@ def activate_plan(user_id: str, plan_id: str) -> None:
         conn.execute(
             update(users)
             .where(users.c.id == user_id)
-            .values(plan=plan_id, plan_expires_at=start + timedelta(days=PLAN_DURATION_DAYS), **_reset_values(now))
+            .values(plan=plan_id, plan_expires_at=start + timedelta(days=days), **_reset_values(now))
         )
 
 

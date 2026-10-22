@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 
 import SocialLogin from "../components/SocialLogin";
 import { api, setToken } from "../lib/api";
-import { PENDING_PLAN_KEY, PLAN_ORDER, money, num, usePricing } from "../lib/plans";
+import { Cycle, PENDING_PLAN_KEY, PLAN_ORDER, money, num, perMonth, usePricing } from "../lib/plans";
 
 const PITCH: Record<string, string> = {
   deneme: "Denemek için: sohbet ve görsel üretimi, kart gerekmez.",
@@ -27,11 +27,12 @@ function Signup() {
   const params = useSearchParams();
   const pricing = usePricing();
   const [plan, setPlan] = useState<string | null>(params.get("paket"));
+  const [cycle, setCycle] = useState<Cycle>("monthly");
 
   const choose = (id: string) => {
     try {
       if (id === "deneme") localStorage.removeItem(PENDING_PLAN_KEY);
-      else localStorage.setItem(PENDING_PLAN_KEY, id);
+      else localStorage.setItem(PENDING_PLAN_KEY, `${id}:${cycle}`);
     } catch {
       // depolama kapalıysa paket seçimi kayıttan sonra panelden yapılır
     }
@@ -60,8 +61,18 @@ function Signup() {
         <main className="page">
           <section className="price-hero">
             <h1>Hangi paketle başlamak istersin?</h1>
-            <p>Ücretsiz paketle hemen başlayabilir, istediğin zaman yükseltebilirsin. Ücretli paketler 30 gün geçerli, otomatik yenilenmez.</p>
+            <p>Ücretsiz paketle hemen başlayabilir, istediğin zaman yükseltebilirsin. Fiyatlara KDV eklenir; otomatik yenilenmez.</p>
           </section>
+          <div className="cycle-switch">
+            <div className="tabs" role="tablist" aria-label="Ödeme dönemi">
+              <button type="button" role="tab" aria-selected={cycle === "monthly"} className={cycle === "monthly" ? "active" : ""} onClick={() => setCycle("monthly")}>
+                Aylık
+              </button>
+              <button type="button" role="tab" aria-selected={cycle === "yearly"} className={cycle === "yearly" ? "active" : ""} onClick={() => setCycle("yearly")}>
+                Yıllık · %20 indirim
+              </button>
+            </div>
+          </div>
           <div className="plans plans-4">
             {ids.map((id) => {
               const p = id === "deneme" ? pricing?.trial : pricing?.plans?.[id];
@@ -71,8 +82,14 @@ function Signup() {
                   <h2>{id === "deneme" ? "Ücretsiz" : p?.name}</h2>
                   <p className="muted" style={{ margin: 0, fontSize: 14 }}>{PITCH[id]}</p>
                   <div className="amount">
-                    {id === "deneme" ? "$0" : p ? money(p.price, p.currency) : "…"} <small>{id === "deneme" ? "süresiz" : "/ 30 gün"}</small>
+                    {id === "deneme" ? "$0" : p ? money(perMonth(p, cycle), p.currency) : "…"}{" "}
+                    <small>{id === "deneme" ? "süresiz" : "/ ay + KDV"}</small>
                   </div>
+                  {id !== "deneme" && p && (
+                    <p className="plan-sub" style={{ marginTop: -6 }}>
+                      {cycle === "yearly" ? `Yıllık ${money(p.price_yearly, p.currency)} + KDV tek ödeme` : "30 gün geçerli"}
+                    </p>
+                  )}
                   <ul>
                     {id === "deneme" ? (
                       <>
@@ -83,7 +100,7 @@ function Signup() {
                       </>
                     ) : p ? (
                       <>
-                        <li>{num(p.credits)} kredi</li>
+                        <li>Her ay {num(p.credits)} kredi</li>
                         <li>Sınırsız sohbet (mesaj başı 1 kredi), dosya ekleme</li>
                         <li>{num(p.examples.images)} yüksek kaliteli görsel ya da {num(p.examples.videos["720p"])} kısa video</li>
                         <li className={p.ads_enabled ? "" : "no"}>Instagram reklamları (Meta)</li>
