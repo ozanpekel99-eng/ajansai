@@ -165,3 +165,65 @@ def chat_completion(model: str, messages: list[dict], max_tokens: int = 2000) ->
     if not content:
         raise LLMError("Boş yanıt")
     return content
+
+
+# ---------------- Ücretsiz sağlayıcı zinciri ----------------
+# Groq ve Cerebras'ın ücretsiz katmanları (OpenAI uyumlu). Her model ayrı günlük
+# kotaya sahip; biri dolunca (429) ya da hata verince sıradakine geçilir. Hepsi
+# doluysa en son ücretli ama çok ucuz Haiku 5.5 (AI Gateway) kullanılır.
+
+FREE_PROVIDERS = {
+    "groq": ("https://api.groq.com/openai/v1/chat/completions", lambda: config.GROQ_API_KEY),
+    "cerebras": ("https://api.cerebras.ai/v1/chat/completions", lambda: config.CEREBRAS_API_KEY),
+}
+
+
+def _free_provider_call(provider: str, model: str, messages: list[dict], max_tokens: int) -> str:
+    url, key = FREE_PROVIDERS[provider]
+    body = {"model": model, "messages": messages, "max_completion_tokens": max_tokens}
+    if "gpt-oss" in model:
+        body["reasoning_effort"] = "low"  # düşünme token'ları kotadan yer; kısa tut
+    try:
+        response = requests.post(
+            url,
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {key()}"},
+            json=body,
+            timeout=45,
+        )
+    except requests.RequestException as e:
+        raise LLMError(f"{provider} ulaşılamadı: {e}") from e
+    if response.status_code != 200:
+        raise LLMError(f"{provider}/{model} {response.status_code}: {response.text[:200]}")
+    try:
+        content = response.json()["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError, ValueError) as e:
+        raise LLMError(f"{provider} beklenmeyen yanıt: {response.text[:200]}") from e
+    if not content or not content.strip():
+        raise LLMError(f"{provider}/{model} boş yanıt")
+    return content
+
+
+def free_chain() -> list[tuple[str, str]]:
+    """Anahtarı tanımlı ücretsiz (sağlayıcı, model) çiftleri, öncelik sırasıyla."""
+    chain = []
+    for item in (config.FREE_CHAT_CHAIN or "").split(","):
+        provider, _, model = item.strip().partition(":")
+        if provider in FREE_PROVIDERS and model and FREE_PROVIDERS[provider][1]():
+            chain.append((provider, model))
+    return chain
+
+
+def free_chat_completion(messages: list[dict], max_tokens: int = 1200) -> tuple[str, str]:
+    """Önce ücretsiz katmanlar, en son Haiku. (metin, "sağlayıcı:model") döndürür."""
+    errors = []
+    for provider, model in free_chain():
+        try:
+            return _free_provider_call(provider, model, messages, max_tokens), f"{provider}:{model}"
+        except LLMError as e:
+            errors.append(str(e))
+            logger.warning("Ücretsiz sağlayıcı atlandı: %s", e)
+    try:
+        return chat_completion(config.FREE_CHAT_MODEL, messages, max_tokens), config.FREE_CHAT_MODEL
+    except LLMError as e:
+        errors.append(str(e))
+        raise LLMError("; ".join(errors)) from e

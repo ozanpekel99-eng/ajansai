@@ -4,9 +4,10 @@ Her paket 30 günlük bir kredi bakiyesi verir; her üretim işlemi sabit sayıd
 kredi düşer. Kredi maliyetleri sağlayıcı maliyetine göre belirlendi
 (Vercel AI Gateway fiyatları, Ekim 2026); 1 kredi ≈ en fazla $0.011 maliyet:
 
-- Fikir (Claude Sonnet 5): 2 fikir ≈ $0.006 → her 2 fikir 1 kredi
+- Fikir (Claude Haiku 5.5): 2 fikir ≈ $0.001 → her 2 fikir 1 kredi
 - Görsel (Seedream 5.0 Pro): $0.035 → 4 kredi
-- Sohbet mesajı (Claude Sonnet 5 / video ekinde Gemini 3.6 Flash): ≈ $0.01 → 1 kredi, her ek +1
+- Sohbet mesajı (Claude Haiku 5.5 / video ekinde Gemini 3.6 Flash): ≈ $0.001 → 1 kredi, her ek +1
+  (ücretsiz pakette Groq/Cerebras ücretsiz katmanları, $0)
 - Video 720p (Seedance 1.5 Pro): sessiz $0.0259/sn, sesli $0.0518/sn
 - Video 1080p (Seedance 1.5 Pro): sessiz $0.0583/sn, sesli $0.1166/sn
 - Video 4K (Seedance 2.0): token ile ücretlenir, $4 / 1M token;

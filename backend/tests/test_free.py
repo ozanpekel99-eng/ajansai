@@ -12,12 +12,12 @@ IP_B = {"x-forwarded-for": "85.100.1.2"}
 
 
 def _fake_chat(monkeypatch, seen=None):
-    def fake(model, messages, max_tokens=0):
+    def fake(messages, max_tokens=0):
         if seen is not None:
-            seen.append({"model": model, "messages": messages, "max_tokens": max_tokens})
-        return "Ücretsiz fikir"
+            seen.append({"messages": messages, "max_tokens": max_tokens})
+        return "Ücretsiz fikir", "groq:test"
 
-    monkeypatch.setattr(free_tier, "chat_completion", fake)
+    monkeypatch.setattr(free_tier, "free_chat_completion", fake)
 
 
 def _msg(text="Kafem için fikir"):
@@ -33,7 +33,6 @@ def test_guest_chat_uses_haiku_and_daily_limit_per_ip(client, monkeypatch):
         assert r.status_code == 200, r.text
     assert r.json()["reply"] == "Ücretsiz fikir"
     assert r.json()["free"]["chat"] == {"used": 2, "limit": 2, "remaining": 0}
-    assert seen[0]["model"] == config.FREE_CHAT_MODEL == "anthropic/claude-haiku-5.5"
     assert seen[0]["max_tokens"] <= 1200
 
     r = client.post("/api/free/chat", json=_msg(), headers=IP_A)
@@ -60,7 +59,7 @@ def test_free_chat_failure_does_not_use_quota_and_is_text_only(client, monkeypat
     def broken(*a, **k):
         raise LLMError("kapalı")
 
-    monkeypatch.setattr(free_tier, "chat_completion", broken)
+    monkeypatch.setattr(free_tier, "free_chat_completion", broken)
     r = client.post("/api/free/chat", json=_msg(), headers=IP_A)
     assert r.status_code == 503
     assert client.get("/api/free/status", headers=IP_A).json()["chat"]["used"] == 0
@@ -84,7 +83,7 @@ def test_free_chat_sends_short_history(client, monkeypatch):
 def _enable_free_images(monkeypatch, calls):
     monkeypatch.setattr(config, "CLOUDFLARE_ACCOUNT_ID", "acc123")
     monkeypatch.setattr(config, "CLOUDFLARE_AI_TOKEN", "cf-token")
-    monkeypatch.setattr(free_tier, "chat_completion", lambda model, messages, max_tokens=0: "a fridge in a white kitchen")
+    monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0: ("a fridge in a white kitchen", "groq:x"))
 
     def fake_post(url, headers=None, json=None, timeout=None):
         calls.append({"url": url, "headers": headers, "json": json})
@@ -242,3 +241,44 @@ def test_paid_chat_trims_history_and_limits_reply(client, monkeypatch):
     assert sent[0]["role"] == "user" and sent[-1]["content"] == "son"
     assert sum(len(m["content"]) for m in sent[:-1]) <= assistant.HISTORY_CHARS
     assert all(len(m["content"]) <= assistant.OLD_MESSAGE_CHARS for m in sent)
+
+
+# ---------------- Ücretsiz sağlayıcı zinciri ----------------
+
+def test_free_chain_falls_through_to_haiku(monkeypatch):
+    from app.services import llm_service as ls
+
+    monkeypatch.setattr(config, "GROQ_API_KEY", "gk")
+    monkeypatch.setattr(config, "CEREBRAS_API_KEY", "ck")
+    monkeypatch.setattr(config, "FREE_CHAT_CHAIN", "cerebras:gpt-oss-120b,groq:openai/gpt-oss-120b,bilinmeyen:x")
+    calls = []
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        calls.append((url, json.get("model"), headers["Authorization"], json.get("reasoning_effort")))
+        if "cerebras" in url:
+            return FakeResponse(429, {"error": "quota"})
+        return FakeResponse(200, {"choices": [{"message": {"content": "Groq yanıtı"}}]})
+
+    monkeypatch.setattr(ls.requests, "post", fake_post)
+    text, used = ls.free_chat_completion([{"role": "user", "content": "selam"}])
+    assert text == "Groq yanıtı" and used == "groq:openai/gpt-oss-120b"
+    assert calls[0] == ("https://api.cerebras.ai/v1/chat/completions", "gpt-oss-120b", "Bearer ck", "low")
+    assert calls[1][0] == "https://api.groq.com/openai/v1/chat/completions"
+
+    # Hepsi doluysa Haiku'ya düşer
+    monkeypatch.setattr(ls.requests, "post", lambda url, **k: FakeResponse(429, {}))
+    monkeypatch.setattr(ls, "chat_completion", lambda model, messages, max_tokens=0: f"{model} yanıtı")
+    text, used = ls.free_chat_completion([{"role": "user", "content": "selam"}])
+    assert used == config.FREE_CHAT_MODEL == "anthropic/claude-haiku-5.5"
+
+
+def test_free_chain_skips_providers_without_keys(monkeypatch):
+    from app.services import llm_service as ls
+
+    monkeypatch.setattr(config, "GROQ_API_KEY", None)
+    monkeypatch.setattr(config, "CEREBRAS_API_KEY", "ck")
+    assert ls.free_chain() == [("cerebras", "gpt-oss-120b"), ("cerebras", "qwen-3.8-27b")]
+
+
+def test_paid_chat_uses_haiku():
+    assert config.CHAT_MODEL == "anthropic/claude-haiku-5.5"

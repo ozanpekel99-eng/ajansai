@@ -1,7 +1,8 @@
 """Ücretsiz paket: kredi harcamadan fikir sohbeti, ücretsiz AI görseli ve stok fotoğraf.
 
 Maliyet sıfıra yakın tutulur:
-- Sohbet Claude Haiku 5.5 ile, yalnızca metin, kısa geçmiş (mesaj başı ~$0,0007).
+- Sohbet Groq / Cerebras ücretsiz katmanlarıyla ($0), kotalar dolarsa Claude Haiku 5.5 ile
+  (mesaj başı ~$0,0007); yalnızca metin, kısa geçmiş.
 - Görsel Cloudflare Workers AI'ın günlük ücretsiz kotasıyla (FLUX.1 schnell); site geneli
   günlük tavan ücretsiz kotanın altında tutulur, aşılırsa üretim ertesi güne kalır.
 - Stok fotoğraflar Pexels'ten (ücretsiz, ticari kullanım serbest).
@@ -23,7 +24,7 @@ from sqlalchemy import and_, delete, func, select
 from app import config
 from app.db import free_events, get_engine, stock_cache, utcnow
 from app.services import assistant
-from app.services.llm_service import chat_completion
+from app.services.llm_service import free_chat_completion
 
 logger = logging.getLogger("ajansai.free")
 
@@ -134,7 +135,8 @@ def chat(subject: str, signed_in: bool, history: list[dict]) -> str:
     for m in history[-HISTORY_MESSAGES:]:
         messages.append({"role": m["role"], "content": (m.get("content") or "")[:MESSAGE_CHARS]})
     try:
-        return chat_completion(config.FREE_CHAT_MODEL, messages, max_tokens=1200)
+        text, _ = free_chat_completion(messages, max_tokens=1200)
+        return text
     except Exception:
         release(event_id)
         raise
@@ -147,10 +149,9 @@ def image_enabled() -> bool:
 
 
 def _english_prompt(concept: str) -> str:
-    """FLUX İngilizce istemlerde daha iyi sonuç verir; Haiku ile kısa bir çeviri (~$0,0002)."""
+    """FLUX İngilizce istemlerde daha iyi sonuç verir; ücretsiz zincirle kısa bir çeviri."""
     try:
-        text = chat_completion(
-            config.FREE_CHAT_MODEL,
+        text, _ = free_chat_completion(
             [
                 {
                     "role": "user",
@@ -159,9 +160,9 @@ def _english_prompt(concept: str) -> str:
                     + concept,
                 }
             ],
-            max_tokens=200,
-        ).strip()
-        return text or concept
+            max_tokens=300,
+        )
+        return text.strip() or concept
     except Exception as e:  # çeviri olmazsa özgün metinle devam
         logger.warning("İstem çevrilemedi: %s", e)
         return concept

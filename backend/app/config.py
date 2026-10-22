@@ -68,7 +68,7 @@ OMNIROUTE_TIMEOUT = float(_env("OMNIROUTE_TIMEOUT", "90"))
 # OIDC token ile doğrulanır). AI_GATEWAY_API_KEY verilirse onu kullanır.
 AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh/v1"
 AI_GATEWAY_API_KEY = _env("AI_GATEWAY_API_KEY")
-AI_GATEWAY_MODEL = _env("AI_GATEWAY_MODEL", "anthropic/claude-sonnet-5")
+AI_GATEWAY_MODEL = _env("AI_GATEWAY_MODEL", "anthropic/claude-haiku-5.5")
 # Varsayılan: Vercel'de çalışıyorsa açık. Kapatmak için AI_GATEWAY_ENABLED=false.
 AI_GATEWAY_ENABLED = _bool("AI_GATEWAY_ENABLED", bool(_env("VERCEL")) or bool(AI_GATEWAY_API_KEY))
 
@@ -77,8 +77,9 @@ ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 
 # --- Görsel / video (Vercel AI Gateway üzerinden, ayrı anahtar gerekmez) ---
 IMAGE_MODEL = _env("IMAGE_MODEL", "bytedance/seedream-5.0-pro")
-# Fikir sohbeti: metin, görsel ve belge Claude ile; video eki varsa Gemini ile anlaşılır.
-CHAT_MODEL = _env("CHAT_MODEL", "anthropic/claude-sonnet-5")
+# Fikir sohbeti (ücretli paketler): metin, görsel ve belge Claude Haiku 5.5 ile
+# (mesaj başı ~$0,0007); video eki varsa Gemini ile anlaşılır.
+CHAT_MODEL = _env("CHAT_MODEL", "anthropic/claude-haiku-5.5")
 CHAT_VIDEO_MODEL = _env("CHAT_VIDEO_MODEL", "google/gemini-3.6-flash")
 # Çözünürlüğe göre video modeli ve sağlayıcıya gönderilen çözünürlük. Videolar
 # dikey (9:16) üretilir; çözünürlük sağlayıcının kademe adıyla verilir.
@@ -88,7 +89,14 @@ VIDEO_MODELS = {
     "4k": (_env("VIDEO_MODEL_4K", "bytedance/seedance-2.0"), "3840x2160"),
 }
 # --- Ücretsiz paket (üyelik gerektirmez; maliyeti sıfıra yakın) ---
-# Fikir sohbeti Claude Haiku 5.5 ile (mesaj başı ~$0,0007).
+# Fikir sohbeti önce Groq / Cerebras ücretsiz katmanlarıyla ($0); kotalar dolarsa
+# Claude Haiku 5.5 ile (mesaj başı ~$0,0007). Zincir: "sağlayıcı:model" listesi.
+GROQ_API_KEY = _env("GROQ_API_KEY")
+CEREBRAS_API_KEY = _env("CEREBRAS_API_KEY")
+FREE_CHAT_CHAIN = _env(
+    "FREE_CHAT_CHAIN",
+    "cerebras:gpt-oss-120b,groq:openai/gpt-oss-120b,cerebras:qwen-3.8-27b,groq:qwen/qwen3.8-27b",
+)
 FREE_CHAT_MODEL = _env("FREE_CHAT_MODEL", "anthropic/claude-haiku-5.5")
 FREE_CHAT_PER_DAY_USER = _int("FREE_CHAT_PER_DAY_USER", 20)
 FREE_CHAT_PER_DAY_ANON = _int("FREE_CHAT_PER_DAY_ANON", 10)
