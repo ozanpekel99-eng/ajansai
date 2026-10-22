@@ -35,6 +35,8 @@ Rules:
   Default style: high-end photorealistic commercial photography.
 - Reference images: when product/style references are attached, say "Use the product/person/object from
   reference image N exactly as it looks (same shape, colors, label, logo)".
+- If the client clearly wants to change an attached photo itself (e.g. "yüklediğim fotoğrafa yaz", "bu görselin
+  üstüne ekle", "arka planı değiştir"), treat reference image 1 as the image to edit and use EDIT MODE.
 - EDIT MODE (an existing image is attached as the FIRST image): start with "Edit the first image." List only the
   requested changes as concrete visual instructions. Turn vague wishes into concrete design changes, e.g.
   "daha dikkat çekici yaz" -> make the headline much larger and bolder, add a high-contrast color block or
