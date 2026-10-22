@@ -390,31 +390,3 @@ def meta_ad_copy(payload: AdCopyRequest, user: dict = Depends(get_current_user))
         raise HTTPException(status_code=503, detail="Reklam metni yazılamadı, kredin iade edildi. Tekrar dene.")
     return {"primary_text": data["primary_text"][:2000], "headline": (data.get("headline") or "")[:120]}
 
-
-@router.get("/meta/debug-page")
-def meta_debug_page(page_id: str, user: dict = Depends(get_current_user)):
-    """Geçici teşhis: sayfanın Instagram bağlantısını farklı yollardan sorar."""
-    _require_ads(user)
-    token = _get_token(user["id"])
-    out = {}
-    for name, path, fields in [
-        ("page", page_id, "id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}"),
-        ("ig_accounts", f"{page_id}/instagram_accounts", "id,username"),
-        ("page_backed", f"{page_id}/page_backed_instagram_accounts", "id,username"),
-        ("biz_ig", "me/businesses", "id,name,owned_instagram_accounts.limit(50){id,username},instagram_accounts.limit(50){id,username}"),
-    ]:
-        try:
-            params = {"fields": fields} if fields else {}
-            r = meta._graph("GET", path, token, **params)
-            if name == "page" and isinstance(r, dict) and r.get("access_token") and r["access_token"] != "…":
-                ptoken = r["access_token"]
-                for n2, p2 in [("ig_accounts_pt", f"{page_id}/instagram_accounts"), ("page_backed_pt", f"{page_id}/page_backed_instagram_accounts")]:
-                    try:
-                        out[n2] = meta._graph("GET", p2, ptoken, fields="id,username")
-                    except Exception as e2:  # noqa: BLE001
-                        out[n2] = f"HATA: {e2}"
-                r["access_token"] = "…"
-            out[name] = r
-        except Exception as e:  # noqa: BLE001
-            out[name] = f"HATA: {e}"
-    return out

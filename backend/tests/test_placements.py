@@ -18,3 +18,10 @@ def test_customized_creative_labels():
     rules = spec["asset_customization_rules"]
     assert rules[0]["customization_spec"]["instagram_positions"] == ["story"]
     assert rules[1]["customization_spec"]["facebook_positions"] == ["feed"]
+
+
+def test_match_instagram_by_name():
+    pages = {"1": {"id": "1", "name": "Kısmet Beko"}, "2": {"id": "2", "name": "Kelebek Mobilya"}}
+    m._match_instagram(pages, {"a": "kismetbeko", "b": "kelebekmutfak", "c": "kelebekkids"})
+    assert pages["1"]["instagram_username"] == "kismetbeko"
+    assert "instagram_id" not in pages["2"]  # belirsiz eşleşme kabul edilmez

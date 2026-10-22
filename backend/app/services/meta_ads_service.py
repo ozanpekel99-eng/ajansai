@@ -83,7 +83,19 @@ def exchange_code_for_token(code: str, redirect_uri: str) -> str:
         raise MetaError("Meta hesabı bağlanamadı.") from e
 
 
+_ACC_CACHE: dict[str, tuple[float, list[dict]]] = {}
+
+
 def list_ad_accounts(access_token: str) -> list[dict]:
+    hit = _ACC_CACHE.get(access_token[-24:])
+    if hit and _time.time() - hit[0] < 120:
+        return hit[1]
+    rows = _list_ad_accounts(access_token)
+    _ACC_CACHE[access_token[-24:]] = (_time.time(), rows)
+    return rows
+
+
+def _list_ad_accounts(access_token: str) -> list[dict]:
     try:
         response = requests.get(
             f"{META_BASE_URL}/me/adaccounts",
@@ -187,6 +199,8 @@ def _graph(method: str, path: str, token: str, **data) -> dict:
         err = payload.get("error") or {}
         logger.error("Meta %s %s: %s", method, path.split("?")[0], _meta_error(response))
         message = err.get("error_user_msg") or err.get("message") or "Meta isteği başarısız oldu."
+        if err.get("code") in (4, 17, 32, 613) or "request limit" in message.lower():
+            message = "Meta kısa süreliğine istek sınırına ulaştı; birkaç dakika sonra tekrar dene."
         raise MetaError(message)
     return payload
 
@@ -265,6 +279,7 @@ def list_pages(token: str, ad_account_id: str | None = None, fresh: bool = False
         return hit[1]
 
     found: dict[str, dict] = {}
+    biz_ig: dict[str, str] = {}
 
     def add(rows, source):
         for p in rows or []:
@@ -288,17 +303,57 @@ def list_pages(token: str, ad_account_id: str | None = None, fresh: bool = False
     try:
         sub = f"{{{PAGE_FIELDS}}}"
         biz = _graph("GET", "me/businesses", token, limit=25,
-                     fields=f"id,owned_pages.limit(100){sub},client_pages.limit(100){sub}").get("data", [])
+                     fields=f"id,owned_pages.limit(100){sub},client_pages.limit(100){sub},"
+                            "owned_instagram_accounts.limit(100){id,username},instagram_accounts.limit(100){id,username}").get("data", [])
         for b in biz:
             add((b.get("owned_pages") or {}).get("data"), "business")
             add((b.get("client_pages") or {}).get("data"), "business")
+            for edge in ("owned_instagram_accounts", "instagram_accounts"):
+                for ig in (b.get(edge) or {}).get("data", []):
+                    if ig.get("id"):
+                        biz_ig.setdefault(ig["id"], ig.get("username") or "")
     except MetaError:
         pass
     if not found and errors:
         raise errors[0]
+    _match_instagram(found, biz_ig)
     rows = sorted(found.values(), key=lambda r: (r["source"] != "ad_account", not r.get("instagram_id"), r["name"].lower()))
     _PAGES_CACHE[key] = (_time.time(), rows)
+    _BIZ_IG[token[-24:]] = biz_ig
     return rows
+
+
+_BIZ_IG: dict[str, dict[str, str]] = {}
+
+_TR = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+
+
+def _norm(t: str) -> str:
+    return "".join(ch for ch in (t or "").translate(_TR).lower() if ch.isalnum())
+
+
+def _match_instagram(pages: dict[str, dict], biz_ig: dict[str, str]) -> None:
+    """Meta sayfa–Instagram bağını vermediğinde, işletmedeki Instagram hesaplarını sayfa adına göre eşler.
+
+    Yalnızca tek ve belirgin eşleşme kabul edilir; böyle satırlar instagram_guess=True ile işaretlenir.
+    """
+    used = {p["instagram_id"] for p in pages.values() if p.get("instagram_id")}
+    free = {i: u for i, u in biz_ig.items() if i not in used and u}
+    for p in pages.values():
+        if p.get("instagram_id") or not free:
+            continue
+        full = _norm(p["name"])
+        words = [w for w in (_norm(x) for x in p["name"].split()) if len(w) >= 4]
+        hits = [i for i, u in free.items() if _norm(u) == full or (full and full in _norm(u))]
+        if not hits:
+            scored = [(sum(w in _norm(u) for w in words), i) for i, u in free.items()]
+            best = max((sc for sc, _ in scored), default=0)
+            need = 2 if len(words) >= 2 else 1
+            hits = [i for sc, i in scored if sc == best and sc >= need]
+        if len(hits) == 1:
+            i = hits[0]
+            p.update(instagram_id=i, instagram_username=free.pop(i), instagram_guess=True)
+_IG_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
 
 
 def page_instagram(token: str, page_id: str) -> dict | None:
@@ -333,6 +388,10 @@ def granted_permissions(token: str) -> list[str]:
 def list_instagram_accounts(ad_account_id: str, token: str) -> list[dict]:
     """Reklamda kullanılabilecek Instagram hesapları: reklam hesabına atananlar +
     kullanıcının sayfalarına bağlı işletme hesapları."""
+    ckey = (token[-24:], ad_account_id)
+    hit = _IG_CACHE.get(ckey)
+    if hit and _time.time() - hit[0] < PAGES_TTL:
+        return hit[1]
     found: dict[str, dict] = {}
     act = ad_account_id.removeprefix("act_")
     try:
@@ -349,7 +408,12 @@ def list_instagram_accounts(ad_account_id: str, token: str) -> list[dict]:
                 row["username"] = row["username"] or p.get("instagram_username") or ""
     except MetaError:
         pass
-    return list(found.values())
+    # İşletme portföyündeki Instagram hesapları (sayfa eşleşmesi arayüzde ada göre yapılır)
+    for ig_id, username in _BIZ_IG.get(token[-24:], {}).items():
+        found.setdefault(ig_id, {"id": ig_id, "username": username, "page_id": None})
+    out = list(found.values())
+    _IG_CACHE[ckey] = (_time.time(), out)
+    return out
 
 
 def search_locations(query: str, token: str) -> list[dict]:
@@ -651,7 +715,19 @@ def object_status(token: str, campaign_id: str) -> str:
     return _graph("GET", campaign_id, token, fields="effective_status").get("effective_status", "UNKNOWN")
 
 
+_SETUP_CACHE: dict[str, tuple[float, dict]] = {}
+
+
 def setup_status(token: str) -> dict:
+    hit = _SETUP_CACHE.get(token[-24:])
+    if hit and _time.time() - hit[0] < 120:
+        return hit[1]
+    out = _setup_status(token)
+    _SETUP_CACHE[token[-24:]] = (_time.time(), out)
+    return out
+
+
+def _setup_status(token: str) -> dict:
     """Reklam vermeye hazır mı? Reklam hesabı, ödeme yöntemi, Facebook sayfası ve Instagram kontrolü.
 
     Eksik adımlar için Meta'nın ilgili sayfasına giden bağlantılar döndürülür (kart bilgisi
@@ -703,7 +779,7 @@ def setup_status(token: str) -> dict:
             "action": "Instagram'ı bağla", "url": "https://business.facebook.com/latest/settings/instagram_account",
         },
     ]
-    return {"ready": all(s["done"] for s in steps), "steps": steps, "permissions": granted_permissions(token)}
+    return {"ready": all(s["done"] for s in steps), "steps": steps}
 
 
 def page_whatsapp(token: str, page_id: str) -> dict:
