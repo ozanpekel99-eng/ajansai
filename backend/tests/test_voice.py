@@ -122,3 +122,34 @@ def test_stream_prefers_vercel_gateway(client, monkeypatch):
     assert sent["headers"]["ai-speech-model-specification-version"] == "4"
     assert sent["json"]["outputFormat"] == "pcm" and sent["json"]["voice"] == "Sulafat"
     assert llm_service.spent_today() > 0
+
+
+def test_realtime_token_charges_per_minute(client, monkeypatch):
+    from app.routers import voice
+    from app.services import llm_service
+
+    monkeypatch.setattr(config, "AI_GATEWAY_ENABLED", True)
+    monkeypatch.setattr(config, "AI_GATEWAY_API_KEY", "vk")
+    sent = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        sent.update(url=url, headers=headers, json=json)
+        return FakeResponse(200, {"token": "vcst_x", "expiresAt": 123})
+
+    import requests
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    from .conftest import register
+
+    free = register(client, email="free@x.com")
+    assert client.post("/api/voice/realtime/token", json={}, headers=auth(free)).status_code == 402
+    token = register_paid(client, plan="pro")
+    r = client.post("/api/voice/realtime/token", json={"context": "Kullanıcı: kafe"}, headers=auth(token))
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["token"] == "vcst_x" and d["url"].startswith("wss://ai-gateway.vercel.sh/v4/ai/realtime-model?ai-model-id=")
+    assert "kafe" in d["instructions"] and sent["url"].endswith("/v1/realtime/client-secrets")
+    assert sent["json"]["model"] == config.REALTIME_MODEL
+    assert client.post("/api/voice/realtime/tick", headers=auth(token)).status_code == 200
+    used = client.get("/api/plans/usage", headers=auth(token)).json()["credits"]["used"]
+    assert used == 2 * config.REALTIME_CREDITS_PER_MINUTE

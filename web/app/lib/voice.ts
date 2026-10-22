@@ -68,7 +68,7 @@ async function fetchSpeech(text: string): Promise<string | null> {
 const RATE = 24000;
 
 /** Akışlı ses: gelen PCM parçalarını kesintisiz sırayla çalar. */
-class PcmPlayer {
+export class PcmPlayer {
   ctx: AudioContext;
   next = 0;
   sources: AudioBufferSourceNode[] = [];

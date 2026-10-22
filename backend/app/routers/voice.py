@@ -15,6 +15,7 @@ from app.routers.free import client_ip
 from app.security import get_optional_user
 from app.services import free_tier, tts
 from app.services.usage_service import QuotaExceededError, consume, get_usage, refund
+from app.security import get_current_user
 
 router = APIRouter()
 logger = logging.getLogger("ajansai.voice")
@@ -97,3 +98,88 @@ def stream(payload: SpeakRequest, request: Request, user: dict | None = Depends(
             logger.warning("Ses akışı yarıda kesildi: %s", e)
 
     return StreamingResponse(body(), media_type="audio/L16;rate=24000", headers={"Cache-Control": "no-store"})
+
+
+# ---------------- Gerçek zamanlı sesli sohbet ----------------
+
+REALTIME_INSTRUCTIONS = (
+    "Sen ajansAI'sın: Türkçe konuşan, sıcak, doğal ve yardımsever bir sesli asistansın. Kısa ve sohbet eder gibi konuş; "
+    "uzun listeler okuma, en fazla 2-3 cümleyle yanıt ver ve gerekirse soru sor. Her konuda yardım edersin; pazarlama, "
+    "sosyal medya ve reklam konularında uzmansın. Meta reklam önerilerinde yalnızca Instagram yerleşimini öner. "
+    "Görsel, video veya dosya istenirse bunları yazılı sohbette ya da araçlarda yapabileceğini söyle."
+)
+
+
+class RealtimeRequest(BaseModel):
+    context: str = Field("", max_length=6000)  # yazılı sohbetin son kısmı (devamlılık için)
+
+
+def _mint_client_secret(model: str) -> dict:
+    import requests
+
+    from app.services.llm_service import ai_gateway_token
+
+    token = ai_gateway_token()
+    if not (config.AI_GATEWAY_ENABLED and token):
+        raise HTTPException(status_code=503, detail="Gerçek zamanlı ses şu an kullanılamıyor.")
+    try:
+        r = requests.post(
+            "https://ai-gateway.vercel.sh/v1/realtime/client-secrets",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "ai-gateway-protocol-version": "0.0.1",
+                "ai-gateway-auth-method": "api-key" if config.AI_GATEWAY_API_KEY else "oidc",
+            },
+            json={"model": model, "expiresIn": 60},
+            timeout=20,
+        )
+    except requests.RequestException as e:
+        logger.error("Realtime anahtarı alınamadı: %s", e)
+        raise HTTPException(status_code=503, detail="Gerçek zamanlı ses şu an kullanılamıyor.")
+    if r.status_code != 200:
+        logger.error("Realtime anahtarı reddedildi %s: %s", r.status_code, r.text[:300])
+        raise HTTPException(status_code=503, detail="Gerçek zamanlı ses şu an kullanılamıyor.")
+    return r.json()
+
+
+@router.post("/realtime/token")
+def realtime_token(payload: RealtimeRequest, user: dict = Depends(get_current_user)):
+    """Gerçek zamanlı sesli sohbet başlatır: ilk dakikanın kredisi düşülür, kısa ömürlü bağlantı anahtarı döner.
+
+    Sohbet sürdükçe istemci her dakika /realtime/tick çağırır; kredi bitince oturum kapanır.
+    """
+    if get_usage(user["id"]).get("plan") == "deneme":
+        raise HTTPException(status_code=402, detail="Gerçek zamanlı sesli sohbet ücretli paketlerde açık.")
+    per_min = config.REALTIME_CREDITS_PER_MINUTE
+    try:
+        event = consume(user["id"], "voice", per_min, "Gerçek zamanlı sesli sohbet (1 dk)")
+    except QuotaExceededError as e:
+        raise HTTPException(status_code=402, detail=str(e))
+    model = config.REALTIME_MODEL
+    try:
+        secret = _mint_client_secret(model)
+    except HTTPException:
+        refund(event)
+        raise
+    instructions = REALTIME_INSTRUCTIONS
+    if payload.context.strip():
+        instructions += "\n\nYazılı sohbetin son kısmı (kaldığın yerden devam et):\n" + payload.context.strip()[-4000:]
+    return {
+        "token": secret.get("token"),
+        "url": f"wss://ai-gateway.vercel.sh/v4/ai/realtime-model?ai-model-id={model}",
+        "expires_at": secret.get("expiresAt"),
+        "voice": config.REALTIME_VOICE,
+        "instructions": instructions,
+        "credits_per_minute": per_min,
+    }
+
+
+@router.post("/realtime/tick")
+def realtime_tick(user: dict = Depends(get_current_user)):
+    """Süren sesli sohbetin bir sonraki dakikası için kredi düşer. Yetmezse 402 (istemci oturumu kapatır)."""
+    try:
+        consume(user["id"], "voice", config.REALTIME_CREDITS_PER_MINUTE, "Gerçek zamanlı sesli sohbet (1 dk)")
+    except QuotaExceededError as e:
+        raise HTTPException(status_code=402, detail=str(e))
+    return {"ok": True}

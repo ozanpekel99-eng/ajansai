@@ -127,6 +127,10 @@ GOOGLE_TTS_API_KEY = _env("GOOGLE_TTS_API_KEY")
 GEMINI_API_KEY = _env("GEMINI_API_KEY")
 GEMINI_TTS_MODEL = _env("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts")
 # Öncelikli yol: aynı Gemini sesi Vercel AI Gateway'den (Vercel kredisiyle ödenir). Boş bırakılırsa kapalı.
+# Gerçek zamanlı sesli sohbet (konuşmadan konuşmaya, Vercel AI Gateway)
+REALTIME_MODEL = _env("REALTIME_MODEL", "openai/gpt-realtime-mini")
+REALTIME_VOICE = _env("REALTIME_VOICE", "marin")
+REALTIME_CREDITS_PER_MINUTE = _int("REALTIME_CREDITS_PER_MINUTE", 3)
 GATEWAY_TTS_MODEL = _env("GATEWAY_TTS_MODEL", "google/gemini-3.8-flash-tts")
 TTS_USD_PER_M_AUDIO_TOKENS = float(_env("TTS_USD_PER_M_AUDIO_TOKENS", "9"))  # 2027'de 18
 GEMINI_TTS_VOICE = _env("GEMINI_TTS_VOICE", "Sulafat")

@@ -55,6 +55,7 @@ export default function FikirWorkspace({ initial = null }: { initial?: Conversat
       initial={open}
       endpoint="/api/content/chat"
       attach="all"
+      realtime
       videoHref={videoHref}
       tools={{
         video: usage.video_enabled ? { href: "/araclar/video" } : { href: "/paketler", locked: "Paketle açılır" },

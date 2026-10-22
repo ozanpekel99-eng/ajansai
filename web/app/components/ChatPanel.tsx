@@ -7,6 +7,7 @@ import Link from "next/link";
 import { ApiError, api } from "../lib/api";
 import { saveChat } from "../lib/chats";
 import { renderMarkdown } from "../lib/markdown";
+import { useRealtimeVoice } from "../lib/realtime";
 import { useVoice } from "../lib/voice";
 import { FileChips, PendingFile, UploadProgress, useUploader } from "./Attachments";
 import Icon from "./Icon";
@@ -48,10 +49,12 @@ type Props = {
   videoHref?: (text: string) => string | null;
   /** + menüsünde gösterilecek video / reklam araçları */
   tools?: { video?: MenuTool; ads?: MenuTool };
+  /** Gerçek zamanlı sesli sohbet (ücretli paketler) */
+  realtime?: boolean;
   initial?: Conversation | null;
 };
 
-export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, videoHref, tools, initial }: Props) {
+export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, videoHref, tools, realtime, initial }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("chat");
   const imageMode = mode === "image";
@@ -203,6 +206,30 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
     voice.stopSpeaking();
     setSpeakingIdx(null);
   }
+
+  // Gerçek zamanlı sesli sohbet: konuşulanlar yazılı sohbete de eklenir
+  const addSpoken = (role: "user" | "assistant", content: string) => {
+    const list = [...messagesRef.current, { role, content } as Msg];
+    messagesRef.current = list;
+    setMessages(list);
+    persist(list);
+  };
+  const live = useRealtimeVoice({
+    onUserText: (t) => addSpoken("user", t),
+    onAssistantText: (t) => addSpoken("assistant", t),
+  });
+  const startLive = () => {
+    voice.stopSpeaking();
+    setError("");
+    const context = messagesRef.current
+      .slice(-8)
+      .map((m) => `${m.role === "user" ? "Kullanıcı" : "Asistan"}: ${m.content.slice(0, 600)}`)
+      .join("\n");
+    live.start(context);
+  };
+  useEffect(() => {
+    if (live.state === "error" && live.error) setError(live.error);
+  }, [live.state, live.error]);
 
   // Konuşarak yazdırma (mikrofon düğmesi)
   const dictate = () => {
@@ -372,6 +399,17 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
         {(error || uploader.error) && <div className="notice error">{error || uploader.error}</div>}
         <FileChips files={files} onRemove={(id) => setFiles((x) => x.filter((f) => f.id !== id))} />
         <UploadProgress busy={uploader.busy} />
+        {live.active && (
+          <div className="voice-bar" role="status">
+            <span className={`voice-dot ${live.state === "listening" ? "on" : ""}`} aria-hidden="true" />
+            <span className="voice-state">
+              {live.state === "connecting" ? "Bağlanıyor…" : live.state === "speaking" ? live.partial.slice(-120) || "Konuşuyor…" : "Dinliyorum… istediğin an araya girebilirsin"}
+            </span>
+            <button type="button" className="btn btn-light btn-sm" onClick={live.stop}>
+              Bitir
+            </button>
+          </div>
+        )}
         {voiceMode && (
           <div className="voice-bar" role="status">
             <span className={`voice-dot ${voice.listening ? "on" : ""}`} aria-hidden="true" />
@@ -505,7 +543,18 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
               <Icon name="mic" />
             </button>
           )}
-          {voice.canListen && voice.canSpeak && !text.trim() && !files.length ? (
+          {realtime && !text.trim() && !files.length ? (
+            <button
+              type="button"
+              className={`send-btn ${live.active ? "active" : ""}`}
+              onClick={live.active ? live.stop : startLive}
+              disabled={!!blocker && !live.active}
+              aria-label={live.active ? "Sesli sohbeti bitir" : "Sesli sohbet"}
+              title="Gerçek zamanlı sesli sohbet"
+            >
+              <Icon name={live.active ? "stop" : "wave"} />
+            </button>
+          ) : voice.canListen && voice.canSpeak && !text.trim() && !files.length ? (
             <button
               type="button"
               className={`send-btn ${voiceMode ? "active" : ""}`}
