@@ -14,6 +14,7 @@ from pathlib import Path
 
 import requests
 
+from app.services import slides
 from app.services.llm_service import LLMError, smart_chat_completion
 
 logger = logging.getLogger("ajansai.documents")
@@ -76,13 +77,7 @@ def split_file_request(text: str) -> tuple[str, dict | None]:
 # ---------------- İçerik (JSON) ----------------
 
 SCHEMAS = {
-    "presentation": (
-        '{"title": "Sunum başlığı", "subtitle": "kısa alt başlık", "slides": [{"title": "Slayt başlığı", '
-        '"bullets": ["en fazla 5 kısa madde"], "image_query": "2-4 English keywords for a stock photo", '
-        '"note": "isteğe bağlı kısa konuşmacı notu"}]}',
-        "6-10 slayt hazırla. Her slaytta 3-5 kısa, somut madde olsun (her biri en fazla 110 karakter). Son slayt özet "
-        "veya çağrı (CTA) olsun.",
-    ),
+    "presentation": (slides.SCHEMA, slides.GUIDE),
     "document": (
         '{"title": "Belge başlığı", "subtitle": "isteğe bağlı alt başlık", "sections": [{"heading": "Bölüm başlığı", '
         '"paragraphs": ["paragraf"], "bullets": ["isteğe bağlı maddeler"]}]}',
@@ -119,7 +114,8 @@ def build_spec(request: dict, conversation: list[dict], paid: bool = False) -> d
     )
     last_error = None
     for _ in range(2):
-        text, _ = smart_chat_completion([{"role": "user", "content": prompt}], max_tokens=6000, paid=paid)
+        tokens = 9000 if request["kind"] == "presentation" else 6000
+        text, _ = smart_chat_completion([{"role": "user", "content": prompt}], max_tokens=tokens, paid=paid)
         try:
             spec = _parse_json(text)
             if spec.get("title"):
@@ -215,138 +211,30 @@ def _cover(data: bytes, ratio: float) -> bytes:
     return out.getvalue()
 
 
+def _deck_images(spec: dict) -> dict[int, bytes]:
+    from concurrent.futures import ThreadPoolExecutor
+
+    queries = slides.image_queries(spec)
+    if not queries:
+        return {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        raw = dict(zip(queries, pool.map(_photo, queries.values())))
+    out = {}
+    for i, data in raw.items():
+        try:
+            if data:
+                out[i] = _jpeg(data, 1800)
+        except Exception:
+            pass
+    return out
+
+
 def presentation_pdf(spec: dict) -> bytes:
-    from fpdf import FPDF
-
-    slides = spec.get("slides") or []
-    images = _slide_images(slides)
-    W, H = 338.7, 190.5  # 16:9 (13.33 x 7.5 inç)
-    pdf = FPDF(orientation="L", unit="mm", format=(H, W))
-    pdf.set_auto_page_break(False)
-    pdf.set_margins(0, 0, 0)
-    _fonts(pdf)
-    LN = {"new_x": "LMARGIN", "new_y": "NEXT", "align": "L"}
-
-    # Kapak: solda başlık, sağda ilk slaydın görseli
-    pdf.add_page()
-    pdf.set_fill_color(*DARK)
-    pdf.rect(0, 0, W, H, "F")
-    cover_img = next((i for i in images if i), None)
-    text_w = W * 0.55 if cover_img else W - 56
-    if cover_img:
-        x0 = W * 0.6
-        pdf.image(io.BytesIO(_cover(cover_img, (W - x0) / H)), x=x0, y=0, w=W - x0, h=H)
-    pdf.set_fill_color(*ACCENT)
-    pdf.rect(28, 58, 16, 16, "F")
-    pdf.set_left_margin(28)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Sans", "B", 38)
-    pdf.set_xy(28, 84)
-    pdf.multi_cell(text_w - 28, 16, str(spec.get("title", "")), **LN)
-    if spec.get("subtitle"):
-        pdf.ln(4)
-        pdf.set_font("Sans", "", 16)
-        pdf.set_text_color(190, 190, 205)
-        pdf.multi_cell(text_w - 28, 8, str(spec["subtitle"]), **LN)
-
-    for i, (s, img) in enumerate(zip(slides, images), start=1):
-        pdf.add_page()
-        pdf.set_fill_color(255, 255, 255)
-        pdf.rect(0, 0, W, H, "F")
-        text_w = W * 0.55 if img else W - 60
-        if img:
-            x0 = W * 0.58
-            pdf.image(io.BytesIO(_cover(img, (W - x0) / H)), x=x0, y=0, w=W - x0, h=H)
-        pdf.set_fill_color(*ACCENT)
-        pdf.rect(28, 26, 10, 3, "F")
-        pdf.set_left_margin(28)
-        pdf.set_text_color(*DARK)
-        pdf.set_font("Sans", "B", 28)
-        pdf.set_xy(28, 34)
-        pdf.multi_cell(text_w - 34, 12.5, str(s.get("title", "")), **LN)
-        pdf.set_font("Sans", "", 16)
-        y = pdf.get_y() + 10
-        for b in _str_list(s.get("bullets"))[:6]:
-            pdf.set_fill_color(*ACCENT)
-            pdf.rect(29, y + 3, 3, 3, "F")
-            pdf.set_left_margin(38)
-            pdf.set_xy(38, y)
-            pdf.set_text_color(55, 55, 70)
-            pdf.multi_cell(text_w - 44, 8, b, **LN)
-            y = pdf.get_y() + 5
-        pdf.set_font("Sans", "", 10)
-        pdf.set_text_color(170, 170, 180)
-        pdf.set_left_margin(0)
-        pdf.set_xy(28, H - 16)
-        pdf.cell(20, 5, f"{i:02d}")
-    return bytes(pdf.output())
+    return slides.to_pdf(spec, _deck_images(spec))
 
 
 def presentation_pptx(spec: dict) -> bytes:
-    from pptx import Presentation
-    from pptx.dml.color import RGBColor
-    from pptx.util import Emu, Inches, Pt
-
-    slides = spec.get("slides") or []
-    images = _slide_images(slides)
-    prs = Presentation()
-    prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
-    blank = prs.slide_layouts[6]
-
-    def box(slide, x, y, w, h, color):
-        shp = slide.shapes.add_shape(1, x, y, w, h)
-        shp.fill.solid()
-        shp.fill.fore_color.rgb = RGBColor(*color)
-        shp.line.fill.background()
-        return shp
-
-    def text(slide, x, y, w, h, value, size, bold=False, color=DARK):
-        tb = slide.shapes.add_textbox(x, y, w, h)
-        tf = tb.text_frame
-        tf.word_wrap = True
-        p = tf.paragraphs[0]
-        p.text = value
-        p.font.size = Pt(size)
-        p.font.bold = bold
-        p.font.color.rgb = RGBColor(*color)
-        return tf
-
-    s0 = prs.slides.add_slide(blank)
-    box(s0, 0, 0, prs.slide_width, prs.slide_height, DARK)
-    cover_img = next((i for i in images if i), None)
-    if cover_img:
-        x0 = Inches(8.0)
-        w = prs.slide_width - x0
-        s0.shapes.add_picture(io.BytesIO(_cover(cover_img, w / prs.slide_height)), x0, 0, w, prs.slide_height)
-    box(s0, Inches(0.9), Inches(2.6), Inches(0.5), Inches(0.5), ACCENT)
-    cw = Inches(6.8) if cover_img else Inches(11.5)
-    text(s0, Inches(0.9), Inches(3.3), cw, Inches(1.6), str(spec.get("title", "")), 40, True, (255, 255, 255))
-    if spec.get("subtitle"):
-        text(s0, Inches(0.9), Inches(5.0), cw, Inches(1), str(spec["subtitle"]), 18, False, (190, 190, 205))
-
-    for s, img in zip(slides, images):
-        sl = prs.slides.add_slide(blank)
-        text_w = Inches(6.6) if img else Inches(11.8)
-        box(sl, Inches(0.9), Inches(0.95), Inches(0.45), Inches(0.12), ACCENT)
-        text(sl, Inches(0.85), Inches(1.15), text_w, Inches(1.4), str(s.get("title", "")), 34, True)
-        tb = sl.shapes.add_textbox(Inches(0.85), Inches(2.55), text_w, Inches(4.5))
-        tf = tb.text_frame
-        tf.word_wrap = True
-        for k, b in enumerate(_str_list(s.get("bullets"))[:6]):
-            p = tf.paragraphs[0] if k == 0 else tf.add_paragraph()
-            p.text = f"•  {b}"
-            p.font.size = Pt(20)
-            p.font.color.rgb = RGBColor(*GREY)
-            p.space_after = Pt(10)
-        if img:
-            x0 = Inches(7.75)
-            w = prs.slide_width - x0
-            sl.shapes.add_picture(io.BytesIO(_cover(img, w / prs.slide_height)), x0, 0, w, prs.slide_height)
-        if s.get("note"):
-            sl.notes_slide.notes_text_frame.text = str(s["note"])
-    out = io.BytesIO()
-    prs.save(out)
-    return out.getvalue()
+    return slides.to_pptx(spec, _deck_images(spec))
 
 
 def document_pdf(spec: dict) -> bytes:

@@ -265,7 +265,15 @@ class PptxCanvas:
         else:
             shape.line.fill.background()
         shape.shadow.inherit = False
+        self._no_style(shape)
         return shape
+
+    @staticmethod
+    def _no_style(shape):
+        """Şablonun gölge/efekt stilini kaldırır."""
+        style = shape._element.find("{http://schemas.openxmlformats.org/presentationml/2006/main}style")
+        if style is not None:
+            shape._element.remove(style)
 
     def ellipse(self, x, y, w, h, fill):
         from pptx.enum.shapes import MSO_SHAPE
@@ -276,6 +284,7 @@ class PptxCanvas:
         shape.fill.fore_color.rgb = self._rgb(fill)
         shape.line.fill.background()
         shape.shadow.inherit = False
+        self._no_style(shape)
 
     def line(self, x1, y1, x2, y2, color, width=1.0):
         if y1 == y2:
@@ -290,9 +299,14 @@ class PptxCanvas:
         if not lines:
             return y
         lh = size * line_h
-        tb = self.slide.shapes.add_textbox(Pt(x), Pt(y), Pt(w + 4), Pt(lh * len(lines)))
+        from pptx.enum.text import MSO_AUTO_SIZE
+
+        # PowerPoint satırı biraz yukarıda başlatır; büyük başlık fontlarında aşağı kaydırılır
+        nudge = size * (0.10 if key.startswith("display") else 0.03)
+        tb = self.slide.shapes.add_textbox(Pt(x), Pt(y + nudge), Pt(w + 14), Pt(lh * len(lines)))
         tf = tb.text_frame
-        tf.word_wrap = False
+        tf.word_wrap = True
+        tf.auto_size = MSO_AUTO_SIZE.NONE
         tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
         tf.vertical_anchor = MSO_ANCHOR.TOP
         family = FONTS[key][0]
@@ -325,6 +339,60 @@ class PptxCanvas:
         out = io.BytesIO()
         self.prs.save(out)
         return out.getvalue()
+
+
+class MeasureCanvas:
+    """Çizmeden içeriğin en alt noktasını ölçer (dikey ortalama için)."""
+
+    def __init__(self):
+        self.bottom = 0.0
+
+    def _mark(self, y):
+        self.bottom = max(self.bottom, y)
+
+    def page(self, bg):
+        pass
+
+    def rect(self, x, y, w, h, fill=None, radius=0.0, stroke=None, stroke_w=1.0):
+        if not (x <= 0 and w >= W):  # tam genişlikli şeritler hariç
+            self._mark(y + h)
+
+    def ellipse(self, x, y, w, h, fill):
+        self._mark(y + h)
+
+    def line(self, x1, y1, x2, y2, color, width=1.0):
+        self._mark(max(y1, y2))
+
+    def lines(self, x, y, w, lines, key, size, color, accent, line_h=1.2, align="L", tracking=0.0):
+        end = y + len(lines) * size * line_h
+        if lines:
+            self._mark(end)
+        return end
+
+    def image(self, data, x, y, w, h):
+        self._mark(y + h)
+
+
+class Shifted:
+    """Tüm çizimleri dikeyde dy kadar kaydırır."""
+
+    def __init__(self, cv, dy):
+        self.cv, self.dy = cv, dy
+
+    def rect(self, x, y, w, h, *a, **k):
+        return self.cv.rect(x, y + self.dy, w, h, *a, **k)
+
+    def ellipse(self, x, y, w, h, fill):
+        return self.cv.ellipse(x, y + self.dy, w, h, fill)
+
+    def line(self, x1, y1, x2, y2, *a, **k):
+        return self.cv.line(x1, y1 + self.dy, x2, y2 + self.dy, *a, **k)
+
+    def lines(self, x, y, *a, **k):
+        return self.cv.lines(x, y + self.dy, *a, **k) - self.dy
+
+    def image(self, data, x, y, w, h):
+        return self.cv.image(data, x, y + self.dy, w, h)
 
 
 # ---------------- Yardımcı çizimler ----------------
@@ -367,7 +435,7 @@ def heading(cv, t, x, y, w, text, max_size=40, min_size=24, max_lines=2):
     return cv.lines(x, y, w, lines, "display", size, t["text"], t["accent2"] if t["dark"] else t["accent"], line_h=1.08)
 
 
-def para(cv, t, x, y, w, text, size=12, max_lines=6, color=None, key="body", min_size=9):
+def para(cv, t, x, y, w, text, size=12.5, max_lines=6, color=None, key="body", min_size=9):
     if not text:
         return y
     s, lines = fit(text, key, size, min_size, w, max_lines)
@@ -418,18 +486,26 @@ def l_cards(cv, t, s):
     n = max(len(cards), 1)
     gap = 14
     cw = (W - 2 * MX - gap * (n - 1)) / n
-    ch = (H - 64 - y) - (78 if bar else 0)
-    ch = min(ch, 220)
+    max_h = min((H - 64 - y) - (78 if bar else 0), 260)
+
+    def draw_card(c, cx, top, ch, canvas):
+        yy = top + 18
+        if _txt(c, "label"):
+            yy = canvas.lines(cx + 18, yy, cw - 36, fit(_txt(c, "label"), "bodyB", 9, 7.5, cw - 36, 1, upper=True, tracking=0.8)[1],
+                              "bodyB", 9, t["accent"], t["accent"], tracking=0.8) + 8
+        size, lines = fit(_txt(c, "title"), "display", 21, 14, cw - 36, 2, upper=True)
+        yy = canvas.lines(cx + 18, yy, cw - 36, lines, "display", size, t["text"], t["accent"], line_h=1.1) + 8
+        return para(canvas, t, cx + 18, yy, cw - 36, _txt(c, "text"), size=12, max_lines=max(1, int((top + ch - yy - 14) / 17)), min_size=9)
+
+    need = 0.0
+    for c in cards:
+        m = MeasureCanvas()
+        need = max(need, draw_card(c, 0, 0, max_h, m) + 20)
+    ch = min(max(need, 120), max_h)
     for i, c in enumerate(cards):
         cx = MX + i * (cw + gap)
         card_box(cv, t, cx, y, cw, ch)
-        yy = y + 18
-        if _txt(c, "label"):
-            yy = cv.lines(cx + 18, yy, cw - 36, fit(_txt(c, "label"), "bodyB", 8.5, 7.5, cw - 36, 1, upper=True, tracking=0.8)[1],
-                          "bodyB", 8.5, t["accent"], t["accent"], tracking=0.8) + 8
-        size, lines = fit(_txt(c, "title"), "display", 20, 14, cw - 36, 2, upper=True)
-        yy = cv.lines(cx + 18, yy, cw - 36, lines, "display", size, t["text"], t["accent"], line_h=1.1) + 8
-        para(cv, t, cx + 18, yy, cw - 36, _txt(c, "text"), size=10.5, max_lines=int((y + ch - yy - 14) / 15), min_size=8.5)
+        draw_card(c, cx, y, ch, cv)
     if bar:
         by = y + ch + 20
         cv.rect(MX, by, W - 2 * MX, 54, t["text"] if not t["dark"] else t["surf"], radius=6)
@@ -476,12 +552,12 @@ def l_spotlight(cv, t, s):
     y += 18
     items = _items(s.get("items"), 4)
     avail = H - 70 - y
-    per = avail / max(len(items), 1)
+    per = min(avail / max(len(items), 1), 96)
     for i, it in enumerate(items):
         iy = y + i * per
         cv.ellipse(x, iy + 3, 9, 9, t["accent"])
-        yy = cv.lines(x + 22, iy, w - 22, fit(_txt(it, "title"), "bodyB", 12, 10, w - 22, 1)[1], "bodyB", 12, t["text"], t["accent"], line_h=1.3)
-        para(cv, t, x + 22, yy + 3, w - 22, _txt(it, "text"), size=10.5, max_lines=max(1, int((per - 24) / 15)), min_size=8.5)
+        yy = cv.lines(x + 22, iy, w - 22, fit(_txt(it, "title"), "bodyB", 13, 10, w - 22, 1)[1], "bodyB", 13, t["text"], t["accent"], line_h=1.3)
+        para(cv, t, x + 22, yy + 3, w - 22, _txt(it, "text"), size=11.5, max_lines=max(1, int((per - 24) / 16)), min_size=8.5)
 
 
 def l_table(cv, t, s):
@@ -502,32 +578,40 @@ def l_table(cv, t, s):
     widths = [tw * w_ / total for w_ in weights]
     acc_col = s.get("accent_col")
     acc_col = acc_col if isinstance(acc_col, int) and 0 <= acc_col < n else (n - 1 if n > 2 else None)
-    cv.rect(MX, y, tw, 24, t["surf"] if t["dark"] else t["text"])
+    cv.rect(MX, y, tw, 28, t["surf"] if t["dark"] else t["text"])
     hx = MX
     hdr_color = t["accent"] if t["dark"] else t["bg"]
     for j, c in enumerate(cols):
-        cv.lines(hx + 10, y + 7.5, widths[j] - 20, fit(c, "bodyB", 8.5, 7.5, widths[j] - 20, 1)[1], "bodyB", 8.5, hdr_color, hdr_color)
+        cv.lines(hx + 10, y + 8.5, widths[j] - 20, fit(c, "bodyB", 9.5, 7.5, widths[j] - 20, 1)[1], "bodyB", 9.5, hdr_color, hdr_color)
         hx += widths[j]
-    y += 24
+    y += 28
     avail = H - 50 - y
-    font = 9.5
-    rendered = []
-    for r in rows:
-        cells = []
-        for j in range(n):
-            val = str(r[j]) if j < len(r) else ""
-            key = "bodyB" if j == acc_col else "body"
-            _, ls = fit(val, key, font, font, widths[j] - 20, 4)
-            cells.append((ls, key))
-        rendered.append(cells)
-    heights = [max(len(c[0]) for c in cells) * font * 1.35 + 14 for cells in rendered]
+
+    def layout_rows(font):
+        rendered = []
+        for r in rows:
+            cells = []
+            for j in range(n):
+                val = str(r[j]) if j < len(r) else ""
+                key = "bodyB" if j == acc_col else "body"
+                _, ls = fit(val, key, font, font, widths[j] - 20, 5)
+                cells.append((ls, key))
+            rendered.append(cells)
+        return rendered, [max(len(c[0]) for c in cells) * font * 1.35 + font * 1.6 for cells in rendered]
+
+    font = 12.0
+    while True:
+        rendered, heights = layout_rows(font)
+        if sum(heights) <= avail or font <= 8.5:
+            break
+        font -= 0.5
     scale = min(1.0, avail / max(sum(heights), 1))
     for cells, rh in zip(rendered, heights):
         rh *= scale
         cx = MX
         for j, (ls, key) in enumerate(cells):
             color = t["accent2"] if (j == acc_col and t["dark"]) else (t["accent"] if j == acc_col else (t["muted"] if j == 0 else t["text"]))
-            cv.lines(cx + 10, y + 7, widths[j] - 20, ls, key, font * min(1, scale + 0.15), color, t["accent"], line_h=1.35)
+            cv.lines(cx + 10, y + font * 0.8, widths[j] - 20, ls, key, font, color, t["accent"], line_h=1.35)
             cx += widths[j]
         y += rh
         cv.line(MX, y, MX + tw, y, t["line"], 0.6)
@@ -561,8 +645,8 @@ def l_stats(cv, t, s):
         cv.rect(x, y, cw, 3, t["accent"])
         size, ls = fit(_txt(st, "value"), "displayB", 60, 30, cw, 1)
         yy = cv.lines(x, y + 18, cw, ls, "displayB", size, t["accent2"] if t["dark"] else t["accent"], t["accent"], line_h=1.05) + 6
-        yy = cv.lines(x, yy, cw, fit(_txt(st, "label"), "bodyB", 12, 10, cw, 2)[1], "bodyB", 12, t["text"], t["accent"], line_h=1.3) + 6
-        para(cv, t, x, yy, cw, _txt(st, "text"), size=10.5, max_lines=5)
+        yy = cv.lines(x, yy, cw, fit(_txt(st, "label"), "bodyB", 14, 10, cw, 2)[1], "bodyB", 14, t["text"], t["accent"], line_h=1.3) + 6
+        para(cv, t, x, yy, cw, _txt(st, "text"), size=12, max_lines=5)
 
 
 def l_steps(cv, t, s):
@@ -581,9 +665,9 @@ def l_steps(cv, t, s):
         if _txt(st, "label"):
             yy = cv.lines(x, yy, cw, fit(_txt(st, "label"), "bodyB", 8.5, 7.5, cw, 1, upper=True, tracking=0.8)[1], "bodyB", 8.5,
                           t["accent"], t["accent"], tracking=0.8) + 6
-        size, ls = fit(_txt(st, "title"), "display", 18, 13, cw, 2, upper=True)
+        size, ls = fit(_txt(st, "title"), "display", 21, 13, cw, 2, upper=True)
         yy = cv.lines(x, yy, cw, ls, "display", size, t["text"], t["accent"], line_h=1.1) + 8
-        para(cv, t, x, yy, cw, _txt(st, "text"), size=10.5, max_lines=8, min_size=8.5)
+        para(cv, t, x, yy, cw, _txt(st, "text"), size=12, max_lines=8, min_size=8.5)
 
 
 def l_bullets(cv, t, s):
@@ -601,8 +685,8 @@ def l_bullets(cv, t, s):
             title, _, rest = str(b).partition(":")
             x = MX + c * (cw + 40) + 40
             if rest.strip():
-                yy2 = cv.lines(x, yy + 1, cw - 40, fit(title, "bodyB", 12, 10, cw - 40, 1)[1], "bodyB", 12, t["text"], t["accent"], line_h=1.35)
-                yy2 = para(cv, t, x, yy2 + 2, cw - 40, rest.strip(), size=10.5, max_lines=3, min_size=9)
+                yy2 = cv.lines(x, yy + 1, cw - 40, fit(title, "bodyB", 13.5, 10, cw - 40, 1)[1], "bodyB", 13.5, t["text"], t["accent"], line_h=1.35)
+                yy2 = para(cv, t, x, yy2 + 2, cw - 40, rest.strip(), size=12, max_lines=3, min_size=9)
             else:
                 yy2 = cv.lines(x, yy + 1, cw - 40, fit(b, "body", 12, 10, cw - 40, 3)[1], "body", 12, t["text"], t["accent"], line_h=1.4)
             yy = yy2 + 16
@@ -634,6 +718,7 @@ LAYOUTS = {
     "steps": l_steps, "bullets": l_bullets, "quote": l_quote, "closing": l_closing,
 }
 DARK_BY_DEFAULT = {"cover", "table", "quote", "closing"}
+CENTERED = {"cards", "table", "stats", "steps", "bullets"}
 
 
 def _normalize(spec: dict) -> list[dict]:
@@ -670,10 +755,13 @@ def render(spec: dict, cv, images: dict[int, bytes]) -> bytes:
         prev = dark
         t = theme.tone(dark)
         cv.page(t["bg"])
-        if s["layout"] == "split":
-            l_split(cv, t, s, images.get(i))
-        else:
-            LAYOUTS[s["layout"]](cv, t, s)
+        draw = (lambda c: l_split(c, t, s, images.get(i))) if s["layout"] == "split" else (lambda c: LAYOUTS[s["layout"]](c, t, s))
+        dy = 0.0
+        if s["layout"] in CENTERED:
+            m = MeasureCanvas()
+            draw(m)
+            dy = max(0.0, min((H - 56 - m.bottom) * 0.5, 120))
+        draw(Shifted(cv, dy) if dy else cv)
         if hasattr(cv, "notes"):
             cv.notes(_txt(s, "note"))
     return cv.output()

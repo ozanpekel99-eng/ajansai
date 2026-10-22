@@ -42,7 +42,7 @@ def test_builders_produce_valid_files(monkeypatch):
     from pypdf import PdfReader
 
     reader = PdfReader(io.BytesIO(pdf))
-    assert len(reader.pages) == 3 and "Kampanyası" in reader.pages[0].extract_text()
+    assert len(reader.pages) == 3 and "KAMPANYASI" in reader.pages[0].extract_text()
 
     from pptx import Presentation
 
@@ -90,7 +90,7 @@ def test_free_file_daily_limit(client, monkeypatch):
     assert second["files"] == [] and "dosya oluşturabilirsin" in second["image_error"]
 
 
-def test_paid_chat_file_costs_two_credits_and_refunds_on_failure(client, monkeypatch):
+def test_paid_chat_file_costs_three_credits_and_refunds_on_failure(client, monkeypatch):
     _enable_media(monkeypatch)
     _no_photos(monkeypatch)
     from app.services import assistant
@@ -100,10 +100,36 @@ def test_paid_chat_file_costs_two_credits_and_refunds_on_failure(client, monkeyp
     monkeypatch.setattr(storage, "save", lambda d, m, f, filename=None: BLOB_URL + filename)
     token = register_paid(client)
     r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Teklif yaz"}]}, headers=auth(token))
-    assert r.json()["credits_spent"] == 3 and r.json()["files"][0]["name"] == "teklif.docx"
+    assert r.json()["credits_spent"] == 4 and r.json()["files"][0]["name"] == "teklif.docx"
 
     monkeypatch.setattr(documents, "smart_chat_completion", lambda *a, **k: ("bozuk", "groq:x"))
     r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Teklif yaz"}]}, headers=auth(token))
     assert r.json()["files"] == [] and r.json()["credits_spent"] == 1 and r.json()["image_error"]
     used = client.get("/api/plans/usage", headers=auth(token)).json()["credits"]["used"]
-    assert used == 4  # 3 + 1; başarısız dosyanın 2 kredisi iade edildi
+    assert used == 5  # 4 + 1; başarısız dosyanın 3 kredisi iade edildi
+
+
+def test_all_slide_layouts_render_pdf_and_pptx():
+    from app.services import slides
+
+    spec = {"title": "Deneme", "theme": {"palette": "okyanus", "accent": "#FF0066"}, "slides": [
+        {"layout": "cover", "title": "Başlık *vurgu*", "tiles": [{"num": "01", "label": "a"}]},
+        {"layout": "cards", "title": "Kartlar", "cards": [{"label": "x", "title": "y", "text": "z"}], "bar": {"label": "b", "items": ["i"]}},
+        {"layout": "spotlight", "statement": "Büyük *cümle*", "badge": "Hook", "title": "t", "items": [{"title": "a", "text": "b"}]},
+        {"layout": "table", "title": "Tablo", "columns": ["A", "B"], "rows": [["1", "2"], ["3"]]},
+        {"layout": "split", "title": "Görselsiz", "bullets": ["m"]},
+        {"layout": "stats", "title": "S", "stats": [{"value": "%38", "label": "l"}]},
+        {"layout": "steps", "title": "Adım", "steps": [{"title": "a"}, {"title": "b"}]},
+        {"layout": "bullets", "title": "Maddeler", "bullets": ["Bir: iki", "üç"]},
+        {"layout": "quote", "statement": "Söz"},
+        {"layout": "bilinmeyen", "title": "Eski biçim", "bullets": ["madde"]},
+        {"layout": "closing", "title": "Son", "cta": "Ara"},
+    ]}
+    pdf = slides.to_pdf(spec, {})
+    assert pdf.startswith(b"%PDF")
+    from pypdf import PdfReader
+
+    assert len(PdfReader(io.BytesIO(pdf)).pages) == 11
+    from pptx import Presentation
+
+    assert len(Presentation(io.BytesIO(slides.to_pptx(spec, {}))).slides) == 11
