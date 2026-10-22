@@ -874,6 +874,10 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
 
         <section className="panel ws-panel">
           <h2>6. Reklam metni</h2>
+          {mode === "post" ? (
+            <p className="hint">Gönderinin kendi açıklaması reklam metni olarak kullanılır. Aşağıdan yalnızca butonu ve bağlantıyı ayarla.</p>
+          ) : (
+            <>
           <div className="field">
             <label htmlFor="ad-brief">Yapay zekaya anlat (isteğe bağlı)</label>
             <div className="inline-row">
@@ -892,6 +896,8 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
             <label htmlFor="ad-text">Ana metin</label>
             <textarea id="ad-text" required={mode !== "post"} rows={4} value={primaryText} onChange={(e) => setPrimaryText(e.target.value)} maxLength={2000} />
           </div>
+            </>
+          )}
           <div className="field-row">
             <div className="field">
               <label htmlFor="ad-headline">Başlık</label>
@@ -1190,6 +1196,7 @@ function PostPicker({ pageId, igId, value, onChange }: { pageId: string; igId: s
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [error, setError] = useState("");
   const [platform, setPlatform] = useState<"instagram" | "facebook">(igId ? "instagram" : "facebook");
+  useEffect(() => setPlatform(igId ? "instagram" : "facebook"), [igId]);
   useEffect(() => {
     if (!pageId) return;
     setPosts(null);
