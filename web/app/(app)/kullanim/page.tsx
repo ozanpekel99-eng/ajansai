@@ -34,7 +34,7 @@ export default function Kullanim() {
   }, [usage?.credits.used]);
 
   const c = usage?.credits;
-  const pct = c && c.total ? Math.round((c.remaining / c.total) * 100) : 0;
+  const pct = c && c.total ? Math.min(100, Math.round(((c.period_remaining ?? c.remaining) / c.total) * 100)) : 0;
 
   return (
     <div className="page">
@@ -51,13 +51,20 @@ export default function Kullanim() {
               <span style={{ width: `${pct}%` }} />
             </div>
             <div className="muted" style={{ fontSize: 14 }}>
-              {usage.plan_name} paketi · {num(c.total)} krediden {num(c.used)} kredi harcandı · {fmtDate(usage.period_end)} tarihinde yenilenir
+              {usage.plan_name} paketi{usage.cycle === "yearly" ? " (yıllık)" : ""} · {num(c.total)} krediden {num(c.used)} kredi harcandı ·{" "}
+              {usage.cycle === "yearly" ? `paket ${fmtDate(usage.period_end)} tarihine kadar geçerli` : `${fmtDate(usage.period_end)} tarihinde yenilenir`}
+              {(c.extra ?? 0) > 0 && ` · ayrıca ${num(c.extra ?? 0)} ek kredin var`}
             </div>
           </>
         )}
         <div className="actions">
-          <button className="btn btn-primary" onClick={() => openCheckout(usage?.plan === "deneme" ? "baslangic" : usage?.plan)}>
-            Kredi al
+          {usage?.plan !== "deneme" && (
+            <button className="btn btn-primary" onClick={() => openCheckout("kredi")}>
+              Ek kredi al
+            </button>
+          )}
+          <button className={`btn ${usage?.plan === "deneme" ? "btn-primary" : "btn-light"}`} onClick={() => openCheckout(usage?.plan === "deneme" ? "baslangic" : usage?.plan)}>
+            {usage?.plan === "deneme" ? "Paket seç" : "Paketi yenile / yükselt"}
           </button>
         </div>
       </section>

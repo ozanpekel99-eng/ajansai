@@ -31,10 +31,11 @@ export function NoCreditsNotice({ cost }: { cost: number }) {
   return (
     <div className="notice">
       <span>
-        Bu işlem {cost} kredi, {usage.credits.remaining} kredin kaldı. Paketini yükselterek kredi alabilirsin.
+        Bu işlem {cost} kredi, {usage.credits.remaining} kredin kaldı.
+        {usage.plan === "deneme" ? " Bir paket seçerek kredi alabilirsin." : " Ek kredi alabilir ya da paketini yükseltebilirsin."}
       </span>
-      <button type="button" className="btn btn-light btn-sm" onClick={() => openCheckout(usage.plan === "deneme" ? "baslangic" : usage.plan)}>
-        Kredi al
+      <button type="button" className="btn btn-light btn-sm" onClick={() => openCheckout(usage.plan === "deneme" ? "baslangic" : "kredi")}>
+        {usage.plan === "deneme" ? "Paket seç" : "Ek kredi al"}
       </button>
     </div>
   );

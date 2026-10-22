@@ -43,6 +43,11 @@ users = Table(
     Column("idea_used", Integer, nullable=False, default=0),
     # Bu dönemde harcanan kredi. Bakiye = paketin kredisi - credits_used.
     Column("credits_used", Integer, nullable=False, default=0, server_default="0"),
+    # Dönem kredisi (yıllık pakette 12 aylık kredi tek seferde). Boşsa paketin aylık kredisi.
+    Column("period_credits", Integer, nullable=True),
+    Column("cycle", String(10), nullable=False, default="monthly", server_default="monthly"),
+    # Satın alınan ek krediler: dönem kredisi bitince kullanılır, dönem yenilenince silinmez.
+    Column("extra_credits", Integer, nullable=False, default=0, server_default="0"),
     Column("created_at", DateTime, nullable=False),
 )
 
@@ -57,6 +62,8 @@ credit_events = Table(
     Column("credits", Integer, nullable=False),
     Column("detail", String(300), nullable=False, default=""),
     Column("refunded", Integer, nullable=False, default=0),
+    # Bu harcamanın ek krediden karşılanan kısmı (iade doğru bakiyeye yapılır)
+    Column("extra", Integer, nullable=False, default=0, server_default="0"),
     Column("created_at", DateTime, nullable=False),
 )
 
@@ -232,7 +239,13 @@ def init_db() -> None:
     metadata.create_all(engine)
     # Eski kurulumlara sonradan eklenen sütunlar (create_all mevcut tabloya sütun eklemez).
     migrations = {
-        "users": {"credits_used": "INTEGER NOT NULL DEFAULT 0"},
+        "users": {
+            "credits_used": "INTEGER NOT NULL DEFAULT 0",
+            "period_credits": "INTEGER",
+            "cycle": "VARCHAR(10) NOT NULL DEFAULT 'monthly'",
+            "extra_credits": "INTEGER NOT NULL DEFAULT 0",
+        },
+        "credit_events": {"extra": "INTEGER NOT NULL DEFAULT 0"},
         "payments": {
             "currency": "VARCHAR(3) NOT NULL DEFAULT 'TRY'",
             "billing": "VARCHAR(10) NOT NULL DEFAULT 'monthly'",

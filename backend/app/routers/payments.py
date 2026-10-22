@@ -14,8 +14,11 @@ from app.security import get_current_user
 from app.services import iyzico_service
 from typing import Literal
 
-from app.services.plans import BILLING_CYCLES, CURRENCY, get_plan, is_purchasable, price_breakdown
-from app.services.usage_service import activate_plan
+from app.services.plans import (
+    BILLING_CYCLES, CREDIT_PACKS, CURRENCY, FREE_PLAN, get_plan, is_credit_pack, is_purchasable, item_name,
+    price_breakdown, public_packs,
+)
+from app.services.usage_service import activate_plan, add_extra_credits, get_user
 
 router = APIRouter()
 logger = logging.getLogger("ajansai.payments")
@@ -31,15 +34,21 @@ class BillingInfo(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    plan_id: str
+    plan_id: str  # paket id'si ya da ek kredi paketi (kredi_100, kredi_300, kredi_800)
     cycle: Literal["monthly", "yearly"] = "monthly"
     billing: BillingInfo
+
+
+@router.get("/packs")
+def packs():
+    """Ek kredi paketleri."""
+    return {"packs": public_packs()}
 
 
 @router.get("/quote")
 def quote(plan_id: str, cycle: Literal["monthly", "yearly"] = "monthly"):
     """Ödeme ekranındaki özet: KDV hariç tutar, KDV ve toplam."""
-    if not is_purchasable(plan_id):
+    if not (is_purchasable(plan_id) or is_credit_pack(plan_id)):
         raise HTTPException(status_code=400, detail="Geçersiz paket.")
     return {"plan_id": plan_id, "cycle": cycle, **price_breakdown(plan_id, cycle)}
 
@@ -58,12 +67,15 @@ def _normalize_phone(phone: str) -> str:
 @router.post("/checkout")
 def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(get_current_user)):
     """Seçilen paket için iyzico ödeme sayfasını başlatır ve adresini döndürür."""
-    if not is_purchasable(payload.plan_id):
+    pack = is_credit_pack(payload.plan_id)
+    if not (is_purchasable(payload.plan_id) or pack):
         raise HTTPException(status_code=400, detail="Geçersiz paket.")
+    if pack and get_user(user["id"])["plan"] == FREE_PLAN:
+        raise HTTPException(status_code=400, detail="Ek kredi, ücretli bir paketin varken alınabilir. Önce bir paket seç.")
     if not iyzico_service.is_configured():
         raise HTTPException(status_code=503, detail="Ödeme sistemi henüz yapılandırılmadı.")
 
-    plan = get_plan(payload.plan_id)
+    cycle = "credits" if pack else payload.cycle
     payment_id = str(uuid.uuid4())
     prices = price_breakdown(payload.plan_id, payload.cycle)
     amount = Decimal(str(prices["total"]))  # KDV dahil tahsil edilen tutar
@@ -76,7 +88,7 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
                 plan_id=payload.plan_id,
                 amount_try=amount,  # sütun adı eski; tutar `currency` biriminde
                 currency=CURRENCY,
-                billing=payload.cycle,
+                billing=cycle,
                 status="pending",
                 created_at=utcnow(),
             )
@@ -91,7 +103,7 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
             amount=amount,
             currency=CURRENCY,
             plan_id=payload.plan_id,
-            plan_name=f'{plan["name"]} ({"yıllık" if payload.cycle == "yearly" else "aylık"})',
+            plan_name=item_name(payload.plan_id) if pack else f'{get_plan(payload.plan_id)["name"]} ({"yıllık" if payload.cycle == "yearly" else "aylık"})',
             user=user,
             billing=billing,
             buyer_ip=request.client.host if request.client else "127.0.0.1",
@@ -164,8 +176,12 @@ def _finalize(payment, result: dict) -> RedirectResponse:
 
     if changed and success:
         cycle = getattr(payment, "billing", None) or "monthly"
-        activate_plan(payment.user_id, payment.plan_id, BILLING_CYCLES.get(cycle, BILLING_CYCLES["monthly"])["days"])
-        logger.info("Paket açıldı: kullanıcı=%s paket=%s ödeme=%s", payment.user_id, payment.plan_id, payment.id)
+        if is_credit_pack(payment.plan_id):
+            add_extra_credits(payment.user_id, CREDIT_PACKS[payment.plan_id]["credits"])
+            logger.info("Ek kredi yüklendi: kullanıcı=%s paket=%s ödeme=%s", payment.user_id, payment.plan_id, payment.id)
+        else:
+            activate_plan(payment.user_id, payment.plan_id, BILLING_CYCLES.get(cycle, BILLING_CYCLES["monthly"])["days"], cycle)
+            logger.info("Paket açıldı: kullanıcı=%s paket=%s ödeme=%s", payment.user_id, payment.plan_id, payment.id)
 
     return _result_redirect(new_status, payment.id)
 
@@ -185,7 +201,7 @@ def list_payments(user: dict = Depends(get_current_user)):
             {
                 "payment_id": r.id,
                 "plan": r.plan_id,
-                "plan_name": get_plan(r.plan_id)["name"] + (" (yıllık)" if (r.billing or "monthly") == "yearly" else ""),
+                "plan_name": item_name(r.plan_id, r.billing or "monthly"),
                 "amount": float(r.amount_try),
                 "currency": r.currency or "TRY",
                 "status": r.status,
@@ -218,5 +234,4 @@ def payment_status(payment_id: str, user: dict = Depends(get_current_user)):
         except iyzico_service.IyzicoError:
             pass
 
-    plan = get_plan(payment.plan_id)
-    return {"payment_id": payment_id, "status": status, "plan": payment.plan_id, "plan_name": plan["name"]}
+    return {"payment_id": payment_id, "status": status, "plan": payment.plan_id, "plan_name": item_name(payment.plan_id, payment.billing or "monthly")}

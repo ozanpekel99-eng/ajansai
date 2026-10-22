@@ -109,7 +109,8 @@ export type Usage = {
   plan_expires_at: string | null;
   period_start: string;
   period_end: string;
-  credits: { total: number; used: number; remaining: number };
+  credits: { total: number; used: number; remaining: number; period_remaining?: number; extra?: number };
+  cycle?: "monthly" | "yearly";
   video_enabled: boolean;
   ads_enabled: boolean;
   costs: CreditCosts;

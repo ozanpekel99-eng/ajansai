@@ -92,7 +92,7 @@ export default function Sidebar({ open, onNavigate }: { open: boolean; onNavigat
 
       <ChatList pathname={pathname} onNavigate={onNavigate} signedIn={!!user} />
 
-      {usage && <QuotaCard onUpgrade={() => openCheckout()} />}
+      {usage && <QuotaCard onUpgrade={() => openCheckout()} onCredits={() => openCheckout("kredi")} />}
 
       {doneCount < steps.length && (
         <details className="checklist">
@@ -147,17 +147,21 @@ function FreeQuotaCard({ onUpgrade }: { onUpgrade: () => void }) {
   );
 }
 
-function QuotaCard({ onUpgrade }: { onUpgrade: () => void }) {
+function QuotaCard({ onUpgrade, onCredits }: { onUpgrade: () => void; onCredits: () => void }) {
   const { usage } = useSession();
   if (!usage) return null;
   if (usage.plan === "deneme") return <FreeQuotaCard onUpgrade={onUpgrade} />;
-  const { total, remaining } = usage.credits;
+  const { total } = usage.credits;
+  const remaining = usage.credits.period_remaining ?? usage.credits.remaining;
+  const extra = usage.credits.extra ?? 0;
+  const low = remaining + extra < Math.max(20, total * 0.1);
   const trial = usage.plan === "deneme";
   return (
     <div className="quota-card">
       <strong>{usage.plan_name} paketi</strong>
       <div className="meta">
         {remaining.toLocaleString("tr-TR")} / {total.toLocaleString("tr-TR")} kredin kaldı
+        {extra > 0 && ` · +${extra.toLocaleString("tr-TR")} ek kredi`}
       </div>
       <div className="meter" role="progressbar" aria-valuenow={remaining} aria-valuemin={0} aria-valuemax={total}>
         <span style={{ width: `${total ? (remaining / total) * 100 : 0}%` }} />
@@ -165,6 +169,10 @@ function QuotaCard({ onUpgrade }: { onUpgrade: () => void }) {
       {trial ? (
         <button className="btn btn-light btn-sm btn-block" onClick={onUpgrade}>
           Paket seç
+        </button>
+      ) : low ? (
+        <button className="btn btn-light btn-sm btn-block" onClick={onCredits}>
+          Ek kredi al
         </button>
       ) : (
         <Link href="/kullanim" className="btn btn-light btn-sm btn-block">

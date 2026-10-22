@@ -166,7 +166,7 @@ def test_idea_cost_is_one_credit_per_two_ideas(client, monkeypatch):
     r = client.post("/api/content/ideas", json={**IDEA_BODY, "idea_count": 1}, headers=auth(token))
     assert r.json()["credits_spent"] == 1
     c = _credits(client, token)
-    assert c == {"total": 200, "used": 4, "remaining": 196}
+    assert c == {"total": 200, "used": 4, "remaining": 196, "period_remaining": 196, "extra": 0}
     events = client.get("/api/plans/history", headers=auth(token)).json()["events"]
     assert [e["credits"] for e in events] == [1, 3] and events[0]["label"] == "İçerik fikri"
 
@@ -174,7 +174,7 @@ def test_idea_cost_is_one_credit_per_two_ideas(client, monkeypatch):
 def test_free_plan_has_no_credits(client, monkeypatch):
     _fake_ideas(monkeypatch)
     token = register(client)
-    assert _credits(client, token) == {"total": 0, "used": 0, "remaining": 0}
+    assert _credits(client, token) == {"total": 0, "used": 0, "remaining": 0, "period_remaining": 0, "extra": 0}
     r = client.post("/api/content/ideas", json=IDEA_BODY, headers=auth(token))
     assert r.status_code == 402 and "Kredin yetmiyor" in r.json()["detail"]
 
@@ -846,7 +846,7 @@ def test_yearly_checkout_charges_discount_plus_vat_and_opens_365_days(client, mo
     monkeypatch.setattr(pr.iyzico_service, "is_successful_payment", lambda result, **kw: True)
     client.post("/api/payments/iyzico/callback", data={"token": "tok-y"}, follow_redirects=False)
     usage = client.get("/api/plans/usage", headers=auth(token)).json()
-    assert usage["plan"] == "ajans" and usage["credits"]["total"] == 1000
+    assert usage["plan"] == "ajans" and usage["credits"]["total"] == 12000 and usage["cycle"] == "yearly"  # 12 aylık kredi tek seferde
     from datetime import datetime
 
     days = (datetime.fromisoformat(usage["plan_expires_at"].rstrip("Z")) - datetime.utcnow()).days

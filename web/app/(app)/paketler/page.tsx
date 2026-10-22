@@ -78,7 +78,15 @@ export default function Paketler() {
                     {cycle === "yearly" ? `Yıllık ${money(p.price_yearly, p.currency)} + KDV tek ödeme` : "30 gün geçerli"}
                   </p>
                   <div className="credit-badge">
-                    <strong>{num(p.credits)}</strong> kredi / ay
+                    {cycle === "yearly" ? (
+                      <>
+                        <strong>{num(p.credits * 12)}</strong> kredi, tek seferde
+                      </>
+                    ) : (
+                      <>
+                        <strong>{num(p.credits)}</strong> kredi / ay
+                      </>
+                    )}
                   </div>
                   <p className="plan-sub">Bu krediyle yalnızca birini yaparsan:</p>
                   <ul>
@@ -93,7 +101,7 @@ export default function Paketler() {
                     className={`btn btn-block ${id === "pro" ? "btn-primary" : "btn-light"}`}
                     onClick={() => openCheckout(`${id}:${cycle}`)}
                   >
-                    {current ? "30 gün uzat" : `${p.name} paketini al`}
+                    {current ? (cycle === "yearly" ? "1 yıl uzat" : "30 gün uzat") : `${p.name} paketini al`}
                   </button>
                 </article>
               );
@@ -112,10 +120,39 @@ export default function Paketler() {
               <ul>
                 <li>Günde {pricing.free.chat_per_day} sohbet mesajı (yalnızca metin)</li>
                 <li>30 günde {pricing.free.images_per_month} ücretsiz AI görseli</li>
-                <li>Sınırsız telifsiz stok fotoğraf</li>
               </ul>
             </section>
           )}
+
+          <section className="section">
+            <div className="section-head">
+              <div>
+                <h2>Ek kredi paketleri</h2>
+                <p>Paket kredin biterse ek kredi alabilirsin. Ek kredi paket kredinden sonra kullanılır, ay yenilense de silinmez.</p>
+              </div>
+            </div>
+            <div className="packs">
+              {[
+                ["kredi_100", 100, 5],
+                ["kredi_300", 300, 13],
+                ["kredi_800", 800, 30],
+              ].map(([id, credits, price]) => (
+                <div key={id as string} className="panel pack">
+                  <strong>{num(credits as number)} kredi</strong>
+                  <span className="amount">
+                    {money(price as number, "USD")} <small>+ KDV</small>
+                  </span>
+                  <span className="muted">kredi başı {money((price as number) / (credits as number), "USD")}</span>
+                  <button
+                    className="btn btn-light btn-sm"
+                    onClick={() => (usage && usage.plan !== "deneme" ? openCheckout(id as string) : openCheckout("baslangic"))}
+                  >
+                    {usage && usage.plan !== "deneme" ? "Satın al" : "Önce paket seç"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
 
           <section className="section">
             <div className="section-head">

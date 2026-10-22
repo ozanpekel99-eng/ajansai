@@ -84,6 +84,15 @@ PLANS = {
     },
 }
 
+# Ek kredi paketleri (KDV hariç, USD). Dönem kredisi bitince kullanılır; dönem yenilense de silinmez.
+# Fiyatlar paket içi kredi fiyatının üstünde tutulur (paket yükseltmek hep daha avantajlı kalsın)
+# ve en pahalı işlemin kredi başı maliyetini (~$0.011; 2027 ses fiyatıyla ~$0.016) rahatça karşılar.
+CREDIT_PACKS = {
+    "kredi_100": {"name": "100 ek kredi", "credits": 100, "price": 5},  # $0.050 / kredi
+    "kredi_300": {"name": "300 ek kredi", "credits": 300, "price": 13},  # $0.043 / kredi
+    "kredi_800": {"name": "800 ek kredi", "credits": 800, "price": 30},  # $0.0375 / kredi
+}
+
 # Paketler dolar cinsinden satılır; iyzico ödemeyi USD olarak alır
 # (iyzico üye işyeri hesabında döviz ile ödeme açık olmalı).
 CURRENCY = "USD"
@@ -101,6 +110,24 @@ BILLING_CYCLES = {
 
 def get_plan(plan_id: str) -> dict:
     return PLANS.get(plan_id, PLANS[FREE_PLAN])
+
+
+def is_credit_pack(item_id: str) -> bool:
+    return item_id in CREDIT_PACKS
+
+
+def item_name(item_id: str, billing: str = "monthly") -> str:
+    if is_credit_pack(item_id):
+        return CREDIT_PACKS[item_id]["name"]
+    return get_plan(item_id)["name"] + (" (yıllık)" if billing == "yearly" else "")
+
+
+def public_packs() -> list[dict]:
+    return [
+        {"id": k, "name": v["name"], "credits": v["credits"], "price": v["price"], "currency": CURRENCY,
+         "vat_rate": VAT_RATE, "per_credit": round(v["price"] / v["credits"], 4)}
+        for k, v in CREDIT_PACKS.items()
+    ]
 
 
 def is_purchasable(plan_id: str) -> bool:
@@ -133,7 +160,7 @@ def cycle_price(plan_id: str, billing: str = "monthly") -> float:
 
 
 def price_breakdown(plan_id: str, billing: str = "monthly") -> dict:
-    net = cycle_price(plan_id, billing)
+    net = float(CREDIT_PACKS[plan_id]["price"]) if is_credit_pack(plan_id) else cycle_price(plan_id, billing)
     vat = round(net * VAT_RATE / 100, 2)
     return {"net": net, "vat": vat, "vat_rate": VAT_RATE, "total": round(net + vat, 2), "currency": CURRENCY}
 
@@ -148,6 +175,7 @@ def public_plan(plan_id: str) -> dict:
         "price": p["price"],
         "currency": CURRENCY,
         "price_yearly": cycle_price(plan_id, "yearly") if p["price"] else 0,
+        "credits_yearly": c * BILLING_CYCLES["yearly"]["months"],
         "yearly_discount": BILLING_CYCLES["yearly"]["discount"],
         "vat_rate": VAT_RATE,
         "credits": c,

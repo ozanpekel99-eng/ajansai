@@ -3663,3 +3663,42 @@ table.data td.num {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- Ek kredi paketleri ---------- */
+.packs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+}
+
+.pack strong {
+  font-size: 18px;
+}
+
+.pack .amount {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.pack .amount small,
+.pack .muted {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.pack .btn {
+  margin-top: 6px;
+}
+
+@media (max-width: 720px) {
+  .packs {
+    grid-template-columns: 1fr;
+  }
+}
