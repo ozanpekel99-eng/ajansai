@@ -3306,3 +3306,61 @@ table.data td.num {
 .legal a {
   color: var(--text);
 }
+
+/* ---------- Sesli sohbet ---------- */
+.voice-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--r-md);
+  background: var(--indigo-soft);
+  border: 1px solid var(--indigo-hi);
+}
+
+.voice-state {
+  flex: 1;
+  color: var(--text);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex: none;
+}
+
+.voice-dot.on {
+  background: #ff4d4d;
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(255, 77, 77, 0);
+  }
+}
+
+.icon-btn.rec {
+  color: #ff4d4d;
+}
+
+.send-btn.active {
+  background: #ff4d4d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-dot.on {
+    animation: none;
+  }
+}
