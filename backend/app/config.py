@@ -9,6 +9,8 @@ load_dotenv()
 
 def _env(name: str, default: str | None = None) -> str | None:
     value = os.environ.get(name)
+    if value is not None:
+        value = value.strip().strip('"').strip("'")  # yapıştırırken gelen boşluk/tırnak
     return value if value not in (None, "") else default
 
 

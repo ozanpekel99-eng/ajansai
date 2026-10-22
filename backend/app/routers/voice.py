@@ -30,5 +30,5 @@ def speak(payload: SpeakRequest, request: Request, user: dict | None = Depends(g
         audio, mime = tts.synthesize(payload.text, subject)
     except tts.TTSUnavailable as e:
         logger.info("Doğal ses kullanılamadı: %s", e)
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail="Doğal ses şu an kullanılamıyor.")
     return Response(content=audio, media_type=mime, headers={"Cache-Control": "no-store"})
