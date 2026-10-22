@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { logout } from "../lib/api";
 import { CHATS_EVENT, ChatSummary, deleteChat, listChats } from "../lib/chats";
@@ -11,7 +11,6 @@ import { onboardingSteps, useSession } from "../lib/session";
 import Icon from "./Icon";
 
 const MAIN = [
-  { href: "/", label: "Sohbet", icon: "sparkle" },
   { href: "/araclar", label: "Araçlar", icon: "grid" },
   { href: "/paketler", label: "Paketler", icon: "tag" },
 ];
@@ -30,6 +29,7 @@ function isActive(pathname: string, href: string) {
 
 export default function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, usage, metaConnected, openCheckout } = useSession();
   const steps = onboardingSteps(usage, metaConnected);
   const doneCount = steps.filter((s) => s.done).length;
@@ -41,6 +41,21 @@ export default function Sidebar({ open, onNavigate }: { open: boolean; onNavigat
       </Link>
 
       <nav className="nav-group">
+        <Link
+          href="/?yeni=1"
+          className="nav-link new-chat"
+          onClick={(e) => {
+            e.preventDefault();
+            router.push(`/?yeni=${Date.now()}`);
+            window.dispatchEvent(new CustomEvent("ajansai:chats", { detail: { activeId: null } }));
+            onNavigate();
+          }}
+        >
+          <span className="new-chat-icon">
+            <Icon name="plus" size={14} />
+          </span>
+          Yeni sohbet
+        </Link>
         {MAIN.map((item) => (
           <Link
             key={item.href}
@@ -204,9 +219,6 @@ function ChatList({ pathname, onNavigate, signedIn }: { pathname: string; onNavi
     <div className="chat-list">
       <div className="chat-list-head">
         <span className="nav-heading">Sohbetler</span>
-        <Link href={`/?yeni=${Date.now()}`} className="icon-btn" aria-label="Yeni sohbet" title="Yeni sohbet" onClick={() => { setActive(null); onNavigate(); }}>
-          <Icon name="plus" size={16} />
-        </Link>
       </div>
       <div className="chat-list-items">
         {chats === null ? null : chats.length === 0 ? (

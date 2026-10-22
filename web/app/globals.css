@@ -3135,6 +3135,25 @@ table.data td.num {
   border-color: var(--accent, #6c63ff);
 }
 
+.nav-link.new-chat {
+  font-weight: 600;
+}
+
+.new-chat-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--accent, #4f46e5);
+}
+
+.nav-link.new-chat .new-chat-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
 .chat-list {
   display: flex;
   flex: 1;
