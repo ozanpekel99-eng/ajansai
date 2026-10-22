@@ -3015,3 +3015,34 @@ table.data td.num {
   font-size: 14px;
   line-height: 1.7;
 }
+
+.md .md-table {
+  overflow-x: auto;
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+.md table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.md th,
+.md td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.md th {
+  color: var(--text-2);
+  font-weight: 600;
+  background: var(--surface);
+}
+
+.md tr:last-child td {
+  border-bottom: none;
+}
