@@ -1,5 +1,6 @@
 "use client";
 
+import { downloadHref } from "../lib/download";
 import { FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
@@ -308,7 +309,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                         {m.images.map((url) => (
                           <figure key={url}>
                             <img src={url} alt="Üretilen görsel" />
-                            <a className="btn btn-light btn-sm" href={url} target="_blank" rel="noreferrer" download>
+                            <a className="btn btn-light btn-sm" href={downloadHref(url)} download>
                               İndir
                             </a>
                           </figure>
@@ -318,7 +319,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
                     {!!m.files?.length && (
                       <div className="msg-files">
                         {m.files.map((f) => (
-                          <a key={f.url} className="file-card" href={f.url} target="_blank" rel="noreferrer" download={f.name}>
+                          <a key={f.url} className="file-card" href={downloadHref(f.url)} download={f.name}>
                             <span className={`file-badge ${f.format}`}>{f.format.toUpperCase()}</span>
                             <span className="file-meta">
                               <strong>{f.title}</strong>
@@ -649,7 +650,7 @@ function VideoCard({ video, onUpdate }: { video: ChatVideo; onUpdate: (v: ChatVi
   return (
     <figure>
       <video src={video.url} controls playsInline style={{ aspectRatio: ratio }} />
-      <a className="btn btn-light btn-sm" href={video.url} target="_blank" rel="noreferrer" download>
+      <a className="btn btn-light btn-sm" href={downloadHref(video.url)} download>
         İndir
       </a>
     </figure>
