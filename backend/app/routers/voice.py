@@ -24,11 +24,11 @@ class SpeakRequest(BaseModel):
 
 @router.post("/speak")
 def speak(payload: SpeakRequest, request: Request, user: dict | None = Depends(get_optional_user)):
-    """Metni doğal Türkçe sesle MP3 olarak döndürür. Kullanılamazsa 503 (arayüz tarayıcı sesine döner)."""
+    """Metni doğal Türkçe sesle ses dosyası (WAV/MP3) olarak döndürür. Kullanılamazsa 503 (arayüz tarayıcı sesine döner)."""
     subject = free_tier.subject_for(user, client_ip(request))
     try:
-        audio = tts.synthesize(payload.text, subject)
+        audio, mime = tts.synthesize(payload.text, subject)
     except tts.TTSUnavailable as e:
         logger.info("Doğal ses kullanılamadı: %s", e)
         raise HTTPException(status_code=503, detail=str(e))
-    return Response(content=audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
+    return Response(content=audio, media_type=mime, headers={"Cache-Control": "no-store"})

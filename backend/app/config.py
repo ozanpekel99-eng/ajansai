@@ -121,6 +121,11 @@ FREE_IMAGES_PER_DAY_TOTAL = _int("FREE_IMAGES_PER_DAY_TOTAL", 80)
 # Doğal sesli okuma: Google Cloud Text-to-Speech (Chirp 3 HD). Ayda 1M karakter ücretsiz;
 # günlük tavan bunun altında tutulur, aşılırsa tarayıcının kendi sesine düşülür.
 GOOGLE_TTS_API_KEY = _env("GOOGLE_TTS_API_KEY")
+# Daha doğal ses: Gemini TTS (Google AI Studio API anahtarı, ücretsiz katman). Tanımlıysa önce bu denenir.
+GEMINI_API_KEY = _env("GEMINI_API_KEY")
+GEMINI_TTS_MODEL = _env("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts")
+GEMINI_TTS_VOICE = _env("GEMINI_TTS_VOICE", "Sulafat")
+TTS_STYLE = _env("TTS_STYLE", "sıcak, doğal ve samimi; günlük sohbet eder gibi, akıcı ve canlı")
 TTS_VOICE = _env("TTS_VOICE", "tr-TR-Chirp3-HD-Achernar")
 TTS_DAILY_CHARS = _int("TTS_DAILY_CHARS", 30000)
 TTS_CHARS_PER_DAY_SUBJECT = _int("TTS_CHARS_PER_DAY_SUBJECT", 6000)
