@@ -83,7 +83,7 @@ export default function Faturalandirma() {
             <div className="name">Bu dönem harcanan</div>
             <div className="value">{usage.credits.used}</div>
             <div className="foot">
-              {usage.counts.idea} fikir üretimi · {usage.counts.image} görsel · {usage.counts.video} video
+              {usage.counts.idea} sohbet mesajı · {usage.counts.image} görsel · {usage.counts.video} video
             </div>
           </div>
           <div className="panel stat">

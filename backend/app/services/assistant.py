@@ -92,8 +92,10 @@ def reply(history: list[dict]) -> tuple[str, str]:
 
     Geçmişteki eski eklerin yalnızca adı gönderilir; dosyaların kendisi son mesajla gider.
     """
+    from app.services import free_tier  # döngüsel içe aktarmayı önlemek için burada
+
     history = _trim_history(history)
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT + free_tier.IMAGE_TOOL_NOTE}]
     has_video = False
     last = len(history) - 1
     for i, msg in enumerate(history):

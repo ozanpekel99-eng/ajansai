@@ -407,13 +407,13 @@ def test_chat_with_attachments(client, monkeypatch):
         headers=auth(token),
     )
     assert r.status_code == 200, r.text
-    assert r.json() == {"reply": "Harika bir video!", "model": config.CHAT_VIDEO_MODEL, "credits_spent": 3}
+    assert r.json() == {"reply": "Harika bir video!", "model": config.CHAT_VIDEO_MODEL, "images": [], "image_error": None, "credits_spent": 3}
     last = sent["messages"][-1]["content"]
     assert last[1]["type"] == "file" and last[1]["file"]["file_data"].startswith("data:video/mp4;base64,")
     assert last[2]["file"]["filename"] == "katalog.pdf"
     assert sent["messages"][0]["role"] == "system"
     events = client.get("/api/plans/history", headers=auth(token)).json()["events"]
-    assert events[0]["label"] == "Fikir sohbeti" and events[0]["credits"] == 3
+    assert events[0]["label"] == "Sohbet" and events[0]["credits"] == 3
 
 
 def test_chat_text_only_uses_claude_and_refunds_on_error(client, monkeypatch):

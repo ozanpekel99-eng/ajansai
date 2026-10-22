@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { HistoryEntry } from "../../lib/history";
 import { useFreeStatus } from "../../lib/free";
+import { extractConcept } from "../../lib/markdown";
 import { useSession } from "../../lib/session";
 import ChatPanel, { Conversation, loadChats } from "../ChatPanel";
 import { LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
@@ -24,7 +25,7 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
       return (
         <div className="panel empty">
           <h3>Henüz sohbet yok</h3>
-          <p>Oluştur sekmesinden ilk mesajını yaz; sohbetlerin burada listelenir. Geçmiş bu tarayıcıda saklanır.</p>
+          <p>Sohbet sekmesinden ilk mesajını yaz; sohbetlerin burada listelenir. Geçmiş bu tarayıcıda saklanır.</p>
         </div>
       );
     }
@@ -50,8 +51,8 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
 
   if (!usage) return null;
 
-  const conceptHref = (kind: "gorsel" | "video", concept: string) =>
-    `/araclar/${kind}?konsept=${encodeURIComponent(concept)}`;
+  const videoHref = (text: string) =>
+    usage.video_enabled ? `/araclar/video?konsept=${encodeURIComponent((extractConcept(text, "Video") || text).slice(0, 400))}` : null;
 
   // Ücretsiz paket: Haiku ile kredisiz sohbet, günlük mesaj hakkı, dosya eklenemez.
   if (usage.plan === "deneme") {
@@ -61,8 +62,7 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
         key={open?.id ?? "yeni"}
         initial={open}
         endpoint="/api/free/chat"
-        allowFiles={false}
-        conceptHref={conceptHref}
+        attach="images"
         onSent={(data) => data?.free && setStatus(data.free)}
         blocker={
           left === 0 ? (
@@ -71,7 +71,7 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
         }
         footer={() =>
           status
-            ? `Ücretsiz paket · bugün ${status.chat.remaining}/${status.chat.limit} mesaj hakkın var · fotoğraf, video ve belge eklemek için paket seç`
+            ? `Ücretsiz paket · bugün ${status.chat.remaining}/${status.chat.limit} mesaj, 30 günde ${status.images.remaining}/${status.images.limit} görsel hakkın var`
             : "Ücretsiz paket"
         }
       />
@@ -85,13 +85,13 @@ export default function FikirWorkspace({ tab, showCreate }: WorkspaceProps) {
       key={open?.id ?? "yeni"}
       initial={open}
       endpoint="/api/content/chat"
-      allowFiles
-      conceptHref={conceptHref}
+      attach="all"
+      videoHref={videoHref}
       onSent={() => refresh()}
       blocker={lacking ? <NoCreditsNotice cost={costs.chat_message} /> : undefined}
       footer={(files) => {
         const cost = costs.chat_message + files * costs.chat_attachment;
-        return `Bu mesaj ${cost} kredi${files ? ` (mesaj 1 + ${files} dosya; ${costs.chat_pdf_pages ?? 10} sayfadan uzun PDF'lerde her ${costs.chat_pdf_pages ?? 10} sayfa +1)` : ""} · Enter gönderir, Shift+Enter alt satır`;
+        return `Bu mesaj ${cost} kredi, görsel istersen +${costs.image}${files ? ` (mesaj 1 + ${files} dosya; ${costs.chat_pdf_pages ?? 10} sayfadan uzun PDF'lerde her ${costs.chat_pdf_pages ?? 10} sayfa +1)` : ""} · Enter gönderir, Shift+Enter alt satır`;
       }}
     />
   );

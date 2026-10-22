@@ -66,7 +66,7 @@ export default function Paketler() {
                   </div>
                   <p className="plan-sub">Bu krediyle yalnızca birini yaparsan:</p>
                   <ul>
-                    <li>{num(p.examples.messages)} fikir sohbeti mesajı</li>
+                    <li>{num(p.examples.messages)} sohbet mesajı</li>
                     <li>{num(p.examples.images)} görsel</li>
                     <li>
                       5 sn video: {num(p.examples.videos["720p"])} adet 720p, {num(p.examples.videos["1080p"])} adet 1080p ya da {num(p.examples.videos["4k"])} adet 4K
@@ -94,7 +94,7 @@ export default function Paketler() {
                 </p>
               </div>
               <ul>
-                <li>Günde {pricing.free.chat_per_day} fikir sohbeti mesajı (yalnızca metin)</li>
+                <li>Günde {pricing.free.chat_per_day} sohbet mesajı (yalnızca metin)</li>
                 <li>30 günde {pricing.free.images_per_month} ücretsiz AI görseli</li>
                 <li>Sınırsız telifsiz stok fotoğraf</li>
               </ul>
@@ -119,7 +119,7 @@ export default function Paketler() {
                 </thead>
                 <tbody>
                   <tr>
-                    <td>Fikir sohbeti</td>
+                    <td>Sohbet mesajı</td>
                     <td className="num">
                       Mesaj başı {costs.chat_message}, her ek +{costs.chat_attachment}
                     </td>
@@ -241,7 +241,7 @@ export default function Paketler() {
                   {[
                     ["Fiyat (30 gün)", (p: Plan) => (p.price ? money(p.price, p.currency) : "Ücretsiz")],
                     ["Kredi", (p: Plan) => (p.credits ? num(p.credits) : "—")],
-                    ["Fikir sohbeti mesajı (yalnızca)", (p: Plan) => (p.credits ? num(p.examples.messages) : `Günde ${pricing.free?.chat_per_day ?? 20}`)],
+                    ["Sohbet mesajı (yalnızca)", (p: Plan) => (p.credits ? num(p.examples.messages) : `Günde ${pricing.free?.chat_per_day ?? 20}`)],
                     ["Dosya ekleyerek sohbet", (p: Plan) => (p.credits ? "Var" : "—")],
                     ["Seedream görsel (yalnızca)", (p: Plan) => (p.credits ? num(p.examples.images) : "—")],
                     ["Ücretsiz AI görseli (30 gün)", () => String(pricing.free?.images_per_month ?? 6)],

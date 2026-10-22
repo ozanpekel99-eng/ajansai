@@ -43,6 +43,12 @@ JWT_SECRET = _env("JWT_SECRET")
 IS_SERVERLESS = bool(_env("VERCEL"))
 JWT_EXPIRE_DAYS = int(_env("JWT_EXPIRE_DAYS", "30"))
 
+# Google / Apple ile giriş (gizli değildir; istemci kimlikleri)
+# Google: Cloud Console → APIs & Services → Credentials → OAuth client ID (Web)
+GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID")
+# Apple: Developer → Identifiers → Services ID (Sign in with Apple açık)
+APPLE_CLIENT_ID = _env("APPLE_CLIENT_ID")
+
 # --- CORS ---
 # Virgülle ayrılmış liste. Örn: https://ajansai.vercel.app,https://www.ajansai.com
 ALLOWED_ORIGINS = [
@@ -106,6 +112,8 @@ FREE_CHAT_PER_DAY_TOTAL = _int("FREE_CHAT_PER_DAY_TOTAL", 5000)  # tüm site, g�
 CLOUDFLARE_ACCOUNT_ID = _env("CLOUDFLARE_ACCOUNT_ID")
 CLOUDFLARE_AI_TOKEN = _env("CLOUDFLARE_AI_TOKEN")
 FREE_IMAGE_MODEL = _env("FREE_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnell")
+# Görselden görsel (örnek görselle üretim): FLUX.2 klein 4B, ~110 neuron → günlük tavanda 2 sayılır
+FREE_IMAGE_REF_MODEL = _env("FREE_IMAGE_REF_MODEL", "@cf/black-forest-labs/flux-2-klein-4b")
 FREE_IMAGES_PER_MONTH = _int("FREE_IMAGES_PER_MONTH", 6)
 FREE_IMAGES_PER_DAY_TOTAL = _int("FREE_IMAGES_PER_DAY_TOTAL", 150)
 # Stok fotoğraf kütüphanesi: Pixabay (öncelikli) veya Pexels, ikisi de ücretsiz API anahtarı

@@ -337,3 +337,114 @@ def test_paid_text_chat_falls_back_to_free_chain(client, monkeypatch):
     token = register_paid(client)
     r = client.post("/api/content/chat", json={"messages": [{"role": "user", "content": "Fikir ver"}]}, headers=auth(token))
     assert r.status_code == 200 and r.json()["reply"] == "Groq yanıtı"
+
+
+def test_free_chat_generates_image_when_asked(client, monkeypatch):
+    calls = []
+    _enable_free_images(monkeypatch, calls)
+    monkeypatch.setattr(
+        free_tier,
+        "free_chat_completion",
+        lambda messages, max_tokens=0: ("Harika fikir! İşte görselin.\n[[GORSEL: a latte on a wooden table, morning light]]", "groq:x"),
+    )
+    r = client.post("/api/free/chat", json=_msg("Ahşap masada latte görseli üret"), headers=IP_A)
+    data = r.json()
+    assert r.status_code == 200, r.text
+    assert data["reply"] == "Harika fikir! İşte görselin." and "[[" not in data["reply"]
+    assert data["images"][0].startswith("data:image/jpeg;base64,")
+    assert calls[0]["json"]["prompt"] == "a latte on a wooden table, morning light"  # çeviri yapılmadı
+    assert data["free"]["images"]["used"] == 1
+
+
+def test_free_chat_image_attachment_requires_login_and_uses_reference_model(client, monkeypatch):
+    calls = []
+    _enable_free_images(monkeypatch, calls)
+    monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", BLOB_TOKEN)
+    monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0: ("Tamam.\n[[GORSEL: the product in image 0 on a beach]]", "groq:x"))
+    att = {"url": BLOB_URL + "urun.jpg", "content_type": "image/jpeg", "name": "urun.jpg"}
+    body = {"messages": [{"role": "user", "content": "Bunu plajda göster", "attachments": [att]}]}
+    assert client.post("/api/free/chat", json=body, headers=IP_A).status_code == 401
+
+    import io
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (1200, 900), "red").save(buf, "JPEG")
+    monkeypatch.setattr(storage, "fetch", lambda url, max_bytes=0: buf.getvalue())
+    monkeypatch.setattr(storage, "save", lambda d, m, f: BLOB_URL + "uretilen.jpg")
+    sent = {}
+
+    def fake_post(url, headers=None, data=None, files=None, json=None, timeout=None):
+        sent.update(url=url, data=data, files=files)
+        return FakeResponse(200, {"result": {"image": base64.b64encode(b"jpg").decode()}})
+
+    monkeypatch.setattr(free_tier.requests, "post", fake_post)
+    token = register(client)
+    r = client.post("/api/free/chat", json=body, headers={**IP_A, **auth(token)})
+    assert r.status_code == 200, r.text
+    assert r.json()["images"] == [BLOB_URL + "uretilen.jpg"]
+    assert sent["url"].endswith("/ai/run/@cf/black-forest-labs/flux-2-klein-4b")
+    ref = Image.open(io.BytesIO(sent["files"]["input_image_0"][1]))
+    assert max(ref.size) < 512
+    # örnekli üretim günlük tavanda iki kat sayılır
+    from app.db import free_events, get_engine
+    from sqlalchemy import select
+
+    with get_engine().connect() as conn:
+        kinds = [r.kind for r in conn.execute(select(free_events))]
+    assert kinds.count("image") == 1 and kinds.count("image_extra") == 1
+
+
+def test_social_login_creates_and_reuses_account(client, monkeypatch):
+    from app.services import social_auth
+
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", "gid.apps.googleusercontent.com")
+    assert client.get("/api/auth/providers").json()["google_client_id"] == "gid.apps.googleusercontent.com"
+    monkeypatch.setattr(social_auth, "verify", lambda provider, token: {"email": "Ozan@Gmail.com", "name": "Ozan P", "email_verified": True})
+    r1 = client.post("/api/auth/google", json={"credential": "x"})
+    r2 = client.post("/api/auth/google", json={"credential": "x"})
+    assert r1.status_code == 200 and r1.json()["user"]["id"] == r2.json()["user"]["id"]
+    assert r1.json()["user"]["email"] == "ozan@gmail.com"
+    # Bu hesaba şifreyle girilemez
+    assert client.post("/api/auth/login", json={"email": "ozan@gmail.com", "password": "!social"}).status_code == 401
+
+    def bad(provider, token):
+        raise social_auth.SocialAuthError("Giriş doğrulanamadı")
+
+    monkeypatch.setattr(social_auth, "verify", bad)
+    assert client.post("/api/auth/apple", json={"id_token": "x"}).status_code == 401
+
+
+def test_social_verify_checks_audience(monkeypatch):
+    from app.services import social_auth
+
+    monkeypatch.setattr(config, "APPLE_CLIENT_ID", None)
+    import pytest
+
+    with pytest.raises(social_auth.SocialAuthError):
+        social_auth.verify("apple", "token")
+
+
+def test_social_verify_real_signature(monkeypatch):
+    import time
+
+    import jwt as pyjwt
+    import pytest
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    from app.services import social_auth
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    class FakeJwks:
+        def get_signing_key_from_jwt(self, token):
+            return type("K", (), {"key": key.public_key()})()
+
+    monkeypatch.setattr(social_auth, "_jwks", lambda provider: FakeJwks())
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", "gid")
+    now = int(time.time())
+    good = {"iss": "https://accounts.google.com", "aud": "gid", "sub": "1", "email": "a@b.com", "email_verified": True, "iat": now, "exp": now + 600}
+    assert social_auth.verify("google", pyjwt.encode(good, key, algorithm="RS256"))["email"] == "a@b.com"
+    for bad in ({**good, "aud": "baska"}, {**good, "iss": "https://evil.com"}, {**good, "exp": now - 10}, {**good, "email_verified": False}):
+        with pytest.raises(social_auth.SocialAuthError):
+            social_auth.verify("google", pyjwt.encode(bad, key, algorithm="RS256"))

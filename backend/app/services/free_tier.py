@@ -11,9 +11,11 @@ Giriş yapmamış ziyaretçiler IP adresinin özetiyle sayılır (IP'nin kendisi
 """
 
 import base64
+import io
 import hashlib
 import json
 import logging
+import re
 import uuid
 from datetime import timedelta
 from urllib.parse import urlparse
@@ -81,7 +83,11 @@ def _reserve(subject: str, kind: str, limit: int, window: timedelta, total_limit
         conn.execute(free_events.insert().values(id=event_id, subject=subject, kind=kind, created_at=now))
     with get_engine().connect() as conn:
         mine = _count(conn, kind, now - window, subject)
-        total = _count(conn, kind, now - DAY) if total_limit else 0
+        total = 0
+        if total_limit:
+            total = _count(conn, kind, now - DAY)
+            if kind == "image":  # örnekli üretim iki kat kota harcar
+                total += _count(conn, "image_extra", now - DAY)
     if mine > limit:
         release(event_id)
         raise FreeLimitError(message)
@@ -92,9 +98,9 @@ def _reserve(subject: str, kind: str, limit: int, window: timedelta, total_limit
 
 
 def release(event_id: str) -> None:
-    """Başarısız işlemde kullanım hakkını geri verir."""
+    """Başarısız işlemde kullanım hakkını geri verir (virgülle birden çok kayıt olabilir)."""
     with get_engine().begin() as conn:
-        conn.execute(delete(free_events).where(free_events.c.id == event_id))
+        conn.execute(delete(free_events).where(free_events.c.id.in_(event_id.split(","))))
 
 
 def status(subject: str, signed_in: bool) -> dict:
@@ -119,29 +125,53 @@ def status(subject: str, signed_in: bool) -> dict:
 # ---------------- Sohbet ----------------
 
 FREE_NOTE = (
-    "\n- Bu kullanıcı ücretsiz pakette: yanıtları derli toplu tut (en fazla 5 fikir). "
-    "Dosya ekleme ücretli paketlerde; kullanıcı dosyadan söz ederse bunu kısaca belirt."
+    "\n- Bu kullanıcı ücretsiz pakette: yanıtları derli toplu tut (en fazla 5 fikir)."
 )
+
+# Sohbetten görsel üretimi (ChatGPT gibi): model görsel istendiğini bu satırla bildirir.
+IMAGE_TOOL_NOTE = (
+    "\n- Görsel üretebilirsin. Kullanıcı açıkça bir görsel, fotoğraf, afiş veya gönderi görseli üretmeni/çizmeni "
+    "isterse (ör. 'bunun görselini üret', 'bir post görseli yap'), yanıtını kısa tut (1-2 cümle, gerekirse caption) ve "
+    "en sona tek satır olarak şunu ekle: [[GORSEL: <İngilizce, en fazla 60 kelimelik görüntü istemi: konu, ortam, ışık, "
+    "stil>]]. Kullanıcı görsel eklediyse ve onu kullanmak/değiştirmek istiyorsa istemde 'the product in image 0' gibi "
+    "ona atıf yap. Görsel istenmedikçe bu satırı ekleme. Görsel üretemeyeceğini asla söyleme; satırı eklemen yeterli, "
+    "görseli sistem üretip mesajının altında gösterir. Satırda yazı/logo isteme; görselde metin olmasın."
+)
+IMAGE_TAG = re.compile(r"\[\[\s*G[ÖO]RSEL\s*:\s*(.+?)\]\]", re.IGNORECASE | re.DOTALL)
 HISTORY_MESSAGES = 8
 MESSAGE_CHARS = 3000
 
 
-def chat(subject: str, signed_in: bool, history: list[dict]) -> str:
+def split_image_request(text: str) -> tuple[str, str | None]:
+    """Yanıttaki [[GORSEL: ...]] satırını ayırır: (görünen metin, görsel istemi)."""
+    m = IMAGE_TAG.search(text)
+    if not m:
+        return text, None
+    return IMAGE_TAG.sub("", text).strip(), m.group(1).strip()[:1500]
+
+
+def chat(subject: str, signed_in: bool, history: list[dict]) -> tuple[str, str | None]:
+    """(yanıt metni, görsel istemi veya None) döndürür."""
     lim = limits(signed_in)["chat_per_day"]
     msg = (
         f"Ücretsiz pakette günde {lim} mesaj hakkın var ve bugünkü hakkın doldu. "
         + ("Yarın devam edebilir ya da bir paket seçebilirsin." if signed_in else "Ücretsiz üye olursan günde daha fazla mesaj yazabilirsin.")
     )
     event_id = _reserve(subject, "chat", lim, DAY, config.FREE_CHAT_PER_DAY_TOTAL, msg)
-    messages = [{"role": "system", "content": assistant.SYSTEM_PROMPT + FREE_NOTE}]
+    system = assistant.SYSTEM_PROMPT + FREE_NOTE + (IMAGE_TOOL_NOTE if image_enabled() else "")
+    messages = [{"role": "system", "content": system}]
     for m in history[-HISTORY_MESSAGES:]:
-        messages.append({"role": m["role"], "content": (m.get("content") or "")[:MESSAGE_CHARS]})
+        content = (m.get("content") or "")[:MESSAGE_CHARS]
+        n = len(m.get("attachments") or [])
+        if n:
+            content = f"{content}\n[Kullanıcı bu mesaja {n} görsel ekledi: image 0{', image 1' if n > 1 else ''}]".strip()
+        messages.append({"role": m["role"], "content": content or "(boş mesaj)"})
     try:
         text, _ = free_chat_completion(messages, max_tokens=1200)
-        return text
     except Exception:
         release(event_id)
         raise
+    return split_image_request(text)
 
 
 # ---------------- Ücretsiz AI görseli (Cloudflare Workers AI) ----------------
@@ -158,7 +188,8 @@ def _english_prompt(concept: str) -> str:
                 {
                     "role": "user",
                     "content": "Translate this social media image idea into one concise English image-generation "
-                    "prompt (max 60 words, describe subject, setting, light, style). Reply with the prompt only.\n\n"
+                    "prompt (max 60 words, describe subject, setting, light, style). If it mentions the uploaded/reference "
+                    "image or product, keep that reference (e.g. 'the product from image 0'). Reply with the prompt only.\n\n"
                     + concept,
                 }
             ],
@@ -192,17 +223,64 @@ def _cloudflare_image(prompt: str) -> bytes:
     return base64.b64decode(image)
 
 
-def reserve_image(subject: str, signed_in: bool) -> str:
+def reserve_image(subject: str, signed_in: bool, with_reference: bool = False) -> str:
     lim = limits(signed_in)["images_per_month"]
     msg = (
         f"Ücretsiz pakette 30 günde {lim} görsel üretebilirsin ve bu hakkın doldu. "
         "Stok kütüphanesinden fotoğraf seçmeye devam edebilir ya da bir paketle sınırsız üretebilirsin."
     )
-    return _reserve(subject, "image", lim, MONTH, config.FREE_IMAGES_PER_DAY_TOTAL, msg)
+    extra = None
+    if with_reference:
+        extra = str(uuid.uuid4())
+        with get_engine().begin() as conn:
+            conn.execute(free_events.insert().values(id=extra, subject=subject, kind="image_extra", created_at=utcnow()))
+    try:
+        event_id = _reserve(subject, "image", lim, MONTH, config.FREE_IMAGES_PER_DAY_TOTAL, msg)
+    except FreeLimitError:
+        if extra:
+            release(extra)
+        raise
+    return f"{event_id},{extra}" if extra else event_id
 
 
-def generate_image(concept: str) -> bytes:
-    return _cloudflare_image(_english_prompt(concept))
+def _small_reference(data: bytes) -> bytes:
+    """FLUX.2 klein örnek görselleri 512x512'den küçük ister."""
+    from PIL import Image, ImageOps
+
+    try:
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+    except Exception as e:
+        raise FreeServiceError("Örnek görsel okunamadı.") from e
+    img.thumbnail((508, 508))
+    out = io.BytesIO()
+    img.save(out, "JPEG", quality=90)
+    return out.getvalue()
+
+
+def _cloudflare_ref_image(prompt: str, references: list[bytes]) -> bytes:
+    url = (
+        f"https://api.cloudflare.com/client/v4/accounts/{config.CLOUDFLARE_ACCOUNT_ID}"
+        f"/ai/run/{config.FREE_IMAGE_REF_MODEL}"
+    )
+    files = {f"input_image_{i}": (f"ref{i}.jpg", _small_reference(b), "image/jpeg") for i, b in enumerate(references[:4])}
+    data = {"prompt": prompt[:2048], "width": "1024", "height": "1024"}
+    try:
+        r = requests.post(url, headers={"Authorization": f"Bearer {config.CLOUDFLARE_AI_TOKEN}"}, data=data, files=files, timeout=120)
+    except requests.RequestException as e:
+        raise FreeServiceError(f"Cloudflare'e ulaşılamadı: {e}") from e
+    if r.status_code >= 400:
+        raise FreeServiceError(f"Cloudflare {r.status_code}: {r.text[:300]}")
+    image = ((r.json() or {}).get("result") or {}).get("image")
+    if not image:
+        raise FreeServiceError(f"Cloudflare yanıtında görsel yok: {r.text[:200]}")
+    return base64.b64decode(image)
+
+
+def generate_image(concept: str, references: list[bytes] | None = None, translate: bool = True) -> bytes:
+    prompt = _english_prompt(concept) if translate else concept
+    if references:
+        return _cloudflare_ref_image(prompt, references)
+    return _cloudflare_image(prompt)
 
 
 # ---------------- Stok fotoğraf (Pixabay veya Pexels) ----------------

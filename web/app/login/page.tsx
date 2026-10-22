@@ -1,11 +1,13 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 
+import SocialLogin from "../components/SocialLogin";
 import { api, setToken } from "../lib/api";
 
 export default function Login() {
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const mode = "login" as "login" | "register";
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -41,9 +43,11 @@ export default function Login() {
         <h1>{mode === "login" ? "Tekrar hoş geldin" : "Hesabını oluştur"}</h1>
         <p>
           {mode === "login"
-            ? "İçerik fikirlerine, görsellerine ve paketine ulaşmak için giriş yap."
-            : "Ücretsiz başla: günde 20 fikir mesajı, ayda 6 görsel ve stok fotoğraf kütüphanesi. Kart gerekmez."}
+            ? "Sohbetlerine, görsellerine ve paketine ulaşmak için giriş yap."
+            : ""}
         </p>
+
+        <SocialLogin onDone={() => (window.location.href = "/")} />
 
         <form onSubmit={submit}>
           {mode === "register" && (
@@ -80,16 +84,7 @@ export default function Login() {
         </div>
 
         <div className="switch-link">
-          {mode === "login" ? "Hesabın yok mu? " : "Zaten hesabın var mı? "}
-          <button
-            type="button"
-            onClick={() => {
-              setMode(mode === "login" ? "register" : "login");
-              setError("");
-            }}
-          >
-            {mode === "login" ? "Kayıt ol" : "Giriş yap"}
-          </button>
+          Hesabın yok mu? <Link href="/kayit">Üye ol</Link>
         </div>
       </div>
 

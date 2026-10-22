@@ -18,7 +18,7 @@ PERIOD_DAYS = 30
 
 ACTION_LABELS = {
     "idea": "İçerik fikri",
-    "chat": "Fikir sohbeti",
+    "chat": "Sohbet",
     "describe": "Örnekten konsept",
     "image": "Görsel",
     "video": "Video",

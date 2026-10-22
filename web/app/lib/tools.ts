@@ -25,10 +25,10 @@ export const KIND_LABEL: Record<ToolKind, string> = {
 export const TOOLS: Tool[] = [
   {
     slug: "fikir",
-    name: "İçerik Fikri",
+    name: "Sohbet",
     kind: "metin",
-    short: "ChatGPT gibi yaz: fikir, caption, hashtag ve reklam metni. Fotoğraf, video ve belge ekleyebilirsin.",
-    long: "Ne istediğini yaz; form doldurmana gerek yok. Ürün fotoğrafı, örnek video veya katalog eklersen onlara bakarak fikir, caption, hashtag ve reklam metni üretir.",
+    short: "ChatGPT gibi konuş: paylaşım fikri, caption, reklam metni ve görsel; ne istersen yaz.",
+    long: "Ne istediğini yaz; form doldurmana gerek yok. Görsel istersen sohbetin içinde üretir. Ürün fotoğrafı eklersen ondan yeni görseller çıkarır; ücretli paketlerde video ve belge de ekleyebilirsin.",
     quota: "ideas",
     costLabel: "Ücretsiz pakette günde 20 mesaj",
     ready: true,

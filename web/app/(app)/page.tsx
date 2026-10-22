@@ -23,10 +23,10 @@ export default function Dashboard() {
   const stepCopy: Record<string, { text: string; action: React.ReactNode }> = {
     account: { text: "Kayıt oldun, ücretsiz paketin açıldı.", action: <span className="chip">Tamamlandı</span> },
     idea: {
-      text: "İşletmeni anlat, Instagram için fikir, caption ve hashtag al.",
+      text: "İşletmeni anlat; fikir, caption ya da görsel iste.",
       action: (
         <Link href="/araclar/fikir" className="btn btn-light btn-sm">
-          Fikir üret
+          Sohbete başla
         </Link>
       ),
     },
@@ -57,7 +57,7 @@ export default function Dashboard() {
         </h1>
         <Link href="/araclar/fikir" className="btn btn-primary">
           <Icon name="sparkle" size={16} />
-          Yeni içerik üret
+          Sohbete başla
         </Link>
       </div>
 

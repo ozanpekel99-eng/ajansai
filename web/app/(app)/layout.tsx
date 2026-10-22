@@ -1,16 +1,30 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 import CheckoutModal from "../components/CheckoutModal";
 import Icon from "../components/Icon";
 import Sidebar from "../components/Sidebar";
+import { PENDING_PLAN_KEY } from "../lib/plans";
 import { SessionProvider, useSession } from "../lib/session";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [checkout, setCheckout] = useState<{ open: boolean; plan?: string }>({ open: false });
   const openCheckout = useCallback((plan?: string) => setCheckout({ open: true, plan }), []);
+
+  // Kayıtta ücretli paket seçildiyse ödeme penceresini aç
+  useEffect(() => {
+    try {
+      const pending = localStorage.getItem(PENDING_PLAN_KEY);
+      if (pending) {
+        localStorage.removeItem(PENDING_PLAN_KEY);
+        openCheckout(pending);
+      }
+    } catch {
+      // depolama kapalı
+    }
+  }, [openCheckout]);
 
   return (
     <SessionProvider onCheckout={openCheckout}>

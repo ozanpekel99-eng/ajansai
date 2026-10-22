@@ -88,3 +88,6 @@ export const money = (n: number, currency = "USD") => {
 export const num = (n: number) => n.toLocaleString("tr-TR");
 
 export const PLAN_ORDER = ["baslangic", "pro", "ajans"];
+
+/** Kayıtta seçilen ücretli paket: kayıttan sonra panelde ödeme penceresi bununla açılır. */
+export const PENDING_PLAN_KEY = "ajansai_signup_plan";

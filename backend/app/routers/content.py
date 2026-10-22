@@ -11,7 +11,7 @@ from sqlalchemy import and_, select, update
 
 from app.db import get_engine, utcnow, video_tasks
 from app.security import get_current_user
-from app.services import assistant, gateway_media, storage
+from app.services import assistant, free_tier, gateway_media, storage
 from app.services.claude_service import generate_content_ideas
 from app.services.llm_service import LLMError
 from app.services.plans import CREDIT_COSTS, chat_cost, idea_cost, video_cost
@@ -269,7 +269,48 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
         logger.error("Sohbet yanıtı alınamadı: %s", e)
         refund(event_id)
         raise HTTPException(status_code=503, detail="Yapay zeka şu an yanıt veremedi, kredin iade edildi. Birazdan tekrar dene.")
-    return {"reply": text, "model": model, "credits_spent": credits}
+
+    text, image_prompt = free_tier.split_image_request(text)
+    images, image_error = [], None
+    if image_prompt:
+        refs = [a.url for a in last.attachments if storage.kind_of(a.content_type) == "image"][:4]
+        url, image_error, image_credits = _chat_image(user, image_prompt, refs)
+        if url:
+            images.append(url)
+        credits += image_credits
+    return {
+        "reply": text or ("İşte görselin." if images else ""),
+        "model": model,
+        "images": images,
+        "image_error": image_error,
+        "credits_spent": credits,
+    }
+
+
+def _chat_image(user: dict, prompt: str, refs: list[str]) -> tuple[str | None, str | None, int]:
+    """Sohbette istenen görsel: önce Seedream (4 kredi); olmazsa ücretsiz görsel hakkıyla FLUX.
+
+    (adres, hata, harcanan kredi) döndürür.
+    """
+    if gateway_media.is_enabled():
+        cost = CREDIT_COSTS["image"]
+        try:
+            event_id = consume(user["id"], "image", cost, f"Sohbetten görsel: {prompt}")
+        except QuotaExceededError:
+            event_id = None
+        if event_id:
+            try:
+                data, mime = gateway_media.generate_image(prompt, "1:1", refs or None)
+                if storage.is_enabled():
+                    return storage.save(data, mime, f"gorsel/{user['id']}"), None, cost
+                return f"data:{mime};base64,{base64.b64encode(data).decode()}", None, cost
+            except (gateway_media.MediaError, storage.StorageError) as e:
+                logger.warning("Seedream olmadı, ücretsiz görsele geçiliyor: %s", e)
+                refund(event_id)
+    from app.routers.free import make_free_image
+
+    url, error, _ = make_free_image(f"u:{user['id']}", user, prompt, refs, translate=False)
+    return url, error, 0
 
 
 class DescribeRequest(BaseModel):

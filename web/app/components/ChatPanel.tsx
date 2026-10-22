@@ -4,21 +4,34 @@ import { FormEvent, KeyboardEvent, ReactNode, useEffect, useRef, useState } from
 import Link from "next/link";
 
 import { ApiError, api } from "../lib/api";
-import { extractConcept, renderMarkdown } from "../lib/markdown";
+import { renderMarkdown } from "../lib/markdown";
 import { FileChips, PendingFile, UploadProgress, useUploader } from "./Attachments";
 import Icon from "./Icon";
 
-export type Msg = { role: "user" | "assistant"; content: string; attachments?: PendingFile[] };
+export type Msg = {
+  role: "user" | "assistant";
+  content: string;
+  attachments?: PendingFile[];
+  images?: string[];
+  imageError?: string | null;
+};
 export type Conversation = { id: string; title: string; at: number; messages: Msg[] };
 
+/**
+ * Ek ekleme biçimi:
+ * - all: görsel, video, belge (ücretli paketler)
+ * - images: yalnızca görsel (ücretsiz üye; görselden görsel üretimi için)
+ * - signup: ataç düğmesi üye olmaya yönlendirir (ziyaretçi)
+ */
+export type AttachMode = "all" | "images" | "signup";
+
 const CHATS_KEY = "ajansai_chats";
-const MAX_FILES = 5;
 
 const SUGGESTIONS = [
   "Beyaz eşya mağazam için bu hafta paylaşabileceğim 5 Reels fikri",
-  "Kafem için yeni sezon soğuk kahve menüsünü tanıtan bir carousel yaz",
-  "Eklediğim ürün fotoğrafına göre 3 farklı caption ve hashtag öner",
+  "Kafem için soğuk kahve kampanyasının gönderi görselini üret",
   "Emlak ofisim için Instagram reklam metni ve hedef kitle önerisi",
+  "Kuaför salonum için bir haftalık hikâye planı hazırla",
 ];
 
 export function loadChats(): Conversation[] {
@@ -39,18 +52,18 @@ function saveChats(list: Conversation[]) {
 
 type Props = {
   endpoint: string;
-  allowFiles: boolean;
+  attach: AttachMode;
   /** Composer altındaki bilgi satırı (kredi veya ücretsiz hak). */
   footer: (files: number) => ReactNode;
   /** Gönderimi engelleyen durum (kredi/hak bitti) için uyarı; varsa gönderim kapalıdır. */
   blocker?: ReactNode;
   onSent?: (data: any) => void;
-  conceptHref: (kind: "gorsel" | "video", concept: string) => string | null;
+  /** Yanıttan video üretmeye geçiş bağlantısı (yoksa gösterilmez). */
+  videoHref?: (text: string) => string | null;
   initial?: Conversation | null;
-  placeholder?: string;
 };
 
-export default function ChatPanel({ endpoint, allowFiles, footer, blocker, onSent, conceptHref, initial, placeholder }: Props) {
+export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, videoHref, initial }: Props) {
   const [chatId, setChatId] = useState<string>(() => initial?.id ?? `${Date.now()}`);
   const [messages, setMessages] = useState<Msg[]>(initial?.messages ?? []);
   const [text, setText] = useState("");
@@ -61,7 +74,9 @@ export default function ChatPanel({ endpoint, allowFiles, footer, blocker, onSen
   const endRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLTextAreaElement>(null);
 
-  const uploader = useUploader(["image", "video", "document"], MAX_FILES, files.length, (f) => setFiles((x) => [...x, f]));
+  const maxFiles = attach === "all" ? 5 : 2;
+  const kinds = attach === "all" ? (["image", "video", "document"] as const) : (["image"] as const);
+  const uploader = useUploader([...kinds], maxFiles, files.length, (f) => setFiles((x) => [...x, f]));
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -70,7 +85,7 @@ export default function ChatPanel({ endpoint, allowFiles, footer, blocker, onSen
   const canSend = !blocker && !sending && !uploader.busy.length && (text.trim().length > 0 || files.length > 0);
 
   const persist = (msgs: Msg[]) => {
-    const title = (msgs.find((m) => m.role === "user")?.content || "Dosya incelemesi").slice(0, 70);
+    const title = (msgs.find((m) => m.role === "user")?.content || "Görsel").slice(0, 70);
     saveChats([{ id: chatId, title, at: Date.now(), messages: msgs }, ...loadChats().filter((c) => c.id !== chatId)]);
   };
 
@@ -86,21 +101,18 @@ export default function ChatPanel({ endpoint, allowFiles, footer, blocker, onSen
     setError("");
     setSending(true);
     try {
-      const data = await api<{ reply: string }>(endpoint, {
+      const data = await api<{ reply: string; images?: string[]; image_error?: string | null }>(endpoint, {
         method: "POST",
         body: JSON.stringify({
-          messages: next.map((m) =>
-            allowFiles
-              ? {
-                  role: m.role,
-                  content: m.content,
-                  attachments: (m.attachments || []).map(({ url, content_type, name }) => ({ url, content_type, name })),
-                }
-              : { role: m.role, content: m.content },
-          ),
+          messages: next.map((m) => ({
+            role: m.role,
+            content: m.content,
+            attachments: (m.attachments || []).map(({ url, content_type, name }) => ({ url, content_type, name })),
+          })),
         }),
       });
-      const done = [...next, { role: "assistant" as const, content: data.reply }];
+      const reply: Msg = { role: "assistant", content: data.reply, images: data.images || [], imageError: data.image_error };
+      const done = [...next, reply];
       setMessages(done);
       persist(done);
       onSent?.(data);
@@ -140,21 +152,18 @@ export default function ChatPanel({ endpoint, allowFiles, footer, blocker, onSen
     }
   };
 
-  const suggestions = allowFiles ? SUGGESTIONS : SUGGESTIONS.filter((s) => !s.startsWith("Eklediğim"));
+  const lastUserWithImages = [...messages].reverse().find((m) => m.role === "user");
+  const pendingImage = sending && /görsel|resim|fotoğraf|afiş|post|çiz/i.test(lastUserWithImages?.content || "");
 
   return (
     <div className="chat">
       <div className="chat-scroll">
         {messages.length === 0 ? (
           <div className="chat-empty">
-            <h2>Bugün ne paylaşalım?</h2>
-            <p>
-              {allowFiles
-                ? "İşletmeni ve ne istediğini anlat. Ürün fotoğrafı, örnek video veya katalog eklersen onlara bakarak öneririm."
-                : "İşletmeni ve ne istediğini anlat; fikir, caption, hashtag ve reklam metni yazayım."}
-            </p>
+            <h2>Hadi sohbete başlayalım</h2>
+            <p>İşletmeni ve ne istediğini anlat. Paylaşım fikri, caption, reklam metni ya da görsel; ne istersen yaz.</p>
             <div className="suggestions">
-              {suggestions.map((s) => (
+              {SUGGESTIONS.map((s) => (
                 <button key={s} type="button" onClick={() => send(undefined, s)} disabled={sending || !!blocker}>
                   {s}
                 </button>
@@ -172,24 +181,41 @@ export default function ChatPanel({ endpoint, allowFiles, footer, blocker, onSen
                   </div>
                 );
               }
-              const imgHref = conceptHref("gorsel", extractConcept(m.content, "Görsel") || m.content.slice(0, 400));
-              const vidHref = conceptHref("video", extractConcept(m.content, "Video") || m.content.slice(0, 400));
+              const vid = videoHref?.(m.content);
               return (
                 <div key={i} className="msg assistant">
                   <div className="avatar" aria-hidden="true">AI</div>
                   <div className="body">
-                    <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />
+                    {m.content && <div className="md" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />}
+                    {!!m.images?.length && (
+                      <div className="msg-images">
+                        {m.images.map((url) => (
+                          <figure key={url}>
+                            <img src={url} alt="Üretilen görsel" />
+                            <a className="btn btn-light btn-sm" href={url} target="_blank" rel="noreferrer" download>
+                              İndir
+                            </a>
+                          </figure>
+                        ))}
+                      </div>
+                    )}
+                    {m.imageError && <div className="notice">{m.imageError}</div>}
                     <div className="actions">
                       <button className="btn btn-ghost btn-sm" type="button" onClick={() => copy(m.content, i)}>
                         <Icon name="copy" size={14} /> {copied === i ? "Kopyalandı" : "Kopyala"}
                       </button>
-                      {imgHref && (
-                        <Link className="btn btn-ghost btn-sm" href={imgHref}>
-                          Görsel üret
-                        </Link>
+                      {!m.images?.length && i === messages.length - 1 && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          type="button"
+                          disabled={sending || !!blocker}
+                          onClick={() => send(undefined, "Bunun için bir gönderi görseli üret")}
+                        >
+                          <Icon name="image" size={14} /> Görselini üret
+                        </button>
                       )}
-                      {vidHref && (
-                        <Link className="btn btn-ghost btn-sm" href={vidHref}>
+                      {vid && (
+                        <Link className="btn btn-ghost btn-sm" href={vid}>
                           Video üret
                         </Link>
                       )}
@@ -201,10 +227,13 @@ export default function ChatPanel({ endpoint, allowFiles, footer, blocker, onSen
             {sending && (
               <div className="msg assistant">
                 <div className="avatar" aria-hidden="true">AI</div>
-                <div className="body typing">
-                  <span />
-                  <span />
-                  <span />
+                <div className="body">
+                  <div className="typing">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                  {pendingImage && <div className="faint" style={{ fontSize: 13, marginTop: 6 }}>Görsel istendiyse birlikte hazırlanıyor, 10–20 saniye sürebilir.</div>}
                 </div>
               </div>
             )}
@@ -219,16 +248,20 @@ export default function ChatPanel({ endpoint, allowFiles, footer, blocker, onSen
         <FileChips files={files} onRemove={(id) => setFiles((x) => x.filter((f) => f.id !== id))} />
         <UploadProgress busy={uploader.busy} />
         <div className="composer-box">
-          {allowFiles && (
+          {attach === "signup" ? (
+            <Link href="/kayit" className="icon-btn" aria-label="Görsel eklemek için üye ol" title="Görsel eklemek için üye ol">
+              <Icon name="clip" />
+            </Link>
+          ) : (
             <>
               {uploader.field}
               <button
                 type="button"
                 className="icon-btn"
                 onClick={uploader.pick}
-                disabled={files.length >= MAX_FILES}
-                aria-label="Görsel, video veya belge ekle"
-                title="Görsel, video veya belge ekle"
+                disabled={files.length >= maxFiles}
+                aria-label={attach === "all" ? "Görsel, video veya belge ekle" : "Görsel ekle"}
+                title={attach === "all" ? "Görsel, video veya belge ekle" : "Görsel ekle (görselden görsel üretebilirsin)"}
               >
                 <Icon name="clip" />
               </button>
@@ -244,12 +277,7 @@ export default function ChatPanel({ endpoint, allowFiles, footer, blocker, onSen
               e.target.style.height = `${Math.min(e.target.scrollHeight, 220)}px`;
             }}
             onKeyDown={onKey}
-            placeholder={
-              placeholder ??
-              (allowFiles
-                ? "Ne paylaşmak istiyorsun? Ürün fotoğrafı, video ya da katalog da ekleyebilirsin…"
-                : "Ne paylaşmak istiyorsun? İşletmeni ve fikrini yaz…")
-            }
+            placeholder="Bir şey sor ya da bir görsel iste…"
             aria-label="Mesaj"
           />
           <button type="submit" className="send-btn" disabled={!canSend} aria-label="Gönder">
