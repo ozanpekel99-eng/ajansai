@@ -617,11 +617,11 @@ def create_instagram_ad(
         adset = _graph("POST", f"act_{act}/adsets", token, **adset_body)
 
         if objective == "whatsapp":
-            cta = {"type": "WHATSAPP_MESSAGE", "value": {"app_destination": "WHATSAPP"}}
             target_link = "https://api.whatsapp.com/send"
+            cta = {"type": "WHATSAPP_MESSAGE", "value": {"app_destination": "WHATSAPP", "link": target_link}}
         elif objective == "instagram_dm":
-            cta = {"type": "INSTAGRAM_MESSAGE", "value": {"app_destination": "INSTAGRAM_DIRECT"}}
             target_link = "https://www.instagram.com/"
+            cta = {"type": "INSTAGRAM_MESSAGE", "value": {"app_destination": "INSTAGRAM_DIRECT", "link": target_link}}
         elif objective == "profile":
             target_link = link or "https://www.instagram.com/"
             cta = {"type": "VIEW_INSTAGRAM_PROFILE", "value": {"link": target_link}}
