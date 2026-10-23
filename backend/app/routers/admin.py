@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app import config
 from app.security import get_current_user
-from app.services import gateway_media, media_planner, storage
+from app.services import gateway_media, library, media_planner, storage
 from app.services.llm_service import ai_gateway_token
 
 router = APIRouter()
@@ -205,3 +205,19 @@ def upload_asset(p: AssetUpload, user: dict = Depends(_admin)):
     """Site varlığı (ör. iyzico logo bandı) yükler; kalıcı Blob adresini döndürür."""
     data = p.content.encode() if p.content_type == "image/svg+xml" else base64.b64decode(p.content)
     return {"url": storage.save(data, p.content_type, "site")}
+
+
+class LibraryAdd(BaseModel):
+    items: list[dict] = Field(..., max_length=30)  # {"url", "kind": image|video, "prompt"}
+
+
+@router.post("/library/add")
+def library_add(p: LibraryAdd, user: dict = Depends(_admin)):
+    """Karşılaştırma çıktılarını yöneticinin kendi kütüphanesine ekler (uygulamada izlemek için)."""
+    n = 0
+    for it in p.items:
+        url = str(it.get("url") or "")
+        if storage.is_own_blob_url(url) and it.get("kind") in ("image", "video"):
+            library.add(user["id"], it["kind"], url, str(it.get("prompt") or "")[:500], "kıyas")
+            n += 1
+    return {"added": n}
