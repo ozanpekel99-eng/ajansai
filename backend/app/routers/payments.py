@@ -86,7 +86,9 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
         raise HTTPException(status_code=400, detail="Geçersiz paket.")
     if pack and get_user(user["id"])["plan"] == FREE_PLAN:
         raise HTTPException(status_code=400, detail="Ek kredi, ücretli bir paketin varken alınabilir. Önce bir paket seç.")
-    if not iyzico_service.is_configured():
+    # Yönetici hesapları sandbox anahtarları tanımlıysa test ödemesi yapar (gerçek para çekilmez).
+    sandbox = (user.get("email") or "").lower() in config.ADMIN_EMAILS and iyzico_service.is_configured(sandbox=True)
+    if not iyzico_service.is_configured(sandbox):
         raise HTTPException(status_code=503, detail="Ödeme sistemi henüz yapılandırılmadı.")
 
     cycle = "credits" if pack else payload.cycle
@@ -110,6 +112,7 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
                 billing=cycle,
                 status="pending",
                 created_at=utcnow(),
+                sandbox=sandbox,
             )
         )
 
@@ -126,6 +129,7 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
             user=user,
             billing=billing,
             buyer_ip=request.client.host if request.client else "127.0.0.1",
+            sandbox=sandbox,
         )
     except iyzico_service.IyzicoError as e:
         with get_engine().begin() as conn:
@@ -139,7 +143,7 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
     with get_engine().begin() as conn:
         conn.execute(update(payments).where(payments.c.id == payment_id).values(iyzico_token=result["token"]))
 
-    return {"payment_id": payment_id, "payment_page_url": result["payment_page_url"]}
+    return {"payment_id": payment_id, "payment_page_url": result["payment_page_url"], "sandbox": sandbox}
 
 
 def _result_redirect(status: str, payment_id: str | None = None) -> RedirectResponse:
@@ -166,7 +170,7 @@ def iyzico_callback(token: str = Form(...)):
         return _result_redirect(payment.status, payment.id)
 
     try:
-        result = iyzico_service.retrieve_checkout(token, payment.id)
+        result = iyzico_service.retrieve_checkout(token, payment.id, sandbox=bool(payment.sandbox))
     except iyzico_service.IyzicoError as e:
         # Sonuç bilinmiyor; ödeme 'pending' kalır, kullanıcı sonuç sayfasında tekrar sorgulayabilir.
         logger.error("iyzico sonucu sorgulanamadı (%s): %s", payment.id, e)
@@ -244,7 +248,7 @@ def payment_status(payment_id: str, user: dict = Depends(get_current_user)):
     status = payment.status
     if status == "pending" and payment.iyzico_token:
         try:
-            result = iyzico_service.retrieve_checkout(payment.iyzico_token, payment.id)
+            result = iyzico_service.retrieve_checkout(payment.iyzico_token, payment.id, sandbox=bool(payment.sandbox))
             # Kullanıcı ödeme sayfasını henüz tamamlamadıysa iyzico sonuç döndürmez; pending kalır.
             if result.get("paymentStatus"):
                 _finalize(payment, result)

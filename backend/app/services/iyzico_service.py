@@ -34,18 +34,26 @@ class IyzicoUnavailable(IyzicoError):
     """Ağ/bağlantı hatası: ödemenin sonucu bilinmiyor (başarısız sayılmamalı)."""
 
 
-def is_configured() -> bool:
-    return bool(config.IYZICO_API_KEY and config.IYZICO_SECRET_KEY)
+def _creds(sandbox: bool = False) -> tuple[str | None, str | None, str]:
+    if sandbox:
+        return config.IYZICO_SANDBOX_API_KEY, config.IYZICO_SANDBOX_SECRET_KEY, config.IYZICO_SANDBOX_BASE_URL
+    return config.IYZICO_API_KEY, config.IYZICO_SECRET_KEY, config.IYZICO_BASE_URL
 
 
-def build_auth_headers(uri_path: str, body: str, random_key: str | None = None) -> dict:
+def is_configured(sandbox: bool = False) -> bool:
+    api_key, secret, _ = _creds(sandbox)
+    return bool(api_key and secret)
+
+
+def build_auth_headers(uri_path: str, body: str, random_key: str | None = None, sandbox: bool = False) -> dict:
+    api_key, secret, _ = _creds(sandbox)
     random_key = random_key or f"{int(time.time() * 1000)}{secrets.randbelow(10**9):09d}"
     signature = hmac.new(
-        config.IYZICO_SECRET_KEY.encode("utf-8"),
+        secret.encode("utf-8"),
         (random_key + uri_path + body).encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
-    auth = f"apiKey:{config.IYZICO_API_KEY}&randomKey:{random_key}&signature:{signature}"
+    auth = f"apiKey:{api_key}&randomKey:{random_key}&signature:{signature}"
     return {
         "Authorization": "IYZWSv2 " + base64.b64encode(auth.encode("utf-8")).decode("ascii"),
         "x-iyzi-rnd": random_key,
@@ -54,15 +62,15 @@ def build_auth_headers(uri_path: str, body: str, random_key: str | None = None) 
     }
 
 
-def _post(path: str, payload: dict, raise_on_failure: bool = True) -> dict:
-    if not is_configured():
+def _post(path: str, payload: dict, raise_on_failure: bool = True, sandbox: bool = False) -> dict:
+    if not is_configured(sandbox):
         raise IyzicoError("Ödeme sistemi henüz yapılandırılmadı.")
     body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     try:
         response = requests.post(
-            config.IYZICO_BASE_URL + path,
+            _creds(sandbox)[2] + path,
             data=body.encode("utf-8"),
-            headers=build_auth_headers(path, body),
+            headers=build_auth_headers(path, body, sandbox=sandbox),
             timeout=30,
         )
         data = response.json()
@@ -88,6 +96,7 @@ def initialize_checkout(
     user: dict,
     billing: dict,
     buyer_ip: str,
+    sandbox: bool = False,
 ) -> dict:
     """Ödeme formunu başlatır. {"token", "payment_page_url"} döndürür."""
     price = _money(amount)
@@ -135,13 +144,13 @@ def initialize_checkout(
             }
         ],
     }
-    data = _post(INIT_PATH, payload)
+    data = _post(INIT_PATH, payload, sandbox=sandbox)
     if not data.get("token") or not data.get("paymentPageUrl"):
         raise IyzicoError("Ödeme sayfası oluşturulamadı.")
     return {"token": data["token"], "payment_page_url": data["paymentPageUrl"]}
 
 
-def retrieve_checkout(token: str, conversation_id: str) -> dict:
+def retrieve_checkout(token: str, conversation_id: str, sandbox: bool = False) -> dict:
     """Ödemenin sonucunu iyzico'dan sorgular (callback'e güvenmek yerine).
 
     Başarısız ödemelerde de yanıtı döndürür; kararı çağıran taraf verir.
@@ -151,6 +160,7 @@ def retrieve_checkout(token: str, conversation_id: str) -> dict:
         RETRIEVE_PATH,
         {"locale": "tr", "conversationId": conversation_id, "token": token},
         raise_on_failure=False,
+        sandbox=sandbox,
     )
 
 

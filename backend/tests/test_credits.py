@@ -17,7 +17,7 @@ def _pay(client, monkeypatch, token, plan_id, cycle="monthly", tok="t1"):
     monkeypatch.setattr(config, "IYZICO_SECRET_KEY", "s")
     sent = {}
     monkeypatch.setattr(pr.iyzico_service, "initialize_checkout", lambda **kw: sent.update(kw) or {"token": tok, "payment_page_url": "u"})
-    monkeypatch.setattr(pr.iyzico_service, "retrieve_checkout", lambda t, c: {"paymentStatus": "SUCCESS", "paymentId": "p"})
+    monkeypatch.setattr(pr.iyzico_service, "retrieve_checkout", lambda t, c, sandbox=False: {"paymentStatus": "SUCCESS", "paymentId": "p"})
     monkeypatch.setattr(pr.iyzico_service, "is_successful_payment", lambda result, **kw: True)
     billing = {"name": "Ozan", "surname": "P", "phone": "05350000000", "city": "Tekirdağ", "address": "Çorlu merkez 1"}
     r = client.post("/api/payments/checkout", json={"plan_id": plan_id, "cycle": cycle, "billing": billing}, headers=auth(token))

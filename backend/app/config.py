@@ -201,6 +201,10 @@ IYZICO_API_KEY = _env("IYZICO_API_KEY")
 IYZICO_SECRET_KEY = _env("IYZICO_SECRET_KEY")
 # Test için sandbox; canlıya geçince https://api.iyzipay.com
 IYZICO_BASE_URL = (_env("IYZICO_BASE_URL", "https://sandbox-api.iyzipay.com") or "").rstrip("/")
+# Yönetici test modu: ADMIN_EMAILS hesaplarının ödemeleri iyzico sandbox'ına gider (gerçek para çekilmez).
+IYZICO_SANDBOX_API_KEY = _env("IYZICO_SANDBOX_API_KEY")
+IYZICO_SANDBOX_SECRET_KEY = _env("IYZICO_SANDBOX_SECRET_KEY")
+IYZICO_SANDBOX_BASE_URL = "https://sandbox-api.iyzipay.com"
 # Tahsilat para birimi. Fiyatlar USD; iyzico hesabında USD POS yoksa "TRY": tutar o günkü
 # TCMB döviz satış kuruyla TL'ye çevrilip TL olarak çekilir. USD POS açılınca "USD" yapılabilir.
 PAYMENT_CURRENCY = _env("PAYMENT_CURRENCY", "TRY")

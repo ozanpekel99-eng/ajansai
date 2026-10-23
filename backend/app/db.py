@@ -8,6 +8,7 @@ kullanılır. Sorgular SQLAlchemy Core ile yazıldığı için ikisinde de aynı
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     Column,
     inspect,
     text,
@@ -110,6 +111,8 @@ payments = Table(
     Column("error", Text, nullable=True),
     Column("created_at", DateTime, nullable=False),
     Column("completed_at", DateTime, nullable=True),
+    # Yönetici test ödemesi: iyzico sandbox ortamında alındı (gerçek para çekilmez).
+    Column("sandbox", Boolean, nullable=False, default=False, server_default=text("false")),
 )
 
 # Kullanıcının Meta hesabını bağladığında aldığımız token sunucuda saklanır;
@@ -282,6 +285,7 @@ def init_db() -> None:
         "payments": {
             "currency": "VARCHAR(3) NOT NULL DEFAULT 'TRY'",
             "billing": "VARCHAR(10) NOT NULL DEFAULT 'monthly'",
+            "sandbox": "BOOLEAN NOT NULL DEFAULT FALSE",
         },
     }
     for table, cols in migrations.items():

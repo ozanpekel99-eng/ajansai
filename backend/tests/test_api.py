@@ -621,8 +621,8 @@ def _enable_iyzico(monkeypatch, retrieve_result):
     config.IYZICO_SECRET_KEY = "s"
     sent = []
 
-    def fake_post(path, payload, raise_on_failure=True):
-        sent.append((path, payload))
+    def fake_post(path, payload, raise_on_failure=True, sandbox=False):
+        sent.append((path, payload, sandbox))
         if path == iyzico_service.INIT_PATH:
             return {"status": "success", "token": "tok-1", "paymentPageUrl": "https://sandbox.iyzi/pay/tok-1"}
         result = dict(retrieve_result)
@@ -666,6 +666,24 @@ def test_payment_success_activates_plan_once(client, monkeypatch):
     assert "status=success" in cb2.headers["location"]
     assert len(sent) == n
     assert client.get("/api/plans/usage", headers=auth(token)).json()["plan_expires_at"] == before
+
+
+def test_admin_payments_use_sandbox_keys(client, monkeypatch):
+    sent = _enable_iyzico(
+        monkeypatch, {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "24.00", "currency": "USD", "paymentId": "p1"}
+    )
+    monkeypatch.setattr(config, "ADMIN_EMAILS", {"admin@example.com"})
+    monkeypatch.setattr(config, "IYZICO_SANDBOX_API_KEY", "sk")
+    monkeypatch.setattr(config, "IYZICO_SANDBOX_SECRET_KEY", "ss")
+    admin = register(client, "admin@example.com")
+    user = register(client, "user@example.com")
+    r = client.post("/api/payments/checkout", json={"plan_id": "pro", "billing": BILLING}, headers=auth(admin)).json()
+    assert r["sandbox"] is True and sent[-1][2] is True
+    client.post("/api/payments/iyzico/callback", data={"token": "tok-1"}, follow_redirects=False)
+    assert sent[-1][0] == iyzico_service.RETRIEVE_PATH and sent[-1][2] is True  # sonuç da sandbox'tan sorulur
+    from app.routers import payments as pr
+    assert pr.iyzico_service.is_configured(sandbox=False)  # normal kullanıcı canlı anahtarlarla öder
+    assert user
 
 
 def test_checkout_in_try_converts_with_tcmb_rate(client, monkeypatch):
@@ -966,7 +984,7 @@ def test_yearly_checkout_charges_discount_plus_vat_and_opens_365_days(client, mo
     r = client.post("/api/payments/checkout", json={"plan_id": "ajans", "cycle": "yearly", "billing": billing}, headers=auth(token))
     assert r.status_code == 200, r.text
     assert str(sent["amount"]) == "403.2" and "yıllık" in sent["plan_name"]
-    monkeypatch.setattr(pr.iyzico_service, "retrieve_checkout", lambda t, c: {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "345.60", "currency": "USD", "basketId": c, "paymentId": "y1"})
+    monkeypatch.setattr(pr.iyzico_service, "retrieve_checkout", lambda t, c, sandbox=False: {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "345.60", "currency": "USD", "basketId": c, "paymentId": "y1"})
     monkeypatch.setattr(pr.iyzico_service, "is_successful_payment", lambda result, **kw: True)
     client.post("/api/payments/iyzico/callback", data={"token": "tok-y"}, follow_redirects=False)
     usage = client.get("/api/plans/usage", headers=auth(token)).json()
