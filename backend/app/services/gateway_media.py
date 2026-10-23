@@ -112,9 +112,11 @@ def _openai_image(model: str, prompt: str, aspect_ratio: str, reference_urls: li
     w, h = OPENAI_SIZES.get(aspect_ratio, (1024, 1024))
     # GPT Image istenmeyen rozet/marka/vaat ("ücretsiz kurulum", "2 yıl garanti", yanlış marka) uydurabiliyor.
     prompt += (
-        "\n\nStrict rules: render ONLY the texts written in double quotes in this prompt, exactly as written. Do not add "
-        "any other text, badges, icons with labels, guarantees, delivery/installation claims, prices, phone numbers, "
-        "brand names or logos. Keep every text fully inside the frame with a clear margin from all edges."
+        "\n\nDesign it as a polished, eye-catching retail ad poster: bold typography, strong hierarchy, color blocks, "
+        "ribbons, price tags and shapes are welcome, and the main campaign price/offer should be the hero. "
+        "Text rules: render ONLY the texts written in double quotes in this prompt, exactly as written (including "
+        "currency signs). Do not add any other words, badges with labels, guarantees, delivery/installation claims, "
+        "prices, phone numbers, brand names or logos. Keep every text fully inside the frame with a clear margin."
     )
     body = {"prompt": prompt, "n": 1, "size": f"{w}x{h}"}
     if reference_urls:
