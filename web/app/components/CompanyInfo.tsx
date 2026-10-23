@@ -1,11 +1,11 @@
 import { COMPANY } from "../lib/company";
 
-/** Satıcı bilgileri listesi: yalnızca doldurulmuş alanlar gösterilir. */
-export default function CompanyInfo() {
+/** Satıcı bilgileri listesi: yalnızca doldurulmuş alanlar gösterilir. Adres yalnızca sözleşmede (withAddress). */
+export default function CompanyInfo({ withAddress = false }: { withAddress?: boolean }) {
   const rows: [string, string][] = [
     ["Unvan", COMPANY.legalName],
     ["Marka", COMPANY.brand],
-    ["Adres", COMPANY.address],
+    ["Adres", withAddress ? COMPANY.address : ""],
     ["Vergi dairesi", COMPANY.taxOffice],
     ["Vergi numarası", COMPANY.taxNumber],
     ["MERSİS numarası", COMPANY.mersis],

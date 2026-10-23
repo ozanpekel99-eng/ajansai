@@ -5,9 +5,9 @@
 export const COMPANY = {
   brand: "ajansAI",
   legalName: "İlayda Pekel",
-  address: "",
+  address: "Çamçeşme Mah. İlkbahar Sk. No: 12 İç Kapı No: 7, Pendik / İstanbul",
   taxOffice: "Pendik Vergi Dairesi",
-  taxNumber: "",
+  taxNumber: "3040475421",
   mersis: "",
   phone: "",
   email: "support@ajansai.tr",

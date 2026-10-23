@@ -14,7 +14,7 @@ export default function DistanceSales() {
       <p>
         <strong>Satıcı:</strong>
       </p>
-      <CompanyInfo />
+      <CompanyInfo withAddress />
       <p>
         <strong>Alıcı:</strong> {COMPANY.website} adresinde üyelik oluşturan ve ödeme sayfasında ad, soyad, telefon ve
         adres bilgilerini giren kişi. Alıcı bilgileri ödeme sırasında verilen bilgilerdir.
