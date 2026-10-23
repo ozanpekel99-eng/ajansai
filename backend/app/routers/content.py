@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select, update
 
+from app import config
 from app.db import get_engine, utcnow, video_tasks
 from app.security import get_current_user
 from app.services import assistant, chat_files, free_tier, gateway_media, library, media_planner, storage
@@ -100,8 +101,11 @@ def create_image(payload: ImageRequest, user: dict = Depends(get_current_user)):
     credits = CREDIT_COSTS["image"]
     event_id = _charge(user["id"], "image", credits, ("Revize: " if base else "") + payload.concept)
 
-    plan = media_planner.plan_image(payload.concept, aspect, edit=bool(base), ref_count=len(refs),
-                                    previous_prompt=payload.previous_prompt)
+    if config.IMAGE_DIRECT:  # ChatGPT gibi: istek aynen modele gider
+        plan = {"prompt": payload.concept, "note": None}
+    else:
+        plan = media_planner.plan_image(payload.concept, aspect, edit=bool(base), ref_count=len(refs),
+                                        previous_prompt=payload.previous_prompt)
     try:
         data, mime = gateway_media.generate_image(plan["prompt"], aspect, ([base] if base else []) + refs or None)
     except gateway_media.MediaError as e:
@@ -422,6 +426,7 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
         refs = [a.url for a in last.attachments if storage.kind_of(a.content_type) == "image"][:4]
         if ref_url:
             refs = [ref_url] + refs[:3]
+        image_prompt = free_tier.direct_image_prompt(image_prompt, last.content, editing=bool(ref_url))
         url, image_error, image_credits = _chat_image(user, image_prompt, refs)
         if url:
             images.append(url)

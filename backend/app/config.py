@@ -91,6 +91,8 @@ IMAGE_MODEL_FALLBACK = _env("IMAGE_MODEL_FALLBACK", "google/gemini-3.1-flash-ima
 IMAGE_MODEL_LAST = _env("IMAGE_MODEL_LAST", "google/gemini-3-pro-image")
 # İstemi (görsel/video) netleştiren hızlı model
 PLANNER_MODEL = _env("PLANNER_MODEL", "anthropic/claude-haiku-5.5")
+# ChatGPT gibi: kullanıcının görsel isteği modele olduğu gibi gider (planlayıcı yeniden yazmaz).
+IMAGE_DIRECT = _env("IMAGE_DIRECT", "1") == "1"
 # Sohbet (ücretli paketler): Claude Sonnet 5.5 (mesaj başı ~$0,01-0,02); olmazsa Haiku 5.5.
 # Video eki varsa Gemini ile anlaşılır.
 CHAT_MODEL = _env("CHAT_MODEL", "anthropic/claude-sonnet-5.5")

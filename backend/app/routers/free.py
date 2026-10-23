@@ -104,7 +104,7 @@ def _premium_image(prompt: str, refs: list[str], translate: bool) -> tuple[bytes
 
     try:
         aspect, clean = free_tier.image_aspect(prompt)
-        if translate:
+        if translate and not config.IMAGE_DIRECT:
             clean = media_planner.plan_image(clean, aspect, ref_count=len(refs)).get("prompt") or clean
         data, mime = gateway_media.generate_image(clean, aspect, refs or None)
     except Exception as e:  # yedek: Cloudflare FLUX
@@ -167,6 +167,7 @@ def chat(payload: FreeChatRequest, request: Request, user: dict | None = Depends
         ref_url, image_prompt = free_tier.extract_ref(image_prompt, labels)
         if ref_url:
             refs = [ref_url] + refs[:1]
+        image_prompt = free_tier.direct_image_prompt(image_prompt, last.content, editing=bool(ref_url))
         url, image_error, limited = make_free_image(subject, user, image_prompt, refs, translate=False)
         if limited:
             limit = "image"  # arayüz paketleri gösterir

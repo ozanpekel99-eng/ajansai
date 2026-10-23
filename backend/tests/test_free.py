@@ -128,6 +128,7 @@ def test_free_images_use_paid_model_then_flux_after_daily_cap(client, monkeypatc
 
     monkeypatch.setattr(gateway_media, "generate_image", fake_generate)
     monkeypatch.setattr(config, "FREE_PREMIUM_IMAGES_PER_DAY", 1)
+    monkeypatch.setattr(config, "IMAGE_DIRECT", False)
     r = client.post("/api/free/image", json={"concept": "kahve fincanı"}, headers=IP_A)
     assert r.status_code == 200 and r.json()["image_url"].startswith("data:image/png;base64,")
     assert gemini == [("planned kahve fincanı", "1:1")] and calls == []
@@ -419,7 +420,7 @@ def test_free_chat_generates_image_when_asked(client, monkeypatch):
     assert r.status_code == 200, r.text
     assert data["reply"] == "Harika fikir! İşte görselin." and "[[" not in data["reply"]
     assert data["images"][0].startswith("data:image/jpeg;base64,")
-    assert calls[0]["json"]["prompt"] == "a latte on a wooden table, morning light"  # çeviri yapılmadı
+    assert calls[0]["json"]["prompt"] == "Ahşap masada latte görseli üret"  # ChatGPT gibi: kullanıcının cümlesi aynen
     assert data["free"]["images"]["used"] == 1 and data["limit"] is None
     # Aylık görsel hakkı dolunca arayüz paketleri göstersin diye limit="image" döner
     monkeypatch.setattr(config, "FREE_IMAGES_PER_MONTH", 1)
@@ -551,3 +552,12 @@ def test_free_vision_chain_uses_only_qwen(monkeypatch):
     monkeypatch.setattr(ls, "_free_provider_call", lambda p, m, msgs, mt: used.append(m) or "ok")
     ls.free_chat_completion([{"role": "user", "content": "x"}], vision=True)
     assert used == ["qwen/qwen3.8-27b"]
+
+
+def test_direct_image_prompt_keeps_user_words():
+    # ChatGPT gibi: kullanıcının cümlesi aynen gider; oran sohbet modelinin satırından alınır
+    tag = "4:5 | A cozy cafe poster with latte, headline text"
+    assert free_tier.direct_image_prompt(tag, "Kafem için '2. kahve %50' yazan bir kampanya görseli yap", False) == \
+        "4:5 | Kafem için '2. kahve %50' yazan bir kampanya görseli yap"
+    assert free_tier.direct_image_prompt(tag, "evet üret", False) == tag  # kısa onay: sohbet modelinin istemi
+    assert free_tier.direct_image_prompt(tag, "%40 yap", True) == "4:5 | %40 yap"  # düzenleme: talimat aynen
