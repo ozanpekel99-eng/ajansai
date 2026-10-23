@@ -116,7 +116,9 @@ Edit mode (the FIRST attached image is the current poster): start with "Edit the
 only the requested change concretely, then "Keep everything else exactly the same" and list every existing
 on-image text verbatim in quotes.
 Always: keep all text fully inside the frame with safe margins; nothing cut off. Describe the layout for the
-given aspect ratio. Output ONLY the prompt text, no preamble."""
+given aspect ratio. Put the prices and deadline early in the prompt (they matter most). End the prompt with
+exactly: "Render ONLY the quoted texts above, exactly as written. No other text, badges, guarantees, delivery or
+installation claims, logos or prices." Output ONLY the prompt text, no preamble."""
 
 
 def direct_ad_prompt(request: str, aspect: str, edit: bool = False, ref_count: int = 0) -> str:
@@ -131,7 +133,7 @@ def direct_ad_prompt(request: str, aspect: str, edit: bool = False, ref_count: i
         raw = llm_service.chat_completion(
             config.IMAGE_PROMPT_MODEL,
             [{"role": "system", "content": AD_DIRECTOR_SYSTEM}, {"role": "user", "content": "\n".join(parts)}],
-            max_tokens=1200,
+            max_tokens=4000,  # Sonnet 5.5 düşünme token'ları da bu sınıra dahil
         ).strip()
         if raw:
             return raw

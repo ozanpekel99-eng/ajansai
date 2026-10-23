@@ -99,7 +99,7 @@ def _answer_from_results(messages: list[dict], query: str, results: list[dict], 
             "numarayla belirt. Sonuçlarda olmayan şeyi uydurma; emin değilsen söyle.",
         }
     ]
-    text, _ = smart_chat_completion(msgs, max_tokens=1800, paid=paid)
+    text, _ = smart_chat_completion(msgs, max_tokens=4000, paid=paid)
     return text
 
 
