@@ -3266,7 +3266,8 @@ table.data td.num {
 }
 
 .guest-main .chat {
-  min-height: calc(100vh - 140px);
+  /* alt bilgi (yasal bağlantılar ve ödeme logoları) ilk ekranda görünsün */
+  min-height: calc(100vh - 260px);
 }
 
 /* ---------- Kayıt: paket seçimi ve sosyal giriş ---------- */

@@ -42,6 +42,9 @@ export default function GuestPage() {
           <img src="/logo-on-dark.png" alt="ajansAI" />
         </Link>
         <div className="actions">
+          <Link href="/kayit" className="btn btn-ghost btn-sm">
+            Paketler
+          </Link>
           {signedIn ? (
             <Link href="/" className="btn btn-light btn-sm">
               Panele git
