@@ -114,6 +114,13 @@ VIDEO_MODELS = {
     "1080p": (_env("VIDEO_MODEL_1080P", "google/veo-3.1-fast-generate-001"), "1920x1080"),
     "4k": (_env("VIDEO_MODEL_4K", "google/veo-3.1-fast-generate-001"), "3840x2160"),
 }
+# Yedek video modeli: Veo başlatılamazsa ya da iş hata verirse aynı istem ve açılış karesiyle Kling denenir.
+# Kling yalnızca 5 / 10 sn üretir (4-6 sn → 5, 8 sn → 10). Sesli istekte sesi destekleyen 2.6 kullanılır.
+VIDEO_FALLBACK = _env("VIDEO_FALLBACK", "1") == "1"
+VIDEO_FALLBACK_I2V = _env("VIDEO_FALLBACK_I2V", "klingai/kling-v2.5-turbo-i2v")
+VIDEO_FALLBACK_T2V = _env("VIDEO_FALLBACK_T2V", "klingai/kling-v2.5-turbo-t2v")
+VIDEO_FALLBACK_AUDIO_I2V = _env("VIDEO_FALLBACK_AUDIO_I2V", "klingai/kling-v2.6-i2v")
+VIDEO_FALLBACK_AUDIO_T2V = _env("VIDEO_FALLBACK_AUDIO_T2V", "klingai/kling-v2.6-t2v")
 # --- Ücretsiz paket (üyelik gerektirmez; maliyeti sıfıra yakın) ---
 # Ücretsiz sağlayıcı zinciri (Groq / Cerebras, $0): Claude bütçesi dolunca. "sağlayıcı:model" listesi.
 GROQ_API_KEY = _env("GROQ_API_KEY")

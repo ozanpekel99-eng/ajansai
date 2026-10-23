@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app import config
 from app.security import get_current_user
-from app.services import gateway_media, storage
+from app.services import gateway_media, media_planner, storage
 from app.services.llm_service import ai_gateway_token
 
 router = APIRouter()
@@ -102,6 +102,30 @@ def bench_video(p: VideoBench, user: dict = Depends(_admin)):
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": str(e)[:500]}
     return {"ok": True, "job": {"model": p.model, "operation": out.get("operation")}, "started": t}
+
+
+class VideoPlanBench(BaseModel):
+    request: str = Field(..., max_length=2000)
+    image_url: str | None = None
+    aspect: str = "9:16"
+    duration: int = 6
+    audio: bool = False
+
+
+@router.post("/bench/plan")
+def bench_plan(p: VideoPlanBench, user: dict = Depends(_admin)):
+    """Üretimdeki video yönetmenini çalıştırır: istem + (gerekirse düzenlenmiş/üretilmiş) açılış karesi."""
+    plan = media_planner.plan_video(p.request, p.aspect, p.duration, has_start_frame=bool(p.image_url),
+                                    audio=p.audio, start_image_url=p.image_url)
+    frame = p.image_url
+    if not frame or plan.get("frame_prompt"):
+        try:
+            data, mime = gateway_media.generate_image(plan["frame_prompt"] or p.request, p.aspect,
+                                                      [frame] if frame else None)
+            frame = storage.save(data, mime, f"bench/{user['id']}")
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)[:500], "plan": plan}
+    return {"ok": True, "plan": plan, "frame": frame}
 
 
 class VideoPoll(BaseModel):

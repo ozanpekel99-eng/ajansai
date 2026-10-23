@@ -288,6 +288,7 @@ def test_video_costs_and_failed_job_refunded_once(client, monkeypatch):
     started = []
     monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16": started.append((d, r, i, e, a, ar)) or {"model": "m", "operation": {"id": "op"}})
     monkeypatch.setattr(content.gateway_media, "video_status", lambda op: {"status": "error", "error": "model hatası"})
+    monkeypatch.setattr(content.gateway_media, "start_fallback_video", lambda *a, **k: (_ for _ in ()).throw(content.gateway_media.MediaError("yedek yok")))
 
     r5 = client.post("/api/content/video", json={"concept": "x"}, headers=auth(token)).json()
     r10 = client.post(
@@ -319,6 +320,66 @@ def test_video_costs_and_failed_job_refunded_once(client, monkeypatch):
     assert _credits(client, token)["used"] == 48
 
 
+def test_video_failed_job_retries_once_with_fallback_model(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "pro")
+    monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", None)
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda *a, **k: {"model": "veo", "operation": {"id": "op"}})
+    fallback = []
+    monkeypatch.setattr(content.gateway_media, "start_fallback_video",
+                        lambda p, d, r, i, a, ar: fallback.append((d, r, i, a, ar)) or {"model": "kling", "operation": {"id": "op2"}, "fallback": True})
+    states = iter([{"status": "error", "error": "veo hatası"},
+                   {"status": "completed", "video": {"type": "url", "url": "https://cdn/k.mp4"}}])
+    polled = []
+    monkeypatch.setattr(content.gateway_media, "video_status", lambda op: polled.append(op["model"]) or next(states))
+
+    job = client.post("/api/content/video", json={"concept": "x", "duration": 8}, headers=auth(token)).json()["job_id"]
+    assert client.get(f"/api/content/video/{job}", headers=auth(token)).json()["status"] == "PENDING"
+    assert fallback == [(8, "1080p", None, False, "9:16")]
+    done = client.get(f"/api/content/video/{job}", headers=auth(token)).json()
+    assert done["status"] == "SUCCEEDED" and done["video_url"] == "https://cdn/k.mp4"
+    assert polled == ["veo", "kling"]
+    assert _credits(client, token)["used"] == 48  # kredi bir kez düşer, yedek ek ücret almaz
+
+
+def test_fallback_job_failing_is_refunded_without_second_retry(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "pro")
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda *a, **k: {"model": "kling", "operation": {}, "fallback": True})
+    monkeypatch.setattr(content.gateway_media, "start_fallback_video", lambda *a, **k: (_ for _ in ()).throw(AssertionError("ikinci kez yedek olmaz")))
+    monkeypatch.setattr(content.gateway_media, "video_status", lambda op: {"status": "error"})
+    job = client.post("/api/content/video", json={"concept": "x"}, headers=auth(token)).json()["job_id"]
+    assert client.get(f"/api/content/video/{job}", headers=auth(token)).json()["status"] == "FAILED"
+    assert _credits(client, token)["used"] == 0
+
+
+def test_start_video_falls_back_to_kling(monkeypatch):
+    from app.services import gateway_media
+    calls = []
+
+    def fake_post(path, model, kind, body, timeout):
+        calls.append((model, body))
+        if model.startswith("google/"):
+            raise gateway_media.MediaError("bakiye yetersiz")
+        return {"operation": {"gatewayJobId": "j"}}
+
+    monkeypatch.setattr(gateway_media, "_post", fake_post)
+    job = gateway_media.start_video("tatlı", 8, "1080p", "https://x/a.png", None, False, "9:16")
+    assert job == {"model": config.VIDEO_FALLBACK_I2V, "operation": {"gatewayJobId": "j"}, "fallback": True}
+    assert calls[1][1]["duration"] == 10 and calls[1][1]["image"]["url"] == "https://x/a.png"
+    job = gateway_media.start_video("tatlı", 4, "720p", None, None, True, "9:16")
+    assert job["model"] == config.VIDEO_FALLBACK_AUDIO_T2V and calls[-1][1]["duration"] == 5
+    assert calls[-1][1]["resolution"] == "1280x720"
+    monkeypatch.setattr(config, "VIDEO_FALLBACK", False)
+    try:
+        gateway_media.start_video("tatlı", 6, "1080p")
+        raise AssertionError("yedek kapalıyken hata yükselmeli")
+    except gateway_media.MediaError:
+        pass
+
+
 def test_video_completes_and_is_cached(client, monkeypatch):
     content = _enable_media(monkeypatch)
     token = register(client)
@@ -342,6 +403,7 @@ def test_cannot_read_other_users_video(client, monkeypatch):
     _set_plan(_user_id(client, owner), "baslangic")
     monkeypatch.setattr(content.gateway_media, "start_video", lambda *a, **k: {"model": "m", "operation": {"id": "op"}})
     monkeypatch.setattr(content.gateway_media, "video_status", lambda op: {"status": "error"})
+    monkeypatch.setattr(content.gateway_media, "start_fallback_video", lambda *a, **k: (_ for _ in ()).throw(content.gateway_media.MediaError("yedek yok")))
     job = client.post("/api/content/video", json={"concept": "x"}, headers=auth(owner)).json()["job_id"]
 
     other = register(client, "b@example.com")

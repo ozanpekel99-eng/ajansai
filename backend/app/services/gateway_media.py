@@ -204,20 +204,8 @@ def generate_image(prompt: str, aspect_ratio: str, reference_urls: list[str] | N
     raise MediaError(" | ".join(errors)[:600])
 
 
-def start_video(
-    prompt: str,
-    duration: int,
-    resolution: str = "720p",
-    image_url: str | None = None,
-    end_image_url: str | None = None,
-    audio: bool = False,
-    aspect_ratio: str = "9:16",
-) -> dict:
-    """Video işini başlatır. Durum sorgusu için {"model", "operation"} döndürür.
-
-    image_url başlangıç karesi (görselden video), end_image_url bitiş karesidir.
-    """
-    model, size = config.VIDEO_MODELS[resolution]
+def _video_body(prompt: str, duration: int, size: str, image_url: str | None, end_image_url: str | None,
+                audio: bool, aspect_ratio: str) -> dict:
     body = {
         "prompt": prompt,
         "n": 1,
@@ -233,10 +221,64 @@ def start_video(
         ]
     elif image_url:
         body["image"] = {"type": "url", "url": image_url}
+    return body
+
+
+def _start(model: str, body: dict) -> dict:
     data = _post("/video-model/start", model, "video", body, timeout=60)
     if data.get("operation") is None:
         raise MediaError(f"Video işi başlatılamadı: {str(data)[:300]}")
     return {"model": model, "operation": data["operation"]}
+
+
+def fallback_video_model(has_image: bool, audio: bool) -> str:
+    if audio:
+        return config.VIDEO_FALLBACK_AUDIO_I2V if has_image else config.VIDEO_FALLBACK_AUDIO_T2V
+    return config.VIDEO_FALLBACK_I2V if has_image else config.VIDEO_FALLBACK_T2V
+
+
+def start_fallback_video(
+    prompt: str,
+    duration: int,
+    resolution: str = "720p",
+    image_url: str | None = None,
+    audio: bool = False,
+    aspect_ratio: str = "9:16",
+) -> dict:
+    """Yedek modelle (Kling) aynı istem ve açılış karesinden video başlatır."""
+    model = fallback_video_model(bool(image_url), audio)
+    size = "1280x720" if resolution == "720p" else "1920x1080"
+    body = _video_body(prompt, 5 if duration <= 6 else 10, size, image_url, None, audio, aspect_ratio)
+    job = _start(model, body)
+    job["fallback"] = True
+    return job
+
+
+def start_video(
+    prompt: str,
+    duration: int,
+    resolution: str = "720p",
+    image_url: str | None = None,
+    end_image_url: str | None = None,
+    audio: bool = False,
+    aspect_ratio: str = "9:16",
+) -> dict:
+    """Video işini başlatır. Durum sorgusu için {"model", "operation"} döndürür.
+
+    image_url başlangıç karesi (görselden video), end_image_url bitiş karesidir. Ana model (Veo)
+    başlatılamazsa yedek modelle (Kling) denenir; dönen işte "fallback": True olur.
+    """
+    model, size = config.VIDEO_MODELS[resolution]
+    try:
+        return _start(model, _video_body(prompt, duration, size, image_url, end_image_url, audio, aspect_ratio))
+    except MediaError as e:
+        if not config.VIDEO_FALLBACK:
+            raise
+        logger.warning("Video modeli %s başlatılamadı, yedeğe geçiliyor: %s", model, e)
+        try:
+            return start_fallback_video(prompt, duration, resolution, image_url, audio, aspect_ratio)
+        except MediaError as e2:
+            raise MediaError(f"{model}: {e} | yedek: {e2}") from e2
 
 
 def video_status(job: dict) -> dict:

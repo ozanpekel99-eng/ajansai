@@ -313,6 +313,39 @@ def _store_video(video: dict, user_id: str) -> str:
     return storage.save(data, "video/mp4", f"video/{user_id}")
 
 
+def _retry_with_fallback(task, error: str) -> bool:
+    """Ana model işi hata verdiyse aynı istem ve açılış karesiyle yedek modeli (Kling) başlatır.
+
+    Kullanıcı kredisi aynı kalır; iş beklemede tutulur. Yedek de başarısız olursa False döner.
+    """
+    if not config.VIDEO_FALLBACK:
+        return False
+    operation = json.loads(task.operation or "{}")
+    if operation.get("fallback"):
+        return False
+    plan = json.loads(task.plan or "{}")
+    prompt = plan.get("prompt") or task.prompt
+    if not prompt:
+        return False
+    try:
+        job = gateway_media.start_fallback_video(
+            prompt, int(plan.get("duration") or 6), plan.get("resolution") or "1080p", plan.get("frame"),
+            bool(plan.get("audio")), plan.get("aspect") or "9:16",
+        )
+    except gateway_media.MediaError as e:
+        logger.error("Yedek video modeli de başlatılamadı (%s): %s", task.id, e)
+        return False
+    with get_engine().begin() as conn:
+        changed = conn.execute(
+            update(video_tasks)
+            .where(and_(video_tasks.c.id == task.id, video_tasks.c.status == "pending",
+                        video_tasks.c.operation == task.operation))
+            .values(operation=json.dumps(job))
+        ).rowcount
+    logger.warning("Video %s ana modelde hata verdi (%s), yedek modele geçildi.", task.id, error[:200])
+    return bool(changed)
+
+
 @router.get("/video/{job_id}")
 def check_video(job_id: str, user: dict = Depends(get_current_user)):
     """Durum: PENDING, SUCCEEDED, FAILED. SUCCEEDED olunca video_url dolu gelir."""
@@ -354,6 +387,8 @@ def check_video(job_id: str, user: dict = Depends(get_current_user)):
         return {"status": "SUCCEEDED", "video_url": url, "error": None}
 
     error = str(result.get("error") or "Video üretilemedi.")[:500]
+    if _retry_with_fallback(task, error):
+        return {"status": "PENDING", "video_url": None, "error": None}
     with get_engine().begin() as conn:
         changed = conn.execute(
             update(video_tasks)
