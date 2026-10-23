@@ -17,7 +17,8 @@
         "NSPhotoLibraryAddUsageDescription": "Ürettiğin görsel ve videoları galerine kaydetmek için.",
         "NSCameraUsageDescription": "Ürün fotoğrafı çekip görsel ve video üretiminde kullanmak için.",
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": "1"
     },
     "android": {
       "package": "tr.ajansai.app",
@@ -27,7 +28,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "versionCode": 1
     },
     "web": {
       "output": "single",
@@ -63,11 +65,15 @@
       ]
     ],
     "extra": {
-      "apiUrl": "https://api.ajansai.tr"
+      "apiUrl": "https://api.ajansai.tr",
+      "eas": {
+        "projectId": "2b271612-46f6-4106-bbfc-98759a7118e1"
+      }
     },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "owner": "ajansai.tr"
   }
 }
