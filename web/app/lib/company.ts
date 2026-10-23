@@ -4,9 +4,9 @@
  */
 export const COMPANY = {
   brand: "ajansAI",
-  legalName: "",
+  legalName: "İlayda Pekel",
   address: "",
-  taxOffice: "",
+  taxOffice: "Pendik Vergi Dairesi",
   taxNumber: "",
   mersis: "",
   phone: "",
@@ -15,7 +15,7 @@ export const COMPANY = {
 };
 
 /** iyzico ile Öde + Visa + MasterCard logo bandı (iyzico resmi logo paketi, beyaz sürüm). */
-export const PAYMENT_LOGO_BAND = "";
+export const PAYMENT_LOGO_BAND = "https://ejoapt623grpxnix.public.blob.vercel-storage.com/site/5eaedd25100b44f0a2859012bb6bf004.bin";
 
 export const LEGAL_LINKS = [
   { href: "/kayit", label: "Paketler ve fiyatlar" },
