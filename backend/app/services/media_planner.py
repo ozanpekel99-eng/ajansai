@@ -88,6 +88,58 @@ def _call(system: str, user: str, max_tokens: int = 900) -> dict:
     return json.loads(m.group(0))
 
 
+AD_DIRECTOR_SYSTEM = """You write image prompts the way ChatGPT does before calling its image model (GPT Image),
+for a Turkish small-business ad agency. Turn the client's Turkish request into ONE detailed English prompt that
+yields a striking, professional Instagram campaign poster on the first try — the kind a top Turkish retail
+designer would make (think big electronics/appliance store campaign posters).
+
+Keep EXACTLY (never change, round or drop): every product name/model code, price, currency sign (₺), date,
+store name, slogan and any text the client gives. Put every on-image text in double quotes, in Turkish with
+correct characters (İ, ı, ş, ğ, ü, ö, ç) and proper capitalization; fix obvious typos and apostrophes
+(e.g. "trakyanın" -> "TRAKYA'NIN").
+
+You SHOULD add design and copywriting craft, like ChatGPT does:
+- a short, punchy Turkish hero headline (2-4 words) that fits the offer (e.g. for a fridge + washer bundle:
+  "EVİNİZİN İKİ GÜÇLÜSÜ"),
+- when there is a regular/list price and a lower campaign price, show the regular price struck through and make
+  the best price the biggest element; give each price its own label and 3D price tag/box,
+- urgency badge for deadlines (e.g. alarm-clock icon + "SON GÜN 31 EKİM"), "+" combo badge for bundles,
+  ribbons, bold red/white retail colors (or colors that fit the brand), a bright realistic lifestyle setting,
+  dramatic but clean lighting, strong visual hierarchy from top to bottom.
+You MUST NOT add facts the client did not give: no extra prices or discount %, no phone numbers, addresses,
+websites, guarantees, free delivery/installation, gifts, or brand names/logos they did not mention (a brand the
+client mentions, e.g. Arçelik, may appear as text).
+
+Product photos: if reference images are attached, say "Use the exact products from the attached photos
+(same shape, color, handles, panel, logos); do not redesign them" and make them the heroes.
+Edit mode (the FIRST attached image is the current poster): start with "Edit the attached poster.", describe
+only the requested change concretely, then "Keep everything else exactly the same" and list every existing
+on-image text verbatim in quotes.
+Always: keep all text fully inside the frame with safe margins; nothing cut off. Describe the layout for the
+given aspect ratio. Output ONLY the prompt text, no preamble."""
+
+
+def direct_ad_prompt(request: str, aspect: str, edit: bool = False, ref_count: int = 0) -> str:
+    """ChatGPT tarzı istem yazımı (Sonnet). Çalışmazsa istek aynen döner."""
+    parts = [f"Aspect ratio: {aspect}."]
+    if edit:
+        parts.append("EDIT MODE: the first attached image is the current poster to edit.")
+    if ref_count:
+        parts.append(f"{ref_count} product photo(s) attached" + (" after the poster." if edit else "."))
+    parts.append(f"Client request (Turkish): {request}")
+    try:
+        raw = llm_service.chat_completion(
+            config.IMAGE_PROMPT_MODEL,
+            [{"role": "system", "content": AD_DIRECTOR_SYSTEM}, {"role": "user", "content": "\n".join(parts)}],
+            max_tokens=1200,
+        ).strip()
+        if raw:
+            return raw
+    except Exception as e:  # noqa: BLE001
+        logger.warning("İstem yazarı çalışmadı: %s", e)
+    return request
+
+
 def plan_image(request: str, aspect: str, edit: bool = False, ref_count: int = 0,
                previous_prompt: str | None = None) -> dict:
     """{"prompt", "note"} döndürür. Planlayıcı çalışmazsa isteği olduğu gibi kullanır."""

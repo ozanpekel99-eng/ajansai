@@ -890,7 +890,7 @@ def test_yearly_checkout_charges_discount_plus_vat_and_opens_365_days(client, mo
 
 
 def test_image_revision_edits_previous_image(client, monkeypatch):
-    monkeypatch.setattr(config, "IMAGE_DIRECT", False)  # planlayıcı yolunu test eder
+    monkeypatch.setattr(config, "IMAGE_PROMPT_MODE", "planner"); monkeypatch.setattr(config, "IMAGE_DIRECT", False)
     content = _enable_media(monkeypatch)
     calls = []
     monkeypatch.setattr(content.media_planner, "plan_image",

@@ -111,8 +111,6 @@ def _openai_image(model: str, prompt: str, aspect_ratio: str, reference_urls: li
     """GPT Image (ChatGPT'nin görsel modeli). Ek görsel varsa ilk görsel düzenlenir / örnek alınır."""
     w, h = OPENAI_SIZES.get(aspect_ratio, (1024, 1024))
     # GPT Image istenmeyen rozet/marka/vaat ("ücretsiz kurulum", "2 yıl garanti", yanlış marka) uydurabiliyor.
-    # Tek kısa koruma: model kullanıcının yazmadığı fiyat/marka/vaat uydurmasın.
-    prompt += "\n\n(Görselde kullanıcının yazmadığı fiyat, telefon, marka, logo, garanti veya kampanya bilgisi ekleme.)"
     body = {"prompt": prompt, "n": 1, "size": f"{w}x{h}"}
     if reference_urls:
         body["files"] = [{"type": "url", "url": u} for u in reference_urls]

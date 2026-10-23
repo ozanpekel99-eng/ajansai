@@ -129,6 +129,7 @@ def test_free_images_use_paid_model_then_flux_after_daily_cap(client, monkeypatc
     monkeypatch.setattr(gateway_media, "generate_image", fake_generate)
     monkeypatch.setattr(config, "FREE_PREMIUM_IMAGES_PER_DAY", 1)
     monkeypatch.setattr(config, "IMAGE_DIRECT", False)
+    monkeypatch.setattr(config, "IMAGE_PROMPT_MODE", "planner")
     r = client.post("/api/free/image", json={"concept": "kahve fincanı"}, headers=IP_A)
     assert r.status_code == 200 and r.json()["image_url"].startswith("data:image/png;base64,")
     assert gemini == [("planned kahve fincanı", "1:1")] and calls == []
@@ -554,10 +555,28 @@ def test_free_vision_chain_uses_only_qwen(monkeypatch):
     assert used == ["qwen/qwen3.8-27b"]
 
 
-def test_direct_image_prompt_keeps_user_words():
+def test_direct_image_prompt_keeps_user_words(monkeypatch):
+    monkeypatch.setattr(config, "IMAGE_PROMPT_MODE", "direct")
     # ChatGPT gibi: kullanıcının cümlesi aynen gider; oran sohbet modelinin satırından alınır
     tag = "4:5 | A cozy cafe poster with latte, headline text"
     assert free_tier.direct_image_prompt(tag, "Kafem için '2. kahve %50' yazan bir kampanya görseli yap", False) == \
         "4:5 | Kafem için '2. kahve %50' yazan bir kampanya görseli yap"
     assert free_tier.direct_image_prompt(tag, "evet üret", False) == tag  # kısa onay: sohbet modelinin istemi
     assert free_tier.direct_image_prompt(tag, "%40 yap", True) == "4:5 | %40 yap"  # düzenleme: talimat aynen
+
+
+def test_chatgpt_mode_writes_ad_prompt_from_user_words(monkeypatch):
+    from app.services import llm_service, media_planner
+
+    seen = {}
+
+    def fake(model, messages, max_tokens=0, free=False):
+        seen.update(model=model, user=messages[-1]["content"])
+        return 'Poster ... "SON GÜN 31 EKİM" ... "46.350₺"'
+
+    monkeypatch.setattr(config, "IMAGE_PROMPT_MODE", "chatgpt")
+    monkeypatch.setattr(llm_service, "chat_completion", fake)
+    out = free_tier.direct_image_prompt("4:5 | x", "A710B buzdolabı nakit 46.350₺, son gün 31 ekim", False, ref_count=2)
+    assert out.startswith("4:5 | Poster") and seen["model"] == config.IMAGE_PROMPT_MODEL
+    assert "2 product photo(s) attached" in seen["user"] and "46.350₺" in seen["user"]
+    assert media_planner.direct_ad_prompt.__doc__
