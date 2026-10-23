@@ -668,6 +668,29 @@ def test_payment_success_activates_plan_once(client, monkeypatch):
     assert client.get("/api/plans/usage", headers=auth(token)).json()["plan_expires_at"] == before
 
 
+def test_checkout_in_try_converts_with_tcmb_rate(client, monkeypatch):
+    from decimal import Decimal
+    from app.services import fx
+    sent = _enable_iyzico(
+        monkeypatch, {"status": "success", "paymentStatus": "SUCCESS", "paidPrice": "1000.80", "currency": "TRY", "paymentId": "p1"}
+    )
+    monkeypatch.setattr(config, "PAYMENT_CURRENCY", "TRY")
+    monkeypatch.setattr(fx, "_fetch_tcmb", lambda: Decimal("41.70"))
+    fx._cache.update(rate=None, at=0)
+    token = register(client)
+    q = client.get("/api/payments/quote", params={"plan_id": "pro"}).json()
+    assert q["total"] == 24.0 and q["charge"] == {"amount": 1000.8, "currency": "TRY", "rate": 41.7}
+    r = client.post("/api/payments/checkout", json={"plan_id": "pro", "billing": BILLING}, headers=auth(token))
+    assert r.status_code == 200, r.text
+    init_payload = sent[0][1]
+    assert init_payload["currency"] == "TRY" and init_payload["paidPrice"] == "1000.80"  # $24 × 41,70
+    cb = client.post("/api/payments/iyzico/callback", data={"token": "tok-1"}, follow_redirects=False)
+    assert "status=success" in cb.headers["location"]
+    assert client.get("/api/plans/usage", headers=auth(token)).json()["plan"] == "pro"
+    pays = client.get("/api/payments/", headers=auth(token)).json()["payments"]
+    assert pays[0]["amount"] == 1000.8 and pays[0]["currency"] == "TRY"
+
+
 @pytest.mark.parametrize(
     "result",
     [
@@ -927,7 +950,8 @@ def test_yearly_checkout_charges_discount_plus_vat_and_opens_365_days(client, mo
     from app.routers import payments as pr
 
     q = client.get("/api/payments/quote", params={"plan_id": "ajans", "cycle": "yearly"}).json()
-    assert q == {"plan_id": "ajans", "cycle": "yearly", "net": 336.0, "vat": 67.2, "vat_rate": 20, "total": 403.2, "currency": "USD"}
+    assert q == {"plan_id": "ajans", "cycle": "yearly", "net": 336.0, "vat": 67.2, "vat_rate": 20, "total": 403.2, "currency": "USD",
+                 "charge": {"amount": 403.2, "currency": "USD", "rate": None}}
     monkeypatch.setattr(config, "IYZICO_API_KEY", "k")
     monkeypatch.setattr(config, "IYZICO_SECRET_KEY", "s")
     sent = {}

@@ -201,6 +201,10 @@ IYZICO_API_KEY = _env("IYZICO_API_KEY")
 IYZICO_SECRET_KEY = _env("IYZICO_SECRET_KEY")
 # Test için sandbox; canlıya geçince https://api.iyzipay.com
 IYZICO_BASE_URL = (_env("IYZICO_BASE_URL", "https://sandbox-api.iyzipay.com") or "").rstrip("/")
+# Tahsilat para birimi. Fiyatlar USD; iyzico hesabında USD POS yoksa "TRY": tutar o günkü
+# TCMB döviz satış kuruyla TL'ye çevrilip TL olarak çekilir. USD POS açılınca "USD" yapılabilir.
+PAYMENT_CURRENCY = _env("PAYMENT_CURRENCY", "TRY")
+USD_TRY_RATE = _env("USD_TRY_RATE", "")  # TCMB'ye ulaşılamazsa kullanılacak yedek kur
 
 
 # Destek e-postası (support@ajansai.tr): Resend ile alınır, Claude ile otomatik yanıtlanır.

@@ -31,7 +31,7 @@ export default function DistanceSales() {
       <h2>3. Hizmetin temel nitelikleri ve bedeli</h2>
       <ul>
         <li>Satın alınan paketin adı, süresi, içerdiği kredi miktarı, KDV hariç bedeli, KDV tutarı ve KDV dahil toplam bedeli ödeme sayfasında, ödemeden önce Alıcı'ya gösterilir.</li>
-        <li>Bedeller ABD doları (USD) cinsindendir ve %20 KDV eklenir. Türk lirası kartlarda tutar, kartı veren bankanın güncel kuruyla çevrilir.</li>
+        <li>Bedeller ABD doları (USD) cinsinden belirlenir ve %20 KDV eklenir. Ödeme, ödeme günündeki T.C. Merkez Bankası döviz satış kuru ile Türk lirasına çevrilerek TL olarak tahsil edilir; çekilecek TL tutarı ödeme ekranında gösterilir.</li>
         <li>Paketler otomatik yenilenmez; dönem sonunda Alıcı'dan kendiliğinden ödeme alınmaz.</li>
       </ul>
 

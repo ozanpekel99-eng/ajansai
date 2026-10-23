@@ -37,7 +37,7 @@ export default function Paketler() {
         <h1>İşine uyan paketi seç</h1>
         <p>
           Her paket 30 günlük bir kredi bakiyesi verir. Sohbet, görsel ve video ürettikçe krediden düşer; ne üreteceğine
-          sen karar verirsin. Fiyatlara %20 KDV eklenir. Otomatik yenilenmez; ödeme iyzico ile dolar (USD) olarak, kartından güncel kurla alınır.
+          sen karar verirsin. Fiyatlara %20 KDV eklenir. Otomatik yenilenmez; ödeme iyzico ile günün TCMB kuruyla TL olarak alınır.
         </p>
       </section>
       <div className="cycle-switch">

@@ -11,7 +11,7 @@ from sqlalchemy import and_, select, update
 from app import config
 from app.db import get_engine, payments, utcnow
 from app.security import get_current_user
-from app.services import iyzico_service
+from app.services import fx, iyzico_service
 from typing import Literal
 
 from app.services.plans import (
@@ -50,7 +50,21 @@ def quote(plan_id: str, cycle: Literal["monthly", "yearly"] = "monthly"):
     """Ödeme ekranındaki özet: KDV hariç tutar, KDV ve toplam."""
     if not (is_purchasable(plan_id) or is_sellable_pack(plan_id)):
         raise HTTPException(status_code=400, detail="Geçersiz paket.")
-    return {"plan_id": plan_id, "cycle": cycle, **price_breakdown(plan_id, cycle)}
+    prices = price_breakdown(plan_id, cycle)
+    out = {"plan_id": plan_id, "cycle": cycle, **prices}
+    try:
+        out["charge"] = _charge_amount(prices)
+    except fx.FxError:
+        out["charge"] = None
+    return out
+
+
+def _charge_amount(prices: dict) -> dict:
+    """Karttan çekilecek tutar: USD fiyat, tahsilat TL ise TCMB kuruyla TL'ye çevrilir."""
+    if config.PAYMENT_CURRENCY == "TRY" and prices["currency"] == "USD":
+        rate = fx.usd_try_rate()
+        return {"amount": float(fx.to_try(prices["total"])), "currency": "TRY", "rate": float(rate)}
+    return {"amount": prices["total"], "currency": prices["currency"], "rate": None}
 
 
 def _normalize_phone(phone: str) -> str:
@@ -78,7 +92,12 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
     cycle = "credits" if pack else payload.cycle
     payment_id = str(uuid.uuid4())
     prices = price_breakdown(payload.plan_id, payload.cycle)
-    amount = Decimal(str(prices["total"]))  # KDV dahil tahsil edilen tutar
+    try:
+        charge = _charge_amount(prices)
+    except fx.FxError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    amount = Decimal(str(charge["amount"]))  # KDV dahil tahsil edilen tutar (tahsilat biriminde)
+    currency = charge["currency"]
 
     with get_engine().begin() as conn:
         conn.execute(
@@ -87,7 +106,7 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
                 user_id=user["id"],
                 plan_id=payload.plan_id,
                 amount_try=amount,  # sütun adı eski; tutar `currency` biriminde
-                currency=CURRENCY,
+                currency=currency,
                 billing=cycle,
                 status="pending",
                 created_at=utcnow(),
@@ -101,7 +120,7 @@ def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(ge
         result = iyzico_service.initialize_checkout(
             payment_id=payment_id,
             amount=amount,
-            currency=CURRENCY,
+            currency=currency,
             plan_id=payload.plan_id,
             plan_name=item_name(payload.plan_id) if pack else f'{get_plan(payload.plan_id)["name"]} ({"yıllık" if payload.cycle == "yearly" else "aylık"})',
             user=user,

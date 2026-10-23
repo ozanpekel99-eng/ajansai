@@ -28,6 +28,7 @@ def fresh_db(tmp_path):
     config.IYZICO_API_KEY = None
     config.BLOB_READ_WRITE_TOKEN = None
     config.IYZICO_SECRET_KEY = None
+    config.PAYMENT_CURRENCY = "USD"  # TL çevrimi ayrı testte
     yield
     metadata.drop_all(get_engine())
     reset_engine()

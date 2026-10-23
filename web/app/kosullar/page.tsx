@@ -28,7 +28,7 @@ export default function Terms() {
         <li>Ücretli paketler aylık (30 gün) veya yıllık (365 gün) olarak satılır, otomatik yenilenmez. Fiyatlara KDV eklenir.</li>
         <li>Aylık pakette krediler her 30 günde yenilenir; kullanılmayan kredi sonraki döneme devretmez. Yıllık pakette 12 aylık kredi tek seferde yüklenir. Ek kredi paketleri dönem bitse de silinmez.</li>
         <li>Üretim teknik bir hata nedeniyle başarısız olursa harcanan kredi otomatik iade edilir.</li>
-        <li>Ödemeler iyzico üzerinden ABD doları olarak alınır. Satış, teslimat, iptal ve iade koşulları <Link href="/mesafeli-satis-sozlesmesi">Mesafeli Satış Sözleşmesi</Link> ve <Link href="/teslimat-ve-iade">Teslimat ve İade Koşulları</Link>'nda yer alır.</li>
+        <li>Ödemeler iyzico üzerinden, dolar fiyatın ödeme günündeki TCMB kuruyla çevrilmiş TL karşılığı olarak alınır. Satış, teslimat, iptal ve iade koşulları <Link href="/mesafeli-satis-sozlesmesi">Mesafeli Satış Sözleşmesi</Link> ve <Link href="/teslimat-ve-iade">Teslimat ve İade Koşulları</Link>'nda yer alır.</li>
         <li>Paketler otomatik yenilenmediği için iptal için ayrıca işlem gerekmez; süre bitince paket yenilenmez.</li>
         <li>Ücretsiz paketin kullanım sınırları önceden haber verilerek değiştirilebilir.</li>
       </ul>
