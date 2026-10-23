@@ -21,3 +21,12 @@ def test_qa_run_reports_and_rate_limits(client, monkeypatch):
     again = client.post("/api/health/qa-run?video=0").json()
     assert again["skipped"] is True
     assert client.get("/api/health/qa").json()["passed"] == 3
+
+
+def test_daily_report_sends_once(client, monkeypatch):
+    sent = []
+    from app.services import support
+    monkeypatch.setattr(support, "send_email", lambda to, subject, text, **k: sent.append(text) or {})
+    assert client.post("/api/health/daily-report").json() == {"sent": True}
+    assert client.post("/api/health/daily-report").json()["sent"] is False
+    assert "günlük kullanım raporu" in sent[0]

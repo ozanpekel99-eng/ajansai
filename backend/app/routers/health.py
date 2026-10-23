@@ -167,3 +167,45 @@ def qa_report():
     if public.get("video"):
         public["video"] = {k: v for k, v in public["video"].items() if k != "job"}
     return public
+
+
+DAILY_KEY = "daily_report_at"
+
+
+def _daily_text(st: dict, day: dict) -> str:
+    lines = [f"ajansAI günlük kullanım raporu ({datetime.now(timezone.utc).strftime('%d.%m.%Y')})", ""]
+    lines.append(f"Son 24 saat: {day['real_signups_in_period']} yeni üye, {day['guest_unique_total']} farklı misafir ziyaretçi "
+                 f"(misafir kullanımı: {day['guest_events_by_kind'] or 'yok'}), {day['real_member_free_events']} ücretsiz üye kullanımı.")
+    paid = [p for p in day["payments"] if not p["test"] and not p["sandbox"]]
+    ok = [p for p in paid if p["status"] == "success"]
+    lines.append(f"Ödeme: {len(ok)} başarılı, {len(paid) - len(ok)} başarısız/yarım (test hariç).")
+    lines.append("")
+    lines.append(f"Toplam gerçek üye: {st['users_real']} (son 30 günde {st['real_signups_in_period']} kayıt). "
+                 f"30 günde farklı misafir: {st['guest_unique_total']}.")
+    if st["real_users"]:
+        lines += ["", "Son üyeler:"]
+        for u in st["real_users"][:15]:
+            lines.append(f"• {u['email']} — {u['plan']}, kayıt {u['created_at'][:10]}, {u['chats']} sohbet, "
+                         f"{u['media']} görsel/video, {u['credits_used']} kredi")
+    if st["guest_unique_visitors_by_day"]:
+        lines += ["", "Günlük misafir (farklı kişi): " + ", ".join(f"{d[5:]}: {n}" for d, n in list(st["guest_unique_visitors_by_day"].items())[-10:])]
+    return "\n".join(lines)
+
+
+@router.api_route("/daily-report", methods=["GET", "POST"])
+def daily_report():
+    """Yöneticiye günlük kullanım raporu e-postası (veri yanıtta dönmez). 20 saatte bir."""
+    last = _get(DAILY_KEY)
+    if last and (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() < MIN_INTERVAL_S:
+        return {"sent": False, "reason": "Son 20 saatte gönderildi."}
+    from app.routers.admin import usage_stats
+    from app.services import support
+
+    text_body = _daily_text(usage_stats(30), usage_stats(1))
+    try:
+        support.send_email(sorted(config.ADMIN_EMAILS), "ajansAI günlük kullanım raporu", text_body)
+    except Exception as e:  # noqa: BLE001
+        logger.error("Günlük rapor gönderilemedi: %s", e)
+        return {"sent": False, "reason": "E-posta gönderilemedi."}
+    _set(DAILY_KEY, datetime.now(timezone.utc).isoformat())
+    return {"sent": True}

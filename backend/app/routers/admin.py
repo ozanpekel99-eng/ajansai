@@ -225,6 +225,10 @@ def library_add(p: LibraryAdd, user: dict = Depends(_admin)):
 
 @router.get("/stats")
 def stats(days: int = 30, user: dict = Depends(_admin)):
+    return usage_stats(days)
+
+
+def usage_stats(days: int = 30) -> dict:
     """Gerçek kullanım özeti (salt okunur): kayıtlar, misafir kullanımı, üretimler, ödemeler.
 
     E-postalar maskelenir; yönetici ve test hesapları ayrı işaretlenir.
