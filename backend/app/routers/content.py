@@ -214,11 +214,15 @@ def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
 
     plan = media_planner.plan_video(payload.concept, payload.aspect_ratio, payload.duration,
                                     has_start_frame=bool(image_url), audio=payload.audio,
-                                    previous_prompt=previous.get("prompt"))
-    if not image_url or (payload.revise_of and plan.get("frame_prompt")):
-        # Açılış karesi üretilir (revizyonda sahne değişikliği istendiyse önceki kareden düzenlenir)
+                                    previous_prompt=previous.get("prompt"), start_image_url=image_url)
+    if not image_url or (plan.get("frame_prompt") and not end_image_url):
+        # Açılış karesi üretilir. Yüklenen fotoğrafta eylem için gereken kişi/el yoksa ya da revizyonda sahne
+        # değişikliği istendiyse fotoğraf (yiyecek/ürün aynen korunarak) düzenlenir.
         try:
-            refs_for_frame = [previous["frame"]] if payload.revise_of and previous.get("frame") else None
+            if payload.revise_of and previous.get("frame"):
+                refs_for_frame = [previous["frame"]]
+            else:
+                refs_for_frame = [image_url] if image_url else None
             data, mime = gateway_media.generate_image(plan["frame_prompt"] or payload.concept, payload.aspect_ratio, refs_for_frame)
             image_url = storage.save(data, mime, f"gorsel/{user['id']}")
         except (gateway_media.MediaError, storage.StorageError) as e:

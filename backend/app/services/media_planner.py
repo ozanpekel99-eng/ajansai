@@ -52,33 +52,45 @@ Rules:
 
 VIDEO_SYSTEM = """You are a commercial film director writing prompts for Google Veo 3.1 (image-to-video).
 Turn the client's Turkish request into a short, single-shot video that looks REAL on the first try.
+If a start image is attached, LOOK at it: what is in the frame, where, and what is missing for the action.
 
 Output JSON only:
 {"frame_prompt": "...", "prompt": "...", "note": "..."}
-- "frame_prompt": an English prompt for a photorealistic still image that is the FIRST FRAME of the shot
-  (subject, setting, composition for the aspect ratio, lighting). If a start image is provided, write ""
-  unless the client asks to change the scene.
+- "frame_prompt": an English prompt for the FIRST FRAME still image.
+  * No start image: describe a photorealistic first frame (subject, setting, composition for the aspect ratio,
+    lighting) that already contains everything the action needs.
+  * Start image given and it already contains everything the action needs: "".
+  * Start image given but the action needs a person, hand or object that is NOT in it (e.g. a woman eating
+    the dessert): write an EDIT prompt for the attached photo: "Edit the attached photo: ..." adding them so they
+    are fully inside the frame from the start (a person seated naturally at the table, head, face and both
+    hands fully visible, not cut by the frame edge, already holding the one utensil she will use). Say the
+    food/product from the photo must stay exactly identical (shape, size, layers, toppings, plate) and the
+    framing may widen slightly to fit the person.
 - "prompt": the English Veo prompt describing what happens, starting from that first frame.
 - "note": at most one short Turkish sentence for the client only if you had to simplify an action that video
   models cannot do realistically; else "".
 
 Realism rules (critical):
-- One continuous shot, one simple main action, slow and smooth. Describe the motion step by step with physical
-  detail (contact, pressure, how the material deforms, what stays still).
-- Hands: one hand, natural grip, enters from frame edge, no fast manipulation, no finger close-ups.
-- Food: utensils move slowly; cutting = the side of the fork presses down and a clean bite separates; the rest
-  of the food keeps its exact shape; liquids pour in a single smooth stream.
+- One continuous shot, one simple main action, slow and smooth, described step by step with physical detail
+  (contact, pressure, how the material deforms, what stays still).
+- People stay fully in frame the whole time (face and hands never cut off); natural, relaxed expressions.
+- Object continuity: exactly the objects of the first frame; nothing appears, disappears, duplicates or
+  changes. One utensil only, held the whole time. Name each object once and keep it consistent.
+- Eating: the side of the fork presses down and a clean bite separates; the bite stays on the fork while it is
+  lifted all the way to the mouth; the person closes her lips around it, chews with a closed mouth, then
+  smiles; the dessert on the plate now shows the missing bite and otherwise keeps its exact shape.
+- Hands: natural grip, no fast manipulation, no finger close-ups. Liquids pour in a single smooth stream.
 - Products and food must stay identical to the first frame (same shape, colors, label). No morphing.
-- Camera: specify one move (static, slow push-in, slow orbit, slow pan) and keep it steady.
+- Camera: one move (static, slow push-in, slow orbit, slow pan), steady.
 - Lighting/style: photorealistic commercial look, natural light, shallow depth of field.
 - No on-screen text, captions, logos or watermarks. No faces if the client says not to show people.
-- Audio (only if requested): describe ambient sounds; Turkish speech only if asked, quoted exactly in Turkish.
+- Audio (only if requested): ambient sounds; Turkish speech only if asked, quoted exactly in Turkish.
 - REVISION: if a previous prompt is given, keep everything from it and change ONLY what the client asks."""
 
 
-def _call(system: str, user: str, max_tokens: int = 900) -> dict:
+def _call(system: str, user, max_tokens: int = 900, model: str | None = None) -> dict:
     raw = llm_service.chat_completion(
-        config.PLANNER_MODEL,
+        model or config.PLANNER_MODEL,
         [{"role": "system", "content": system}, {"role": "user", "content": user}],
         max_tokens=max_tokens,
     )
@@ -182,7 +194,7 @@ def plan_image(request: str, aspect: str, edit: bool = False, ref_count: int = 0
 
 
 def plan_video(request: str, aspect: str, duration: int, has_start_frame: bool, audio: bool,
-               previous_prompt: str | None = None) -> dict:
+               previous_prompt: str | None = None, start_image_url: str | None = None) -> dict:
     """{"frame_prompt", "prompt", "note"} döndürür."""
     parts = [f"Aspect ratio: {aspect}. Duration: {duration} seconds. Audio: {'yes' if audio else 'no'}."]
     parts.append("A start image (first frame) is provided." if has_start_frame else "No start image is provided.")
@@ -190,7 +202,8 @@ def plan_video(request: str, aspect: str, duration: int, has_start_frame: bool, 
         parts.append(f"REVISION. Previous video prompt: {previous_prompt[:1500]}")
     parts.append(f"Client request (Turkish): {request}")
     try:
-        data = _call(VIDEO_SYSTEM, "\n".join(parts), max_tokens=1100)
+        data = _call(VIDEO_SYSTEM, _with_images("\n".join(parts), [start_image_url] if start_image_url else None),
+                     max_tokens=4000, model=config.VIDEO_PROMPT_MODEL)
         prompt = str(data.get("prompt") or "").strip()
         if prompt:
             return {"frame_prompt": str(data.get("frame_prompt") or "").strip(), "prompt": prompt,

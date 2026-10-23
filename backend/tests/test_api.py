@@ -212,7 +212,7 @@ def _enable_media(monkeypatch):
     monkeypatch.setattr(content.media_planner, "plan_image",
                         lambda req, aspect, edit=False, ref_count=0, previous_prompt=None: {"prompt": req, "note": ""})
     monkeypatch.setattr(content.media_planner, "plan_video",
-                        lambda req, aspect, duration, has_start_frame, audio, previous_prompt=None:
+                        lambda req, aspect, duration, has_start_frame, audio, previous_prompt=None, start_image_url=None:
                         {"prompt": req, "frame_prompt": "" if has_start_frame else req, "note": ""})
 
     def no_frame(*a, **k):
@@ -919,7 +919,7 @@ def test_video_revision_reuses_start_frame_and_prompt(client, monkeypatch):
                         lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16": started.append((p, i)) or {"model": "m", "operation": {"id": "op"}})
     seen = []
     monkeypatch.setattr(content.media_planner, "plan_video",
-                        lambda req, aspect, duration, has_start_frame, audio, previous_prompt=None:
+                        lambda req, aspect, duration, has_start_frame, audio, previous_prompt=None, start_image_url=None:
                         seen.append(previous_prompt) or {"prompt": f"P[{req}]", "frame_prompt": "", "note": ""})
     first = client.post("/api/content/video", json={"concept": "tatlı", "image_url": BLOB_URL + "f.png"}, headers=auth(token)).json()
     again = client.post("/api/content/video", json={"concept": "daha yavaş", "revise_of": first["job_id"]}, headers=auth(token)).json()
@@ -928,6 +928,27 @@ def test_video_revision_reuses_start_frame_and_prompt(client, monkeypatch):
     other = register(client, "z@example.com")
     _set_plan(_user_id(client, other), "pro")
     assert client.post("/api/content/video", json={"concept": "x", "revise_of": first["job_id"]}, headers=auth(other)).status_code == 404
+
+
+def test_video_adds_missing_person_to_uploaded_photo(client, monkeypatch):
+    """Fotoğrafta eylem için gereken kişi yoksa açılış karesi fotoğraftan (yiyecek aynen) düzenlenir."""
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "pro")
+    started, frames = [], []
+    monkeypatch.setattr(content.gateway_media, "start_video",
+                        lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16": started.append((p, i)) or {"model": "m", "operation": {"id": "op"}})
+    monkeypatch.setattr(content.gateway_media, "generate_image",
+                        lambda prompt, aspect, refs=None: frames.append((prompt, refs)) or (b"\x89PNGx", "image/png"))
+    monkeypatch.setattr(content.storage, "save", lambda data, mime, folder, filename=None: BLOB_URL + "kare.png")
+    seen = {}
+    monkeypatch.setattr(content.media_planner, "plan_video",
+                        lambda req, aspect, duration, has_start_frame, audio, previous_prompt=None, start_image_url=None:
+                        seen.update(img=start_image_url) or {"prompt": "P", "frame_prompt": "Edit the attached photo: add a woman", "note": ""})
+    r = client.post("/api/content/video", json={"concept": "kadın tatlıyı yesin", "image_url": BLOB_URL + "tatli.png"}, headers=auth(token)).json()
+    assert r["job_id"] and seen["img"] == BLOB_URL + "tatli.png"
+    assert frames == [("Edit the attached photo: add a woman", [BLOB_URL + "tatli.png"])]
+    assert started[0] == ("P", BLOB_URL + "kare.png") and r["start_frame"] == BLOB_URL + "kare.png"
 
 
 def _fake_meta(monkeypatch):
