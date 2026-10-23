@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "ajansAI",
+    "slug": "ajansai-kobi",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f5f5f7"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ajansai.kobi"
+    },
+    "android": {
+      "package": "com.ajansai.kobi"
+    }
+  }
+}
