@@ -221,3 +221,74 @@ def library_add(p: LibraryAdd, user: dict = Depends(_admin)):
             library.add(user["id"], it["kind"], url, str(it.get("prompt") or "")[:500], "kıyas")
             n += 1
     return {"added": n}
+
+
+@router.get("/stats")
+def stats(days: int = 30, user: dict = Depends(_admin)):
+    """Gerçek kullanım özeti (salt okunur): kayıtlar, misafir kullanımı, üretimler, ödemeler.
+
+    E-postalar maskelenir; yönetici ve test hesapları ayrı işaretlenir.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import func, select
+
+    from app.db import conversations, free_events, get_engine, media, payments, users, utcnow
+
+    since = utcnow() - timedelta(days=days)
+
+    def is_test(email: str) -> bool:
+        e = email.lower()
+        return e in config.ADMIN_EMAILS or e.endswith("@example.com") or e.startswith("test") or "ozanpekel" in e
+
+    def mask(email: str) -> str:
+        name, _, dom = email.partition("@")
+        return f"{name[:2]}***@{dom}"
+
+    with get_engine().connect() as conn:
+        rows = conn.execute(select(users.c.id, users.c.email, users.c.plan, users.c.credits_used, users.c.created_at)
+                            .order_by(users.c.created_at.desc())).all()
+        media_by = dict(conn.execute(select(media.c.user_id, func.count()).group_by(media.c.user_id)).all())
+        chats_by = dict(conn.execute(select(conversations.c.user_id, func.count()).group_by(conversations.c.user_id)).all())
+        last_chat = dict(conn.execute(select(conversations.c.user_id, func.max(conversations.c.updated_at)).group_by(conversations.c.user_id)).all())
+        free_rows = conn.execute(select(free_events.c.subject, free_events.c.kind, free_events.c.created_at)
+                                 .where(free_events.c.created_at >= since)).all()
+        pays = conn.execute(select(payments.c.user_id, payments.c.plan_id, payments.c.amount_try, payments.c.currency,
+                                   payments.c.status, payments.c.created_at, payments.c.sandbox)
+                            .where(payments.c.created_at >= since)).all()
+
+    emails = {r.id: r.email for r in rows}
+    people = []
+    for r in rows:
+        people.append({
+            "email": mask(r.email), "test": is_test(r.email), "plan": r.plan, "credits_used": r.credits_used,
+            "created_at": r.created_at.isoformat(), "media": media_by.get(r.id, 0), "chats": chats_by.get(r.id, 0),
+            "last_chat": last_chat[r.id].isoformat() if last_chat.get(r.id) else None,
+        })
+    real = [p for p in people if not p["test"]]
+
+    guests: dict[str, set] = {}
+    guest_events: dict[str, int] = {}
+    member_free = 0
+    for s, kind, at in free_rows:
+        day = at.date().isoformat()
+        if s.startswith("ip:"):
+            guests.setdefault(day, set()).add(s)
+            guest_events[kind] = guest_events.get(kind, 0) + 1
+        elif not is_test(emails.get(s[2:], "")):
+            member_free += 1
+
+    return {
+        "days": days,
+        "users_total": len(people),
+        "users_real": len(real),
+        "real_signups_in_period": sum(1 for p in real if p["created_at"] >= since.isoformat()),
+        "real_users": real[:100],
+        "guest_unique_visitors_by_day": {d: len(v) for d, v in sorted(guests.items())},
+        "guest_unique_total": len(set().union(*guests.values())) if guests else 0,
+        "guest_events_by_kind": guest_events,
+        "real_member_free_events": member_free,
+        "payments": [{"user": mask(emails.get(p.user_id, "?")), "test": is_test(emails.get(p.user_id, "")),
+                      "plan": p.plan_id, "amount": float(p.amount_try), "currency": p.currency, "status": p.status,
+                      "sandbox": bool(p.sandbox), "at": p.created_at.isoformat()} for p in pays],
+    }
