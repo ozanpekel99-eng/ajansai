@@ -1,5 +1,7 @@
 "use client";
 
+import SiteFooter from "../../components/SiteFooter";
+
 import { CreditCosts } from "../../lib/api";
 import { useState } from "react";
 
@@ -354,6 +356,7 @@ export default function Paketler() {
           </section>
         </>
       )}
+      <SiteFooter />
     </div>
   );
 }

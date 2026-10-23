@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import ChatPanel from "../components/ChatPanel";
+import SiteFooter from "../components/SiteFooter";
 import UpgradeCard from "../components/UpgradeCard";
 import { getToken } from "../lib/api";
 import { useFreeStatus } from "../lib/free";
@@ -77,6 +78,7 @@ export default function GuestPage() {
           footer={() => (status ? `Bugün ${status.chat.remaining} mesaj hakkın kaldı` : "")}
         />
       </main>
+      <SiteFooter compact />
     </div>
   );
 }

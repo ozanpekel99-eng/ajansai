@@ -2,6 +2,8 @@
 
 import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
+
+import SiteFooter from "../components/SiteFooter";
 import { useSearchParams } from "next/navigation";
 
 import SocialLogin from "../components/SocialLogin";
@@ -115,6 +117,7 @@ function Signup() {
             })}
           </div>
         </main>
+        <SiteFooter />
       </div>
     );
   }

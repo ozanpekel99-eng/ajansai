@@ -3988,3 +3988,32 @@ table.data td.num {
 @media (max-width: 720px) {
   .upgrade-plans { grid-template-columns: 1fr; }
 }
+
+/* ---------- Herkese açık alt bilgi (yasal bağlantılar, iletişim, ödeme logoları) ---------- */
+.site-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px max(16px, env(safe-area-inset-left, 0px)) 28px;
+  border-top: 1px solid var(--line);
+  color: var(--text-3);
+  font-size: 13px;
+}
+.site-footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.site-footer a { color: var(--text-2); }
+.site-footer a:hover { color: var(--text); }
+.site-footer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.payment-band { height: 26px; width: auto; max-width: 100%; }
+.payment-band-text { font-weight: 600; color: var(--text-2); }
+.site-footer.compact { padding-top: 16px; padding-bottom: 18px; gap: 10px; }
+.site-footer.compact .payment-band { height: 22px; }
+
+.company-info { display: grid; gap: 6px; margin: 8px 0 16px; }
+.company-info div { display: grid; grid-template-columns: 160px 1fr; gap: 12px; }
+.company-info dt { color: var(--text-3); }
+.company-info dd { margin: 0; color: var(--text); }
+@media (max-width: 560px) { .company-info div { grid-template-columns: 1fr; gap: 0; } }
+
+.modal .agree { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--text-2); margin: 4px 0 12px; line-height: 1.5; }
+.modal .agree input { margin-top: 3px; accent-color: var(--indigo); }
+.modal .agree a { color: var(--text); text-decoration: underline; }

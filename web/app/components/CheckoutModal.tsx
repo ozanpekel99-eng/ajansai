@@ -42,6 +42,7 @@ export default function CheckoutModal({
   );
   const [billing, setBilling] = useState<Billing>({ name: "", surname: "", phone: "", city: "", address: "" });
   const [paying, setPaying] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -228,9 +229,18 @@ export default function CheckoutModal({
           </div>
         )}
 
+        <label className="agree">
+          <input id="checkout-agree" type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} required />
+          <span>
+            <a href="/mesafeli-satis-sozlesmesi" target="_blank" rel="noreferrer">Mesafeli Satış Sözleşmesi</a>'ni ve{" "}
+            <a href="/teslimat-ve-iade" target="_blank" rel="noreferrer">Teslimat ve İade Koşulları</a>'nı okudum, onaylıyorum. Kredilerin
+            anında hesabıma tanımlanmasını ve kullanım başladıktan sonra cayma hakkımın olmayacağını kabul ediyorum.
+          </span>
+        </label>
+
         {error && <p className="error-text">{error}</p>}
 
-        <button className="btn btn-primary btn-block" type="submit" disabled={paying || !ready}>
+        <button className="btn btn-primary btn-block" type="submit" disabled={paying || !ready || !agreed}>
           <Icon name="lock" size={16} />
           {paying ? "Ödeme sayfası açılıyor…" : ready ? `${money(total, currency)} öde` : "Paket seç"}
         </button>

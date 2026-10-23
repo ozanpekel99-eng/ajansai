@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 
+import Link from "next/link";
+
 import LegalPage from "../components/LegalPage";
 
 export const metadata: Metadata = { title: "Kullanım Koşulları — ajansAI" };
 
 export default function Terms() {
   return (
-    <LegalPage title="Kullanım Koşulları" updated="22 Ekim 2026">
+    <LegalPage title="Kullanım Koşulları" updated="23 Ekim 2026">
       <p>ajansAI'ı (www.ajansai.tr) kullanarak bu koşulları kabul etmiş olursun.</p>
 
       <h2>Hizmet</h2>
@@ -26,7 +28,8 @@ export default function Terms() {
         <li>Ücretli paketler aylık (30 gün) veya yıllık (365 gün) olarak satılır, otomatik yenilenmez. Fiyatlara KDV eklenir.</li>
         <li>Aylık pakette krediler her 30 günde yenilenir; kullanılmayan kredi sonraki döneme devretmez. Yıllık pakette 12 aylık kredi tek seferde yüklenir. Ek kredi paketleri dönem bitse de silinmez.</li>
         <li>Üretim teknik bir hata nedeniyle başarısız olursa harcanan kredi otomatik iade edilir.</li>
-        <li>Ödemeler iyzico üzerinden ABD doları olarak alınır. İade ve cayma talepleri için support@ajansai.tr adresine yazabilirsin; kullanılmamış paketler için talepler mevzuata uygun şekilde değerlendirilir.</li>
+        <li>Ödemeler iyzico üzerinden ABD doları olarak alınır. Satış, teslimat, iptal ve iade koşulları <Link href="/mesafeli-satis-sozlesmesi">Mesafeli Satış Sözleşmesi</Link> ve <Link href="/teslimat-ve-iade">Teslimat ve İade Koşulları</Link>'nda yer alır.</li>
+        <li>Paketler otomatik yenilenmediği için iptal için ayrıca işlem gerekmez; süre bitince paket yenilenmez.</li>
         <li>Ücretsiz paketin kullanım sınırları önceden haber verilerek değiştirilebilir.</li>
       </ul>
 
