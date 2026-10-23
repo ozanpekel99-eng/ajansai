@@ -4037,3 +4037,8 @@ table.data td.num {
   .result-area .result-empty { min-height: 180px; }
   .site-footer .payment-band { height: 22px; }
 }
+@media (max-width: 760px) {
+  /* Boş sohbette de + menüsü yukarı açılsın: aşağıda yer kalmıyor */
+  .chat.is-empty .plus-menu { top: auto; bottom: calc(100% + 10px); }
+  .plus-menu { max-height: 60dvh; overflow-y: auto; }
+}
