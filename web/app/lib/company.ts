@@ -8,7 +8,7 @@ export const COMPANY = {
   address: "Çamçeşme Mah. İlkbahar Sk. No: 12 İç Kapı No: 7, Pendik / İstanbul",
   taxOffice: "Pendik Vergi Dairesi",
   taxNumber: "3040475421",
-  mersis: "",
+  mersis: "1455713613600001",
   phone: "",
   email: "support@ajansai.tr",
   website: "www.ajansai.tr",
