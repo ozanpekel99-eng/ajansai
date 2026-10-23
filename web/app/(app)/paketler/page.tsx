@@ -65,7 +65,6 @@ export default function Paketler() {
           <div className="plans">
             {ids.map((id) => {
               const p = plans[id];
-              const current = usage?.plan === id;
               return (
                 <article key={id} className={`panel plan ${id === "pro" ? "featured" : ""}`}>
                   {id === "pro" ? <span className="chip chip-indigo">En çok tercih edilen</span> : <span className="chip chip-muted">{p.name}</span>}
@@ -101,7 +100,7 @@ export default function Paketler() {
                     className={`btn btn-block ${id === "pro" ? "btn-primary" : "btn-light"}`}
                     onClick={() => openCheckout(`${id}:${cycle}`)}
                   >
-                    {current ? (cycle === "yearly" ? "1 yıl uzat" : "30 gün uzat") : `${p.name} paketini al`}
+                    {`${p.name} paketini al`}
                   </button>
                 </article>
               );
@@ -134,8 +133,8 @@ export default function Paketler() {
             <div className="packs">
               {[
                 ["kredi_100", 100, 5],
-                ["kredi_300", 300, 13],
-                ["kredi_800", 800, 30],
+                ["kredi_250", 250, 12],
+                ["kredi_500", 500, 22],
               ].map(([id, credits, price]) => (
                 <div key={id as string} className="panel pack">
                   <strong>{num(credits as number)} kredi</strong>

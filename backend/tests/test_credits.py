@@ -40,9 +40,10 @@ def test_yearly_credits_loaded_once_and_not_reset_monthly(client, monkeypatch):
 
 
 def test_credit_packs_require_paid_plan_and_are_used_after_period_credits(client, monkeypatch):
-    assert [p["id"] for p in client.get("/api/payments/packs").json()["packs"]] == ["kredi_100", "kredi_300", "kredi_800"]
-    q = client.get("/api/payments/quote", params={"plan_id": "kredi_300"}).json()
-    assert q["net"] == 13.0 and q["total"] == 15.6
+    assert [p["id"] for p in client.get("/api/payments/packs").json()["packs"]] == ["kredi_100", "kredi_250", "kredi_500"]
+    q = client.get("/api/payments/quote", params={"plan_id": "kredi_250"}).json()
+    assert q["net"] == 12.0 and q["total"] == 14.4
+    assert client.get("/api/payments/quote", params={"plan_id": "kredi_300"}).status_code == 400  # satıştan kalktı
 
     free = register(client, email="free@ornek.com")
     r, _ = _pay(client, monkeypatch, free, "kredi_100")

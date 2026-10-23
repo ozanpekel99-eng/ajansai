@@ -89,10 +89,19 @@ PLANS = {
 # Fiyatlar paket içi kredi fiyatının üstünde tutulur (paket yükseltmek hep daha avantajlı kalsın)
 # ve en pahalı işlemin kredi başı maliyetini (~$0.011; 2027 ses fiyatıyla ~$0.016) rahatça karşılar.
 CREDIT_PACKS = {
+    # Kredi başı fiyat her zaman paket içi fiyatın (Başlangıç $0.050, Pro $0.040, Advanced $0.033) üstünde
+    # ya da eşit kalır; ortalama maliyet ~$0.017/kredi (en kötü ~$0.021) ile marj %55-60.
     "kredi_100": {"name": "100 ek kredi", "credits": 100, "price": 5},  # $0.050 / kredi
-    "kredi_300": {"name": "300 ek kredi", "credits": 300, "price": 13},  # $0.043 / kredi
-    "kredi_800": {"name": "800 ek kredi", "credits": 800, "price": 30},  # $0.0375 / kredi
+    "kredi_250": {"name": "250 ek kredi", "credits": 250, "price": 12},  # $0.048 / kredi
+    "kredi_500": {"name": "500 ek kredi", "credits": 500, "price": 22},  # $0.044 / kredi
 }
+
+# Satıştan kalkmış paketler: yarım kalan ödemeler ve ödeme geçmişi için tutulur, satın alınamaz.
+LEGACY_PACKS = {
+    "kredi_300": {"name": "300 ek kredi", "credits": 300, "price": 13},
+    "kredi_800": {"name": "800 ek kredi", "credits": 800, "price": 30},
+}
+ALL_PACKS = {**CREDIT_PACKS, **LEGACY_PACKS}
 
 # Paketler dolar cinsinden satılır; iyzico ödemeyi USD olarak alır
 # (iyzico üye işyeri hesabında döviz ile ödeme açık olmalı).
@@ -114,12 +123,17 @@ def get_plan(plan_id: str) -> dict:
 
 
 def is_credit_pack(item_id: str) -> bool:
+    """Ödeme kaydındaki kalem bir ek kredi paketi mi (eski paketler dahil)."""
+    return item_id in ALL_PACKS
+
+
+def is_sellable_pack(item_id: str) -> bool:
     return item_id in CREDIT_PACKS
 
 
 def item_name(item_id: str, billing: str = "monthly") -> str:
     if is_credit_pack(item_id):
-        return CREDIT_PACKS[item_id]["name"]
+        return ALL_PACKS[item_id]["name"]
     return get_plan(item_id)["name"] + (" (yıllık)" if billing == "yearly" else "")
 
 
@@ -161,7 +175,7 @@ def cycle_price(plan_id: str, billing: str = "monthly") -> float:
 
 
 def price_breakdown(plan_id: str, billing: str = "monthly") -> dict:
-    net = float(CREDIT_PACKS[plan_id]["price"]) if is_credit_pack(plan_id) else cycle_price(plan_id, billing)
+    net = float(ALL_PACKS[plan_id]["price"]) if is_credit_pack(plan_id) else cycle_price(plan_id, billing)
     vat = round(net * VAT_RATE / 100, 2)
     return {"net": net, "vat": vat, "vat_rate": VAT_RATE, "total": round(net + vat, 2), "currency": CURRENCY}
 

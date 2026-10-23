@@ -15,7 +15,7 @@ from app.services import iyzico_service
 from typing import Literal
 
 from app.services.plans import (
-    BILLING_CYCLES, CREDIT_PACKS, CURRENCY, FREE_PLAN, get_plan, is_credit_pack, is_purchasable, item_name,
+    ALL_PACKS, BILLING_CYCLES, CURRENCY, FREE_PLAN, get_plan, is_credit_pack, is_purchasable, is_sellable_pack, item_name,
     price_breakdown, public_packs,
 )
 from app.services.usage_service import activate_plan, add_extra_credits, get_user
@@ -34,7 +34,7 @@ class BillingInfo(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    plan_id: str  # paket id'si ya da ek kredi paketi (kredi_100, kredi_300, kredi_800)
+    plan_id: str  # paket id'si ya da ek kredi paketi (kredi_100, kredi_250, kredi_500)
     cycle: Literal["monthly", "yearly"] = "monthly"
     billing: BillingInfo
 
@@ -48,7 +48,7 @@ def packs():
 @router.get("/quote")
 def quote(plan_id: str, cycle: Literal["monthly", "yearly"] = "monthly"):
     """Ödeme ekranındaki özet: KDV hariç tutar, KDV ve toplam."""
-    if not (is_purchasable(plan_id) or is_credit_pack(plan_id)):
+    if not (is_purchasable(plan_id) or is_sellable_pack(plan_id)):
         raise HTTPException(status_code=400, detail="Geçersiz paket.")
     return {"plan_id": plan_id, "cycle": cycle, **price_breakdown(plan_id, cycle)}
 
@@ -67,7 +67,7 @@ def _normalize_phone(phone: str) -> str:
 @router.post("/checkout")
 def checkout(payload: CheckoutRequest, request: Request, user: dict = Depends(get_current_user)):
     """Seçilen paket için iyzico ödeme sayfasını başlatır ve adresini döndürür."""
-    pack = is_credit_pack(payload.plan_id)
+    pack = is_sellable_pack(payload.plan_id)
     if not (is_purchasable(payload.plan_id) or pack):
         raise HTTPException(status_code=400, detail="Geçersiz paket.")
     if pack and get_user(user["id"])["plan"] == FREE_PLAN:
@@ -177,7 +177,7 @@ def _finalize(payment, result: dict) -> RedirectResponse:
     if changed and success:
         cycle = getattr(payment, "billing", None) or "monthly"
         if is_credit_pack(payment.plan_id):
-            add_extra_credits(payment.user_id, CREDIT_PACKS[payment.plan_id]["credits"])
+            add_extra_credits(payment.user_id, ALL_PACKS[payment.plan_id]["credits"])
             logger.info("Ek kredi yüklendi: kullanıcı=%s paket=%s ödeme=%s", payment.user_id, payment.plan_id, payment.id)
         else:
             activate_plan(payment.user_id, payment.plan_id, BILLING_CYCLES.get(cycle, BILLING_CYCLES["monthly"])["days"], cycle)

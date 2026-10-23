@@ -35,7 +35,7 @@ export default function CheckoutModal({
   const canBuyCredits = !!currentPlan && currentPlan !== "deneme";
   const [kind, setKind] = useState<"plan" | "credits">(planArg?.startsWith("kredi") && canBuyCredits ? "credits" : "plan");
   const [packs, setPacks] = useState<CreditPack[]>([]);
-  const [packId, setPackId] = useState(planArg?.startsWith("kredi_") ? planArg : "kredi_300");
+  const [packId, setPackId] = useState(planArg?.startsWith("kredi_") ? planArg : "kredi_250");
   const [cycle, setCycle] = useState<Cycle>(cycleArg === "yearly" ? "yearly" : "monthly");
   const [planId, setPlanId] = useState(
     planArg && !planArg.startsWith("kredi") ? planArg : currentPlan && currentPlan !== "deneme" ? currentPlan : "pro",
