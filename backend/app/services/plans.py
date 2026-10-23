@@ -14,7 +14,7 @@ kredi düşer. Kredi maliyetleri sağlayıcı maliyetine göre belirlendi
 - Video 4K (Seedance 2.0): token ile ücretlenir, $4 / 1M token;
   token = 3840×2160×24 fps×sn / 1024 ≈ 194.400/sn → ≈ $0.78/sn (en kötü durum)
 
-Paketler $10 / $20 / $30 (aylık) + %20 KDV; yıllıkta %20 indirim, kredi her 30 günde yenilenir.
+Paketler $10 / $20 / $35 (aylık) + %20 KDV; yıllıkta %20 indirim, kredi her 30 günde yenilenir.
 Ücretsiz paket (id: deneme) satın alınamaz; yeni kayıt olan herkes bununla başlar.
 """
 
@@ -77,8 +77,8 @@ PLANS = {
     # id "ajans" eski kayıtlarla uyum için korunuyor; görünen adı Advanced
     "ajans": {
         "name": "Advanced",
-        "price": 30,
-        "credits": 900,
+        "price": 35,
+        "credits": 1000,
         "video_enabled": True,
         "ads_enabled": True,
         "purchasable": True,
