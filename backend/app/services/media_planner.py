@@ -41,7 +41,11 @@ Rules:
   requested changes as concrete visual instructions. Turn vague wishes into concrete design changes, e.g.
   "daha dikkat çekici yaz" -> make the headline much larger and bolder, add a high-contrast color block or
   badge behind it, keep the same words. End with "Keep everything else exactly the same: scene, products,
-  people, colors, composition and any text not mentioned."
+  people, colors, composition and any text not mentioned." Then list EVERY text that must stay on the image,
+  verbatim in double quotes, exactly as in the current version (same words, numbers, prices, currency signs,
+  percentages). Never change, round or invent any number or price unless the client explicitly asks for it.
+- Layout safety: keep all text and price blocks fully inside the frame with a clear margin from every edge;
+  nothing may be cut off at the top or bottom.
 - Never add brand names, logos or watermarks the client did not ask for."""
 
 VIDEO_SYSTEM = """You are a commercial film director writing prompts for Google Veo 3.1 (image-to-video).

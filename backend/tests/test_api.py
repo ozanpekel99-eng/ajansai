@@ -495,7 +495,7 @@ def test_gateway_media_request_format(monkeypatch):
     assert sent["headers"]["ai-image-model-specification-version"] == "4"
     assert sent["headers"]["Authorization"] == "Bearer gw-key"
     gateway_media.generate_image("kahve", "4:5")
-    assert sent["body"]["size"] == "1024x1536" and "cropped to a 4:5 frame" in sent["body"]["prompt"]
+    assert sent["body"]["size"] == "1024x1280" and "cropped" not in sent["body"]["prompt"]  # 4:5 doğrudan, kırpma yok
 
     # GPT Image yanıt vermezse Gemini (sohbet API'si) devreye girer
     def fake_chat_post(url, headers=None, json=None, timeout=None):
