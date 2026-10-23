@@ -138,3 +138,34 @@ def meta_get(path: str, fields: str = "", page_token_for: str = "", user: dict =
         return meta._graph("GET", path, token, **params)
     except Exception as e:  # noqa: BLE001
         return {"error": str(e)[:500]}
+
+
+class ChatBench(BaseModel):
+    model: str  # "anthropic/claude-haiku-5.5" (AI Gateway) ya da "groq:openai/gpt-oss-120b", "cerebras:..."
+    prompt: str = Field(..., max_length=8000)
+    image_url: str | None = None
+
+
+@router.post("/bench/chat")
+def bench_chat(p: ChatBench, user: dict = Depends(_admin)):
+    """Ücretsiz sohbetle aynı koşullar: aynı sistem istemi, aynı yanıt uzunluğu sınırı (1500 token)."""
+    from app.services import free_tier
+    from app.services.llm_service import FREE_PROVIDERS, LLMError, _free_provider_call, chat_completion
+
+    system = (free_tier.assistant.SYSTEM_PROMPT + free_tier.web_search.today_line() + free_tier.FREE_NOTE
+              + free_tier.IMAGE_TOOL_NOTE + free_tier.MEDIA_NOTE)
+    content = p.prompt
+    if p.image_url:
+        content = [{"type": "text", "text": p.prompt + "\n[Kullanıcı 1 görsel ekledi: image 0]"},
+                   {"type": "image_url", "image_url": {"url": p.image_url}}]
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": content}]
+    t = time.time()
+    provider, _, model = p.model.partition(":")
+    try:
+        if provider in FREE_PROVIDERS and model:
+            text = _free_provider_call(provider, model, messages, 1500)
+        else:
+            text = chat_completion(p.model, messages, 1500)
+    except LLMError as e:
+        return {"model": p.model, "error": str(e)[:500], "seconds": round(time.time() - t, 1)}
+    return {"model": p.model, "text": text, "seconds": round(time.time() - t, 1)}
