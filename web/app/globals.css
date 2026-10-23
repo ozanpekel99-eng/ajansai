@@ -4042,3 +4042,8 @@ table.data td.num {
   .chat.is-empty .plus-menu { top: auto; bottom: calc(100% + 10px); }
   .plus-menu { max-height: 60dvh; overflow-y: auto; }
 }
+
+/* Görsel aracı: hazır kalıp düğmeleri */
+.template-chips { margin-bottom: 8px; flex-wrap: wrap; gap: 6px; }
+.template-chips .chip { height: auto; cursor: pointer; background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--text); padding: 6px 12px; font-size: 13px; }
+.template-chips .chip:hover { border-color: var(--indigo-hi); }

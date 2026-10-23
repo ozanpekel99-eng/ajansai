@@ -26,6 +26,14 @@ type ImageResponse = { image_url: string | null; error: string | null; prompt?: 
 
 const REVISE_EXAMPLES = ["Yazıyı daha büyük ve dikkat çekici yap", "Arka planı daha sıcak tonlara çevir", "Sağ alta \"Son 3 gün\" rozeti ekle"];
 
+/** Ne yazacağını bilmeyenler için doldurulacak hazır kalıplar */
+const TEMPLATES = [
+  { label: "Kampanya / indirim", text: "Ürün: \nSatış fiyatı: \nKampanya fiyatı: \nTaksit: \nSon gün: \nMağaza adı: " },
+  { label: "Yeni ürün", text: "Yeni ürünümüz: \nÖne çıkan özelliği: \nFiyatı: \nMağaza adı: " },
+  { label: "Özel gün", text: "Özel gün: \nMesaj: \nVarsa indirim: \nMağaza adı: " },
+  { label: "Duyuru", text: "Duyuru: \nTarih / saat: \nMağaza adı: " },
+];
+
 export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
   const params = useSearchParams();
   const { usage, refresh, openCheckout } = useSession();
@@ -125,35 +133,43 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
         <h2>Girdi</h2>
         {!freePlan && <NoCreditsNotice cost={cost} />}
         <div className="field">
-          <label htmlFor="g-concept">Konsept</label>
+          <label>1. Ürün fotoğrafın (önerilir)</label>
+          {uploader.field}
+          <FileChips files={refs} onRemove={(id) => setRefs((x) => x.filter((f) => f.id !== id))} />
+          <UploadProgress busy={uploader.busy} />
+          {refs.length < 4 && (
+            <button type="button" className="add-file" onClick={uploader.pick} disabled={uploader.busy.length > 0}>
+              <Icon name="plus" size={16} /> Ürün fotoğrafı ekle
+            </button>
+          )}
+          <span className="hint">
+            Ürününün fotoğrafını eklersen görselde aynı ürün, aynı haliyle kullanılır. En iyi sonuç için ürünün net, önden
+            çekilmiş fotoğrafını yükle (en fazla 4). Ek kredi harcamaz.
+          </span>
+          {uploader.error && <small className="error-text">{uploader.error}</small>}
+        </div>
+        <div className="field">
+          <label htmlFor="g-concept">2. Görselde ne olsun?</label>
+          <div className="chip-row template-chips">
+            {TEMPLATES.map((t) => (
+              <button key={t.label} type="button" className="chip" onClick={() => setConcept(t.text)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
           <textarea
             id="g-concept"
             required
             rows={5}
             value={concept}
             onChange={(e) => setConcept(e.target.value)}
-            placeholder="Beyaz mutfakta yeni nesil gri buzdolabı, sabah ışığı, ön planda taze meyveler"
+            placeholder="Örn: Buzdolabı + çamaşır makinesi kampanyası. Satış fiyatı 69.600₺, nakit 46.350₺, taksitli 50.500₺. En üstte mağaza adım: Başak Arçelik. Son gün 31 Ekim."
           />
           <span className="hint">
-            Ne görünmesini istediğini yaz. Kampanya yazısı için metni tırnak içinde ver: &quot;Kasım indirimi %30&quot;. Sonucu sağdaki
-            &quot;Revize et&quot; ile adım adım düzeltebilirsin.
+            Fiyatları, tarihleri ve mağaza adını yazman yeterli; tasarımı biz yaparız. Yazdığın fiyat, tarih ve isimler görsele
+            aynen yazılır. Beğenmediğin yeri sağdaki &quot;Revize et&quot; ile söyle.
           </span>
           <SampleToConcept target="image" onConcept={setConcept} />
-        </div>
-        <div className="field">
-          <label>Örnek görseller (isteğe bağlı)</label>
-          {uploader.field}
-          <FileChips files={refs} onRemove={(id) => setRefs((x) => x.filter((f) => f.id !== id))} />
-          <UploadProgress busy={uploader.busy} />
-          {refs.length < 4 && (
-            <button type="button" className="add-file" onClick={uploader.pick} disabled={uploader.busy.length > 0}>
-              <Icon name="plus" size={16} /> Ürün veya stil görseli ekle
-            </button>
-          )}
-          <span className="hint">
-            En fazla 4 görsel. Kendi ürününü yüklersen yeni görselde aynı ürün kullanılır; stil örneği yüklersen o tarzda üretilir. Ek kredi harcamaz.
-          </span>
-          {uploader.error && <small className="error-text">{uploader.error}</small>}
         </div>
         <div className="chip-row">
           <ChipSelect icon="ratio" label="Format" value={ratio} onChange={setRatio} options={RATIOS.map((r) => ({ value: r.value, label: r.label }))} />

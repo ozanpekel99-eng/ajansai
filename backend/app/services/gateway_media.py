@@ -114,6 +114,8 @@ def _openai_image(model: str, prompt: str, aspect_ratio: str, reference_urls: li
     body = {"prompt": prompt, "n": 1, "size": f"{w}x{h}"}
     if reference_urls:
         body["files"] = [{"type": "url", "url": u} for u in reference_urls]
+        # Yüklenen ürün fotoğrafları (logo, yazı, renk, biçim) olabildiğince aynen korunur
+        body["providerOptions"] = {"openai": {"input_fidelity": "high"}}
     data = _post("/image-model", model, "image", body, timeout=180)
     images = data.get("images") or []
     if not images:

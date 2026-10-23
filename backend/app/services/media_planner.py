@@ -110,8 +110,11 @@ You MUST NOT add facts the client did not give: no extra prices or discount %, n
 websites, guarantees, free delivery/installation, gifts, or brand names/logos they did not mention (a brand the
 client mentions, e.g. Arçelik, may appear as text).
 
-Product photos: if reference images are attached, say "Use the exact products from the attached photos
-(same shape, color, handles, panel, logos); do not redesign them" and make them the heroes.
+Product photos: if reference images are attached, they are the client's REAL products and must not change at
+all. Say "Use the exact products from the attached photos as they are: same shape, proportions, color, materials,
+handles, buttons, display, panel text and logos. Do not redesign, restyle, recolor or add details to them; only
+place them in the scene with matching lighting and shadows." Make them large, sharp heroes; never cover them
+with text or badges.
 Edit mode (the FIRST attached image is the current poster): start with "Edit the attached poster.", describe
 only the requested change concretely, then "Keep everything else exactly the same" and list every existing
 on-image text verbatim in quotes.
