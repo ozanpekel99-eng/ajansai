@@ -7,6 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from app import config
 from app.security import get_current_user, get_optional_user
 from app.services import chat_files, free_tier, storage
 from app.services.llm_service import LLMError
@@ -69,10 +70,15 @@ def make_free_image(subject: str, user: dict | None, prompt: str, refs: list[str
         event_id = free_tier.reserve_image(subject, user is not None, with_reference=bool(refs))
     except free_tier.FreeLimitError as e:
         return None, str(e), True
+    premium_open = free_tier.premium_image_available()
     data, mime = _premium_image(prompt, refs, translate)
     if data is None:
-        if not free_tier.cloudflare_enabled():
+        # FLUX kalitesi (Türkçe yazı yok, ürün detayı zayıf) kullanıcıya gösterilecek düzeyde değil;
+        # yalnızca FREE_IMAGE_FLUX_FALLBACK açıksa yedek olarak kullanılır.
+        if not (config.FREE_IMAGE_FLUX_FALLBACK and free_tier.cloudflare_enabled()):
             free_tier.release(event_id)
+            if not premium_open and free_tier.premium_image_enabled():
+                return None, "Bugünkü ücretsiz görsel kotası doldu, hakkın düşülmedi. Yarın tekrar dene ya da bir paket seç.", True
             return None, "Görsel üretilemedi, hakkın düşülmedi. Tekrar dene.", False
         try:
             ref_bytes = [storage.fetch(u, max_bytes=20 * 1024 * 1024) for u in refs]

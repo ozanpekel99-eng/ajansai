@@ -9,6 +9,7 @@ from .test_api import BLOB_TOKEN, BLOB_URL, FakeResponse, _enable_media, registe
 
 IP_A = {"x-forwarded-for": "85.100.1.1, 10.0.0.1"}
 IP_B = {"x-forwarded-for": "85.100.1.2"}
+IP_C = {"x-forwarded-for": "85.100.1.3"}
 
 
 def _fake_chat(monkeypatch, seen=None):
@@ -83,6 +84,7 @@ def test_free_chat_sends_short_history(client, monkeypatch):
 def _enable_free_images(monkeypatch, calls):
     monkeypatch.setattr(config, "CLOUDFLARE_ACCOUNT_ID", "acc123")
     monkeypatch.setattr(config, "CLOUDFLARE_AI_TOKEN", "cf-token")
+    monkeypatch.setattr(config, "FREE_IMAGE_FLUX_FALLBACK", True)
     monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0, vision=False, premium=True: ("a fridge in a white kitchen", "groq:x"))
 
     def fake_post(url, headers=None, json=None, data=None, files=None, timeout=None):
@@ -129,10 +131,15 @@ def test_free_images_use_paid_model_then_flux_after_daily_cap(client, monkeypatc
     r = client.post("/api/free/image", json={"concept": "kahve fincanı"}, headers=IP_A)
     assert r.status_code == 200 and r.json()["image_url"].startswith("data:image/png;base64,")
     assert gemini == [("planned kahve fincanı", "1:1")] and calls == []
-    # Günlük Gemini tavanı doldu: aynı hak FLUX yedeğiyle üretilir
+    # Günlük Gemini tavanı doldu: FLUX yedeği açıksa onunla üretilir
     r = client.post("/api/free/image", json={"concept": "kahve fincanı"}, headers=IP_B)
     assert r.status_code == 200 and r.json()["image_url"].startswith("data:image/jpeg;base64,")
     assert len(gemini) == 1 and len(calls) == 1
+    # Varsayılan: FLUX kapalı, zayıf görsel yerine hak düşülmeden kota mesajı
+    monkeypatch.setattr(config, "FREE_IMAGE_FLUX_FALLBACK", False)
+    r = client.post("/api/free/image", json={"concept": "kahve fincanı"}, headers=IP_C)
+    assert r.status_code == 429 and "kotası doldu" in r.json()["detail"]
+    assert len(calls) == 1
 
 
 def test_free_images_site_wide_daily_cap(client, monkeypatch):

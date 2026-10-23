@@ -133,6 +133,9 @@ FREE_IMAGES_PER_DAY_TOTAL = _int("FREE_IMAGES_PER_DAY_TOTAL", 1500)
 # Ücretsiz görseller de ücretli paketle aynı modelle (Gemini 3.1 Flash Image, ~$0,068) üretilir;
 # site geneli günde bu kadarı aşılırsa günün kalanında FLUX (Cloudflare) yedeğine geçilir.
 FREE_PREMIUM_IMAGES_PER_DAY = _int("FREE_PREMIUM_IMAGES_PER_DAY", 400)
+# Gemini olmazsa / tavan dolarsa FLUX (Cloudflare) yedeği. Kalite ChatGPT düzeyinde olmadığı için kapalı:
+# kullanıcı zayıf görsel yerine "hakkın düşülmedi, tekrar dene" mesajı görür.
+FREE_IMAGE_FLUX_FALLBACK = _env("FREE_IMAGE_FLUX_FALLBACK", "0") == "1"
 # Doğal sesli okuma: Google Cloud Text-to-Speech (Chirp 3 HD). Ayda 1M karakter ücretsiz;
 # günlük tavan bunun altında tutulur, aşılırsa tarayıcının kendi sesine düşülür.
 GOOGLE_TTS_API_KEY = _env("GOOGLE_TTS_API_KEY")

@@ -361,7 +361,7 @@ def premium_image_enabled() -> bool:
 
 
 def image_enabled() -> bool:
-    return premium_image_enabled() or cloudflare_enabled()
+    return premium_image_enabled() or (config.FREE_IMAGE_FLUX_FALLBACK and cloudflare_enabled())
 
 
 def premium_image_available() -> bool:
