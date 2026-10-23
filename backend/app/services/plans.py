@@ -78,7 +78,7 @@ PLANS = {
     "ajans": {
         "name": "Advanced",
         "price": 30,
-        "credits": 1000,
+        "credits": 900,
         "video_enabled": True,
         "ads_enabled": True,
         "purchasable": True,

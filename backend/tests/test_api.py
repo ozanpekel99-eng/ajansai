@@ -470,7 +470,7 @@ def test_plans_endpoint_shows_credit_examples(client):
     pro = data["plans"]["pro"]
     assert pro["credits"] == 500 and pro["examples"]["images"] == 125 and pro["price"] == 20 and pro["price_yearly"] == 192
     assert pro["examples"]["videos"] == {"720p": 41, "1080p": 13, "4k": 4}
-    assert data["plans"]["ajans"]["name"] == "Advanced" and data["plans"]["ajans"]["credits"] == 1000 and data["plans"]["ajans"]["price_yearly"] == 288
+    assert data["plans"]["ajans"]["name"] == "Advanced" and data["plans"]["ajans"]["credits"] == 900 and data["plans"]["ajans"]["price_yearly"] == 288
     assert data["trial"]["examples"]["videos"]["720p"] == 0
 
 
@@ -878,7 +878,7 @@ def test_yearly_checkout_charges_discount_plus_vat_and_opens_365_days(client, mo
     monkeypatch.setattr(pr.iyzico_service, "is_successful_payment", lambda result, **kw: True)
     client.post("/api/payments/iyzico/callback", data={"token": "tok-y"}, follow_redirects=False)
     usage = client.get("/api/plans/usage", headers=auth(token)).json()
-    assert usage["plan"] == "ajans" and usage["credits"]["total"] == 12000 and usage["cycle"] == "yearly"  # 12 aylık kredi tek seferde
+    assert usage["plan"] == "ajans" and usage["credits"]["total"] == 10800 and usage["cycle"] == "yearly"  # 12 aylık kredi tek seferde
     from datetime import datetime
 
     days = (datetime.fromisoformat(usage["plan_expires_at"].rstrip("Z")) - datetime.utcnow()).days
