@@ -1,11 +1,11 @@
 /**
  * Satıcı (şirket) bilgileri: İletişim, Mesafeli Satış Sözleşmesi ve alt bilgi bunları gösterir.
- * Boş bırakılan alan sitede gösterilmez. İletişim için yalnızca e-posta gösterilir.
+ * Boş bırakılan alan sitede gösterilmez. Adres yalnızca Mesafeli Satış Sözleşmesi'nde gösterilir; iletişim için e-posta.
  */
 export const COMPANY = {
   brand: "ajansAI",
   legalName: "Soi Bilişim",
-  address: "",
+  address: "Kurtköy Mah. Telve Sk. Şehit Murat Erdem No: 2 İç Kapı No: 9, Pendik / İstanbul",
   taxOffice: "Pendik Vergi Dairesi",
   taxNumber: "3040475421",
   mersis: "1455713613600001",
