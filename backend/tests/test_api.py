@@ -487,7 +487,17 @@ def test_gateway_media_request_format(monkeypatch):
         return FakeResponse(200, {"operation": {"gatewayJobId": "job_1"}})
 
     monkeypatch.setattr(gateway_media.requests, "post", fake_post)
-    # Gemini (sohbet API'si) yanıt vermezse sıradaki modele geçilir; en son Seedream (görsel API'si)
+    # Önce GPT Image (görsel API'si): boyut ve ek görseller
+    data, mime = gateway_media.generate_image("kahve", "1:1", ["https://x/ref.png"])
+    assert mime == "image/jpeg" and sent["url"].endswith("/v4/ai/image-model")
+    assert sent["headers"]["ai-model-id"] == config.IMAGE_MODEL == "openai/gpt-image-2"
+    assert sent["body"]["size"] == "1024x1024" and sent["body"]["files"] == [{"type": "url", "url": "https://x/ref.png"}]
+    assert sent["headers"]["ai-image-model-specification-version"] == "4"
+    assert sent["headers"]["Authorization"] == "Bearer gw-key"
+    gateway_media.generate_image("kahve", "4:5")
+    assert sent["body"]["size"] == "1024x1536" and "cropped to a 4:5 frame" in sent["body"]["prompt"]
+
+    # GPT Image yanıt vermezse Gemini (sohbet API'si) devreye girer
     def fake_chat_post(url, headers=None, json=None, timeout=None):
         if url.endswith("/chat/completions"):
             sent.setdefault("chat", []).append(json)
@@ -496,21 +506,15 @@ def test_gateway_media_request_format(monkeypatch):
         return fake_post(url, headers, json, timeout)
 
     monkeypatch.setattr(gateway_media.requests, "post", fake_chat_post)
+    monkeypatch.setattr(gateway_media, "_openai_image", lambda *a: (_ for _ in ()).throw(gateway_media.MediaError("yok")))
     data, mime = gateway_media.generate_image("kahve", "9:16", ["https://x/ref.png"])
     assert mime == "image/png"
     body = sent["chat"][0]
-    assert body["model"] == config.IMAGE_MODEL and body["modalities"] == ["text", "image"]
+    assert body["model"] == config.IMAGE_MODEL_FALLBACK and body["modalities"] == ["text", "image"]
     assert body["providerOptions"]["google"]["imageConfig"]["aspectRatio"] == "9:16"
     assert body["messages"][0]["content"][1] == {"type": "image_url", "image_url": {"url": "https://x/ref.png"}}
 
     monkeypatch.setattr(gateway_media.requests, "post", fake_post)
-    monkeypatch.setattr(gateway_media, "_gemini_image", lambda *a: (_ for _ in ()).throw(gateway_media.MediaError("yok")))
-    data, mime = gateway_media.generate_image("kahve", "1:1")
-    assert mime == "image/jpeg" and sent["url"].endswith("/v4/ai/image-model")
-    assert sent["headers"]["ai-model-id"] == config.IMAGE_MODEL_LAST
-    assert sent["headers"]["ai-image-model-specification-version"] == "4"
-    assert sent["headers"]["Authorization"] == "Bearer gw-key"
-
     job = gateway_media.start_video("dalga", 8, "4k", "https://x/a.png")
     assert job == {"model": config.VIDEO_MODELS["4k"][0], "operation": {"gatewayJobId": "job_1"}}
     assert sent["url"].endswith("/video-model/start") and sent["headers"]["ai-model-id"] == config.VIDEO_MODELS["4k"][0]

@@ -185,7 +185,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
         </h2>
         {error && <div className="notice error">{error}</div>}
         {loading === "new" ? (
-          <EmptyResult loading text="Görsel üretiliyor, genelde 10–20 saniye sürer." />
+          <EmptyResult loading text="Görsel üretiliyor, genelde 20–40 saniye sürer." />
         ) : result ? (
           <>
             <div className={`media-result ${loading === "revise" ? "is-busy" : ""}`}>

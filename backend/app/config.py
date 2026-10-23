@@ -86,9 +86,9 @@ ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 # --- Görsel / video (Vercel AI Gateway üzerinden, ayrı anahtar gerekmez) ---
 # Görsel: Gemini 3.1 Flash Image (Nano Banana 2) — ~9 sn, Türkçe yazıyı doğru basar, düzenlemede
 # görseli bozmadan yalnızca isteneni değiştirir. Olmazsa Gemini 3 Pro Image, en son Seedream.
-IMAGE_MODEL = _env("IMAGE_MODEL", "google/gemini-3.1-flash-image")
-IMAGE_MODEL_FALLBACK = _env("IMAGE_MODEL_FALLBACK", "google/gemini-3-pro-image")
-IMAGE_MODEL_LAST = _env("IMAGE_MODEL_LAST", "bytedance/seedream-5.0-lite")
+IMAGE_MODEL = _env("IMAGE_MODEL", "openai/gpt-image-2")  # ChatGPT'nin görsel modeli: kampanya yazısı ve düzende en iyi (~$0,063, ~20-35 sn)
+IMAGE_MODEL_FALLBACK = _env("IMAGE_MODEL_FALLBACK", "google/gemini-3.1-flash-image")
+IMAGE_MODEL_LAST = _env("IMAGE_MODEL_LAST", "google/gemini-3-pro-image")
 # İstemi (görsel/video) netleştiren hızlı model
 PLANNER_MODEL = _env("PLANNER_MODEL", "anthropic/claude-haiku-5.5")
 # Sohbet (ücretli paketler): Claude Sonnet 5.5 (mesaj başı ~$0,01-0,02); olmazsa Haiku 5.5.

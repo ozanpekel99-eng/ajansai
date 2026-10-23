@@ -67,6 +67,66 @@ def _sniff_mime(data: bytes) -> str:
     return "image/png"
 
 
+# GPT Image yalnızca üç boyut üretir; diğer oranlar en yakın boyuttan ortadan kırpılır.
+OPENAI_SIZES = {"square": (1024, 1024), "portrait": (1024, 1536), "landscape": (1536, 1024)}
+
+
+def _ratio(aspect: str) -> float:
+    try:
+        w, h = (float(x) for x in aspect.split(":"))
+        return w / h
+    except ValueError:
+        return 1.0
+
+
+def _crop_to(data: bytes, aspect: str) -> bytes:
+    """Görseli ortadan istenen orana kırpar (oran zaten uyuyorsa dokunmaz)."""
+    import io
+
+    from PIL import Image
+
+    try:
+        img = Image.open(io.BytesIO(data))
+        w, h = img.size
+    except Exception:  # okunamazsa olduğu gibi kullan
+        return data
+    target = _ratio(aspect)
+    if abs(w / h - target) < 0.01:
+        return data
+    if w / h > target:  # fazla geniş: yanlardan
+        nw = round(h * target)
+        box = ((w - nw) // 2, 0, (w - nw) // 2 + nw, h)
+    else:  # fazla uzun: üstten ve alttan
+        nh = round(w / target)
+        box = (0, (h - nh) // 2, w, (h - nh) // 2 + nh)
+    out = io.BytesIO()
+    img.crop(box).save(out, "PNG")
+    return out.getvalue()
+
+
+def _openai_image(model: str, prompt: str, aspect_ratio: str, reference_urls: list[str] | None) -> bytes:
+    """GPT Image (ChatGPT'nin görsel modeli). Ek görsel varsa ilk görsel düzenlenir / örnek alınır."""
+    r = _ratio(aspect_ratio)
+    kind = "square" if abs(r - 1) < 0.01 else ("portrait" if r < 1 else "landscape")
+    w, h = OPENAI_SIZES[kind]
+    if abs(w / h - r) > 0.01:
+        prompt += (
+            f"\n\nThe final image will be center-cropped to a {aspect_ratio} frame: keep all text, logos and key "
+            "elements well inside the central area, away from the edges that will be cropped."
+        )
+    body = {"prompt": prompt, "n": 1, "size": f"{w}x{h}"}
+    if reference_urls:
+        body["files"] = [{"type": "url", "url": u} for u in reference_urls]
+    data = _post("/image-model", model, "image", body, timeout=180)
+    images = data.get("images") or []
+    if not images:
+        raise MediaError(f"Görsel dönmedi: {str(data)[:300]}")
+    raw = images[0]
+    if raw.startswith("data:"):
+        raw = raw.split(",", 1)[1]
+    return _crop_to(base64.b64decode(raw), aspect_ratio)
+
+
 GEMINI_ASPECTS = {"1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"}
 
 
@@ -125,7 +185,7 @@ def generate_image(prompt: str, aspect_ratio: str, reference_urls: list[str] | N
 
     reference_urls verilirse model bu görselleri kullanır: düzenlemede ilk görsel düzenlenecek
     görseldir; ürün/stil örnekleri de aynı listede gelir.
-    Sıra: Gemini 3.1 Flash Image → Gemini 3 Pro Image → Seedream.
+    Sıra: GPT Image 2 (ChatGPT'nin modeli) → Gemini 3.1 Flash Image → Gemini 3 Pro Image.
     """
     errors = []
     for model in (config.IMAGE_MODEL, config.IMAGE_MODEL_FALLBACK, config.IMAGE_MODEL_LAST):
@@ -134,6 +194,8 @@ def generate_image(prompt: str, aspect_ratio: str, reference_urls: list[str] | N
         try:
             if model.startswith("google/gemini"):
                 payload = _gemini_image(model, prompt, aspect_ratio, reference_urls)
+            elif model.startswith("openai/gpt-image"):
+                payload = _openai_image(model, prompt, aspect_ratio, reference_urls)
             else:
                 payload = _image_endpoint(model, prompt, aspect_ratio, reference_urls)
             return payload, _sniff_mime(payload)

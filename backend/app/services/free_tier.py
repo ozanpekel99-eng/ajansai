@@ -142,7 +142,10 @@ IMAGE_TOOL_NOTE = (
     "35mm, soft natural light)>]]. <oran> şunlardan biri: 1:1 (varsayılan, gönderi), 4:5, 9:16 (story/reels), 16:9 "
     "(yatay/kapak). Kullanıcı görsel eklediyse ve onu kullanmak/değiştirmek istiyorsa istemde 'the product in image 0' gibi "
     "ona atıf yap. Görsel istenmedikçe bu satırı ekleme. Görsel üretemeyeceğini asla söyleme; satırı eklemen yeterli, "
-    "görseli sistem üretip mesajının altında gösterir. Satırda yazı/logo isteme; görselde metin olmasın."
+    "görseli sistem üretip mesajının altında gösterir. Kullanıcı görselde kampanya yazısı, başlık, indirim, fiyat veya "
+    "buton istiyorsa (ya da kampanya/afiş görseli istiyorsa) istemde reklam afişi düzenini tarif et ve görselde yer "
+    "alacak her yazıyı çift tırnak içinde, Türkçe karakterleriyle aynen yaz (ör. headline \"KASIM FIRSATI\", badge "
+    "\"%25 İNDİRİM\"); kullanıcının vermediği telefon, adres, marka veya logo ekleme. Yazı istenmediyse 'no text' yaz."
 )
 IMAGE_TAG = re.compile(r"\[\[\s*G[ÖO]RSEL\s*:\s*(.+?)(?:\]\]|\Z)", re.IGNORECASE | re.DOTALL)
 HISTORY_MESSAGES = 8

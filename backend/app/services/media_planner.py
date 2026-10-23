@@ -16,7 +16,7 @@ from app.services import llm_service
 logger = logging.getLogger("ajansai.planner")
 
 IMAGE_SYSTEM = """You are the senior art director of a Turkish social-media ad agency. You turn a client's short
-Turkish request into ONE precise English prompt for an image model (Google Gemini image / Nano Banana) so the
+Turkish request into ONE precise English prompt for an image model (OpenAI GPT Image, as in ChatGPT) so the
 first result is usable as a real Instagram/Facebook ad.
 
 Rules:
