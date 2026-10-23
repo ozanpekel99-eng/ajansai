@@ -22,7 +22,7 @@ export default function SiteFooter({ compact = false }: { compact?: boolean }) {
               <a href={`tel:${COMPANY.phone.replace(/\s/g, "")}`}>{COMPANY.phone}</a>
             </>
           )}
-          {" · "}© {new Date().getFullYear()} {COMPANY.legalName || COMPANY.brand}
+          {" · "}© {new Date().getFullYear()} {COMPANY.brand}
         </span>
         {PAYMENT_LOGO_BAND ? (
           <img className="payment-band" src={PAYMENT_LOGO_BAND} alt="iyzico ile Öde, Visa ve MasterCard" />

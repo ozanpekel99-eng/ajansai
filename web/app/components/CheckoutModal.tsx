@@ -66,19 +66,6 @@ export default function CheckoutModal({
   const vat = Math.round(net * vatRate) / 100;
   const total = Math.round((net + vat) * 100) / 100;
 
-  const itemId = kind === "credits" ? packId : planId;
-  const [charge, setCharge] = useState<{ amount: number; currency: string; rate: number | null } | null>(null);
-  useEffect(() => {
-    setCharge(null);
-    if (!ready || !itemId) return;
-    api<{ charge: { amount: number; currency: string; rate: number | null } | null }>(
-      `/api/payments/quote?plan_id=${encodeURIComponent(itemId)}&cycle=${cycle}`,
-    )
-      .then((d) => setCharge(d.charge))
-      .catch(() => {});
-  }, [itemId, cycle, ready]);
-  const inTry = charge && charge.currency !== currency;
-
   const pay = async (e: FormEvent) => {
     e.preventDefault();
     setPaying(true);
@@ -198,22 +185,10 @@ export default function CheckoutModal({
               <span className="muted">KDV (%{vatRate})</span>
               <span>{money(vat, currency)}</span>
             </div>
-            <div>
-              <span className="muted">Nasıl kullanılır</span>
-              <span>Paket kredin bitince bu krediden düşülür; ay yenilense de silinmez.</span>
-            </div>
             <div className="total">
               <span>Ödenecek tutar (KDV dahil)</span>
               <span>{money(total, currency)}</span>
             </div>
-            {inTry && (
-              <div>
-                <span className="muted">Kartından çekilecek</span>
-                <span>
-                  {money(charge!.amount, charge!.currency)} (TCMB kuru 1 $ = {charge!.rate?.toLocaleString("tr-TR")} ₺)
-                </span>
-              </div>
-            )}
           </div>
         )}
 
@@ -237,24 +212,10 @@ export default function CheckoutModal({
                   : `${plan.credits.toLocaleString("tr-TR")} kredi (30 gün)`}
               </span>
             </div>
-            <div>
-              <span className="muted">Örneğin</span>
-              <span>
-                {plan.examples.images} görsel veya {plan.examples.videos["1080p"]} video (1080p, 6 sn)
-              </span>
-            </div>
             <div className="total">
               <span>Ödenecek tutar (KDV dahil)</span>
               <span>{money(total, plan.currency)}</span>
             </div>
-            {inTry && (
-              <div>
-                <span className="muted">Kartından çekilecek</span>
-                <span>
-                  {money(charge!.amount, charge!.currency)} (TCMB kuru 1 $ = {charge!.rate?.toLocaleString("tr-TR")} ₺)
-                </span>
-              </div>
-            )}
           </div>
         )}
 
@@ -271,9 +232,9 @@ export default function CheckoutModal({
 
         <button className="btn btn-primary btn-block" type="submit" disabled={paying || !ready || !agreed}>
           <Icon name="lock" size={16} />
-          {paying ? "Ödeme sayfası açılıyor…" : ready ? `${inTry ? money(charge!.amount, charge!.currency) : money(total, currency)} öde` : "Paket seç"}
+          {paying ? "Ödeme sayfası açılıyor…" : ready ? `${money(total, currency)} öde` : "Paket seç"}
         </button>
-        <p className="secure-note">Fiyatlar dolar; ödeme günün TCMB döviz satış kuruyla TL olarak alınır. Kart bilgilerin iyzico'nun güvenli sayfasında alınır, ajansAI saklamaz.</p>
+        <p className="secure-note">Ödemeyi iyzico'nun güvenli sayfasında TL olarak yaparsın.</p>
       </form>
     </div>
   );

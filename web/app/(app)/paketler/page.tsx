@@ -125,35 +125,37 @@ export default function Paketler() {
             </section>
           )}
 
-          <section className="section">
-            <div className="section-head">
-              <div>
-                <h2>Ek kredi paketleri</h2>
-                <p>Paket kredin biterse ek kredi alabilirsin. Ek kredi paket kredinden sonra kullanılır, ay yenilense de silinmez.</p>
-              </div>
-            </div>
-            <div className="packs">
-              {[
-                ["kredi_100", 100, 5],
-                ["kredi_250", 250, 12],
-                ["kredi_500", 500, 22],
-              ].map(([id, credits, price]) => (
-                <div key={id as string} className="panel pack">
-                  <strong>{num(credits as number)} kredi</strong>
-                  <span className="amount">
-                    {money(price as number, "USD")} <small>+ KDV</small>
-                  </span>
-                  <span className="muted">kredi başı {money((price as number) / (credits as number), "USD")}</span>
-                  <button
-                    className="btn btn-light btn-sm"
-                    onClick={() => (usage && usage.plan !== "deneme" ? openCheckout(id as string) : openCheckout("baslangic"))}
-                  >
-                    {usage && usage.plan !== "deneme" ? "Satın al" : "Önce paket seç"}
-                  </button>
+          {usage && usage.plan !== "deneme" && (
+            <section className="section">
+              <div className="section-head">
+                <div>
+                  <h2>Ek kredi paketleri</h2>
+                  <p>Paket kredin biterse ek kredi alabilirsin. Ek kredi paket kredinden sonra kullanılır, ay yenilense de silinmez.</p>
                 </div>
-              ))}
-            </div>
-          </section>
+              </div>
+              <div className="packs">
+                {[
+                  ["kredi_100", 100, 5],
+                  ["kredi_250", 250, 12],
+                  ["kredi_500", 500, 22],
+                ].map(([id, credits, price]) => (
+                  <div key={id as string} className="panel pack">
+                    <strong>{num(credits as number)} kredi</strong>
+                    <span className="amount">
+                      {money(price as number, "USD")} <small>+ KDV</small>
+                    </span>
+                    <span className="muted">kredi başı {money((price as number) / (credits as number), "USD")}</span>
+                    <button
+                      className="btn btn-light btn-sm"
+                      onClick={() => openCheckout(id as string)}
+                    >
+                      Satın al
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="section">
             <div className="section-head">

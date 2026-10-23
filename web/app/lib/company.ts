@@ -1,11 +1,11 @@
 /**
  * Satıcı (şirket) bilgileri: İletişim, Mesafeli Satış Sözleşmesi ve alt bilgi bunları gösterir.
- * Boş bırakılan alan sitede gösterilmez. Adres, güncel vergi levhasındakiyle aynı olmalı (iyzico kontrol eder).
+ * Boş bırakılan alan sitede gösterilmez. İletişim için yalnızca e-posta gösterilir.
  */
 export const COMPANY = {
   brand: "ajansAI",
-  legalName: "İlayda Pekel – Soi Bilişim",
-  address: "Kurtköy Mah. Telve Sk. Şehit Murat Erdem No: 2 İç Kapı No: 9, Pendik / İstanbul",
+  legalName: "Soi Bilişim",
+  address: "",
   taxOffice: "Pendik Vergi Dairesi",
   taxNumber: "3040475421",
   mersis: "1455713613600001",
