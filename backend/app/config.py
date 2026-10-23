@@ -116,8 +116,8 @@ FREE_CHAT_MODEL = _env("FREE_CHAT_MODEL", "anthropic/claude-haiku-5.5")
 # Ücretsiz paket ve misafir ücretli paketle aynı modelle (Claude Sonnet 5.5, mesaj başı ~$0,01) yanıtlanır;
 # site geneli günlük bu bütçe dolunca ücretsiz katmanlara (Groq / Cerebras) geçilir.
 FREE_GATEWAY_DAILY_USD = float(_env("FREE_GATEWAY_DAILY_USD", "30"))
-FREE_CHAT_PER_DAY_USER = _int("FREE_CHAT_PER_DAY_USER", 20)
-FREE_CHAT_PER_DAY_ANON = _int("FREE_CHAT_PER_DAY_ANON", 10)
+FREE_CHAT_PER_DAY_USER = _int("FREE_CHAT_PER_DAY_USER", 10)
+FREE_CHAT_PER_DAY_ANON = _int("FREE_CHAT_PER_DAY_ANON", 5)
 FREE_CHAT_PER_DAY_TOTAL = _int("FREE_CHAT_PER_DAY_TOTAL", 10000)  # tüm site, günlük tavan
 # Ücretsiz görsel: Cloudflare Workers AI (FLUX.2 klein). Günlük 10.000 neuron ücretsiz;
 # 1024px görsel ~105 neuron (~$0,0012); ilk ~90 görsel/gün ücretsiz, sonrası Workers Paid ile ücretlenir.
@@ -127,7 +127,7 @@ CLOUDFLARE_AI_TOKEN = _env("CLOUDFLARE_AI_TOKEN")
 FREE_IMAGE_MODEL = _env("FREE_IMAGE_MODEL", "@cf/black-forest-labs/flux-2-klein-4b")
 # Görselden görsel (örnek görselle üretim): FLUX.2 klein 4B, ~110 neuron → günlük tavanda 2 sayılır
 FREE_IMAGE_REF_MODEL = _env("FREE_IMAGE_REF_MODEL", "@cf/black-forest-labs/flux-2-klein-4b")
-FREE_IMAGES_PER_MONTH = _int("FREE_IMAGES_PER_MONTH", 6)
+FREE_IMAGES_PER_MONTH = _int("FREE_IMAGES_PER_MONTH", 3)
 FREE_IMAGES_PER_DAY_TOTAL = _int("FREE_IMAGES_PER_DAY_TOTAL", 1500)
 # Ücretsiz görseller de ücretli paketle aynı modelle (Gemini 3.1 Flash Image, ~$0,068) üretilir;
 # site geneli günde bu kadarı aşılırsa günün kalanında FLUX (Cloudflare) yedeğine geçilir.

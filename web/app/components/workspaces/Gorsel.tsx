@@ -112,7 +112,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
       <div className="notice">
         <span>
           Görsel aracı ücretli paketlerde (görsel başı {cost} kredi). Ücretsiz pakette{" "}
-          <Link href="/">sohbette</Link> &quot;görsel üret&quot; diyerek ayda 6 görsel üretebilirsin.
+          <Link href="/">sohbette</Link> &quot;görsel üret&quot; diyerek ayda 3 görsel üretebilirsin.
         </span>
         <button type="button" className="btn btn-light btn-sm" onClick={() => openCheckout("baslangic")}>
           Paket seç

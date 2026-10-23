@@ -48,7 +48,7 @@ CREDIT_COSTS = {
 }
 
 PLANS = {
-    # Ücretsiz paket: kredi yok; Haiku ile fikir sohbeti, ayda 6 ücretsiz AI görseli ve
+    # Ücretsiz paket: kredi yok; ücretli paketle aynı modelle sohbet (günde 10 mesaj), ayda 3 AI görseli ve
     # stok fotoğraf kütüphanesi kredisiz kullanılır (bkz. services/free_tier.py).
     "deneme": {
         "name": "Ücretsiz",

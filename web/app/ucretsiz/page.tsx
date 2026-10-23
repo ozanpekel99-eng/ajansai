@@ -56,7 +56,7 @@ export default function GuestPage() {
           blocker={
             status && status.chat.remaining === 0 ? (
               <div className="notice">
-                <span>Bugünkü {status.chat.limit} ücretsiz mesaj hakkın doldu. Üye olursan günde 20 mesaj yazabilirsin.</span>
+                <span>Bugünkü {status.chat.limit} ücretsiz mesaj hakkın doldu. Üye olursan günde 10 mesaj yazabilirsin.</span>
                 {!signedIn && join}
               </div>
             ) : undefined

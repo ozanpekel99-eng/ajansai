@@ -227,7 +227,7 @@ def test_stock_rejects_foreign_download_host(client, monkeypatch):
 def test_free_plan_listed_with_limits(client):
     data = client.get("/api/plans/").json()
     assert data["trial"]["name"] == "Ücretsiz" and data["trial"]["credits"] == 0
-    assert data["free"] == {"chat_per_day": 20, "chat_per_day_guest": 10, "images_per_month": 6}
+    assert data["free"] == {"chat_per_day": 10, "chat_per_day_guest": 5, "images_per_month": 3}
 
 
 # ---------------- Ücretli sohbette maliyet sınırları ----------------
