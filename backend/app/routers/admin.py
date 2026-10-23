@@ -169,3 +169,15 @@ def bench_chat(p: ChatBench, user: dict = Depends(_admin)):
     except LLMError as e:
         return {"model": p.model, "error": str(e)[:500], "seconds": round(time.time() - t, 1)}
     return {"model": p.model, "text": text, "seconds": round(time.time() - t, 1)}
+
+
+class AssetUpload(BaseModel):
+    content: str = Field(..., max_length=200_000)
+    content_type: str = Field("image/svg+xml", pattern=r"^image/(svg\+xml|png)$")
+
+
+@router.post("/asset")
+def upload_asset(p: AssetUpload, user: dict = Depends(_admin)):
+    """Site varlığı (ör. iyzico logo bandı) yükler; kalıcı Blob adresini döndürür."""
+    data = p.content.encode() if p.content_type == "image/svg+xml" else base64.b64decode(p.content)
+    return {"url": storage.save(data, p.content_type, "site")}
