@@ -4,10 +4,11 @@ import { useFreeStatus } from "../../lib/free";
 import { extractConcept } from "../../lib/markdown";
 import { useSession } from "../../lib/session";
 import ChatPanel, { Conversation } from "../ChatPanel";
+import UpgradeCard from "../UpgradeCard";
 import { LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
 
 export default function FikirWorkspace({ initial = null }: { initial?: Conversation | null } & Partial<WorkspaceProps>) {
-  const { usage, refresh } = useSession();
+  const { usage, refresh, openCheckout } = useSession();
   const { status, setStatus } = useFreeStatus();
   const open = initial;
 
@@ -33,6 +34,7 @@ export default function FikirWorkspace({ initial = null }: { initial?: Conversat
           ads: { href: "/paketler", locked: "Pro paketle açılır" },
         }}
         onSent={(data) => data?.free && setStatus(data.free)}
+        upgrade={(reason) => <UpgradeCard reason={reason} onPick={(id) => openCheckout(id)} />}
         blocker={
           left === 0 ? (
             <LockedNotice text={`Bugünkü ${status?.chat.limit} ücretsiz mesaj hakkın doldu. Yarın devam edebilir ya da bir paketle sınırsız yazabilirsin.`} />

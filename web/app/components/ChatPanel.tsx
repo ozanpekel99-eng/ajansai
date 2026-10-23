@@ -11,6 +11,7 @@ import { useRealtimeVoice } from "../lib/realtime";
 import { useVoice } from "../lib/voice";
 import { FileChips, PendingFile, UploadProgress, useUploader } from "./Attachments";
 import Icon from "./Icon";
+import type { LimitReason } from "./UpgradeCard";
 
 export type Msg = {
   role: "user" | "assistant";
@@ -52,10 +53,13 @@ type Props = {
   /** Gerçek zamanlı sesli sohbet (ücretli paketler) */
   realtime?: boolean;
   initial?: Conversation | null;
+  /** Ücretsiz hak dolunca sohbette gösterilecek paket kartı */
+  upgrade?: (reason: LimitReason) => ReactNode;
 };
 
-export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, videoHref, tools, realtime, initial }: Props) {
+export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, videoHref, tools, realtime, initial, upgrade }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [limitReason, setLimitReason] = useState<LimitReason | null>(null);
   const [mode, setMode] = useState<Mode>("chat");
   const imageMode = mode === "image";
   const menuRef = useRef<HTMLDivElement>(null);
@@ -125,7 +129,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
     setError("");
     setSending(true);
     try {
-      const data = await api<{ reply: string; images?: string[]; image_error?: string | null; sources?: { title: string; url: string }[]; files?: Msg["files"]; video?: VideoSuggestion | null }>(endpoint, {
+      const data = await api<{ reply: string; limit?: LimitReason | null; images?: string[]; image_error?: string | null; sources?: { title: string; url: string }[]; files?: Msg["files"]; video?: VideoSuggestion | null }>(endpoint, {
         method: "POST",
         body: JSON.stringify({
           mode,
@@ -147,6 +151,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
         video: data.video || null,
       };
       setMode("chat");
+      if (data.limit) setLimitReason(data.limit);
       const done = [...next, reply];
       setMessages(done);
       messagesRef.current = done;
@@ -161,6 +166,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
       }
     } catch (err) {
       setError((err as ApiError).message);
+      if ((err as ApiError).status === 429 && upgrade) setLimitReason("chat");
       // gönderilemeyen mesajı geri koy ki kullanıcı tekrar gönderebilsin
       setMessages(messages);
       setText(content);
@@ -390,6 +396,9 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
               </div>
             )}
           </div>
+        )}
+        {upgrade && (limitReason || (blocker ? "chat" : null)) && (
+          <div className="messages">{upgrade((limitReason || "chat") as LimitReason)}</div>
         )}
         <div ref={endRef} />
       </div>

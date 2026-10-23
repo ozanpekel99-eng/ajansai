@@ -4,8 +4,20 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import ChatPanel from "../components/ChatPanel";
+import UpgradeCard from "../components/UpgradeCard";
 import { getToken } from "../lib/api";
 import { useFreeStatus } from "../lib/free";
+import { PENDING_PLAN_KEY } from "../lib/plans";
+
+/** Giriş yapmış kullanıcı: panelde ödeme penceresi bu paketle açılır. */
+function openPlan(id: string) {
+  try {
+    localStorage.setItem(PENDING_PLAN_KEY, id);
+  } catch {
+    // depolama kapalı: panelde paket yeniden seçilir
+  }
+  window.location.href = "/paketler";
+}
 
 /** Üye olmadan dene: ChatGPT gibi tek sohbet; görsel de sohbetten istenir. */
 export default function GuestPage() {
@@ -53,6 +65,7 @@ export default function GuestPage() {
             ads: { href: "/kayit", locked: "Pro paketle açılır" },
           }}
           onSent={(data) => data?.free && setStatus(data.free)}
+          upgrade={(reason) => <UpgradeCard reason={reason} onPick={signedIn ? openPlan : undefined} />}
           blocker={
             status && status.chat.remaining === 0 ? (
               <div className="notice">

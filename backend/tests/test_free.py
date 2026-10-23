@@ -420,7 +420,11 @@ def test_free_chat_generates_image_when_asked(client, monkeypatch):
     assert data["reply"] == "Harika fikir! İşte görselin." and "[[" not in data["reply"]
     assert data["images"][0].startswith("data:image/jpeg;base64,")
     assert calls[0]["json"]["prompt"] == "a latte on a wooden table, morning light"  # çeviri yapılmadı
-    assert data["free"]["images"]["used"] == 1
+    assert data["free"]["images"]["used"] == 1 and data["limit"] is None
+    # Aylık görsel hakkı dolunca arayüz paketleri göstersin diye limit="image" döner
+    monkeypatch.setattr(config, "FREE_IMAGES_PER_MONTH", 1)
+    data = client.post("/api/free/chat", json=_msg("Bir tane daha üret"), headers=IP_A).json()
+    assert data["images"] == [] and data["limit"] == "image" and "hakkın doldu" in data["image_error"]
 
 
 def test_free_chat_image_attachment_uses_vision_and_reference_model(client, monkeypatch):

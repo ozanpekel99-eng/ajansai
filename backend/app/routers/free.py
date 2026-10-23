@@ -162,12 +162,14 @@ def chat(payload: FreeChatRequest, request: Request, user: dict | None = Depends
         logger.error("Ücretsiz sohbet yanıtı alınamadı: %s", e)
         raise HTTPException(status_code=503, detail="Yapay zeka şu an yanıt veremedi, hakkın düşülmedi. Birazdan tekrar dene.")
 
-    images, image_error = [], None
+    images, image_error, limit = [], None, None
     if image_prompt:
         ref_url, image_prompt = free_tier.extract_ref(image_prompt, labels)
         if ref_url:
             refs = [ref_url] + refs[:1]
-        url, image_error, _ = make_free_image(subject, user, image_prompt, refs, translate=False)
+        url, image_error, limited = make_free_image(subject, user, image_prompt, refs, translate=False)
+        if limited:
+            limit = "image"  # arayüz paketleri gösterir
         if url:
             images.append(url)
     out_files, file_error = [], None
@@ -191,6 +193,7 @@ def chat(payload: FreeChatRequest, request: Request, user: dict | None = Depends
         "image_error": image_error or file_error,
         "sources": sources,
         "files": out_files,
+        "limit": limit,
         "free": free_tier.status(subject, user is not None),
     }
 
