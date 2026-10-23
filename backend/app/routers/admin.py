@@ -296,3 +296,63 @@ def usage_stats(days: int = 30) -> dict:
                       "plan": p.plan_id, "amount": float(p.amount_try), "currency": p.currency, "status": p.status,
                       "sandbox": bool(p.sandbox), "at": p.created_at.isoformat()} for p in pays],
     }
+
+
+# --- @ajansai.tr yayın kuyruğu (plan.json → onay). Paylaşım ayrı adımda yapılır. ---
+
+class SocialImport(BaseModel):
+    week: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    # plan.json'daki dosya adlarının önüne eklenecek herkese açık adres (ör. Blob klasörü)
+    media_base: str | None = Field(None, pattern=r"^https://")
+    posts: list[dict] = Field(..., min_length=1, max_length=40)
+
+
+class SocialEdit(BaseModel):
+    caption: str | None = Field(None, max_length=5000)
+    scheduled_local: str | None = None  # İstanbul saati, "YYYY-AA-GG SS:DD"
+
+
+def _social(fn, *args, **kwargs):
+    from app.services import social_queue
+
+    try:
+        return fn(*args, **kwargs)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Gönderi bulunamadı.")
+    except social_queue.QueueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/social/import")
+def social_import(p: SocialImport, user: dict = Depends(_admin)):
+    from app.services import social_queue
+
+    return _social(social_queue.import_week, p.week, p.posts, p.media_base)
+
+
+@router.get("/social/queue")
+def social_list(week: str | None = None, user: dict = Depends(_admin)):
+    from app.services import social_queue
+
+    return {"posts": social_queue.list_posts(week)}
+
+
+@router.post("/social/{post_id}/approve")
+def social_approve(post_id: str, user: dict = Depends(_admin)):
+    from app.services import social_queue
+
+    return _social(social_queue.approve, post_id, user["email"])
+
+
+@router.post("/social/{post_id}/skip")
+def social_skip(post_id: str, user: dict = Depends(_admin)):
+    from app.services import social_queue
+
+    return _social(social_queue.skip, post_id)
+
+
+@router.put("/social/{post_id}")
+def social_edit(post_id: str, p: SocialEdit, user: dict = Depends(_admin)):
+    from app.services import social_queue
+
+    return _social(social_queue.edit, post_id, p.caption, p.scheduled_local)

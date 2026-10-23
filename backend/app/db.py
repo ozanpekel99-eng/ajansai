@@ -218,6 +218,28 @@ support_tickets = Table(
     Column("created_at", DateTime, nullable=False, index=True),
 )
 
+# ajansAI'ın kendi Instagram hesabı (@ajansai.tr) için yayın kuyruğu: marketing/<hafta>/plan.json'dan
+# içe aktarılır, yönetici her gönderiyi onaylar / düzenler / atlar. Paylaşım ayrı adımda (cron) yapılır.
+social_posts = Table(
+    "social_posts",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("week", String(10), nullable=False, index=True),  # haftanın pazartesisi, YYYY-AA-GG
+    Column("idx", Integer, nullable=False),  # plan.json içindeki sıra (hafta + sıra tekildir)
+    Column("kind", String(10), nullable=False),  # image | carousel | reels
+    Column("title", String(300), nullable=False, default=""),
+    Column("target", String(120), nullable=False, default=""),
+    Column("caption", Text, nullable=False),
+    Column("media", Text, nullable=False),  # JSON: herkese açık https adresleri
+    Column("scheduled_at", DateTime, nullable=False, index=True),  # naive UTC
+    Column("status", String(12), nullable=False),  # pending | approved | skipped | published | failed
+    Column("ig_media_id", String(64), nullable=True),
+    Column("error", Text, nullable=True),
+    Column("approved_by", String(320), nullable=True),
+    Column("created_at", DateTime, nullable=False),
+    Column("updated_at", DateTime, nullable=False),
+)
+
 # Uygulamanın kendi ürettiği ayarlar (ör. JWT_SECRET tanımlı değilse oluşturulan anahtar).
 app_settings = Table(
     "app_settings",
