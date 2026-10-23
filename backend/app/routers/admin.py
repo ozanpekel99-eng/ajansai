@@ -172,8 +172,8 @@ def bench_chat(p: ChatBench, user: dict = Depends(_admin)):
 
 
 class AssetUpload(BaseModel):
-    content: str = Field(..., max_length=200_000)
-    content_type: str = Field("image/svg+xml", pattern=r"^image/(svg\+xml|png)$")
+    content: str = Field(..., max_length=8_000_000)
+    content_type: str = Field("image/svg+xml", pattern=r"^image/(svg\+xml|png|jpeg)$")
 
 
 @router.post("/asset")
