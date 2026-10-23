@@ -369,9 +369,11 @@ def test_start_video_falls_back_to_kling(monkeypatch):
     job = gateway_media.start_video("tatlı", 8, "1080p", "https://x/a.png", None, False, "9:16")
     assert job == {"model": config.VIDEO_FALLBACK_I2V, "operation": {"gatewayJobId": "j"}, "fallback": True}
     assert calls[1][1]["duration"] == 10 and calls[1][1]["image"]["url"] == "https://x/a.png"
+    assert calls[1][1]["providerOptions"] == {"klingai": {"mode": "pro"}}
     job = gateway_media.start_video("tatlı", 4, "720p", None, None, True, "9:16")
     assert job["model"] == config.VIDEO_FALLBACK_AUDIO_T2V and calls[-1][1]["duration"] == 5
     assert calls[-1][1]["resolution"] == "1280x720"
+    assert calls[-1][1]["providerOptions"]["klingai"] == {"mode": "pro", "sound": "on"}
     monkeypatch.setattr(config, "VIDEO_FALLBACK", False)
     try:
         gateway_media.start_video("tatlı", 6, "1080p")

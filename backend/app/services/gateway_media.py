@@ -249,6 +249,8 @@ def start_fallback_video(
     model = fallback_video_model(bool(image_url), audio)
     size = "1280x720" if resolution == "720p" else "1920x1080"
     body = _video_body(prompt, 5 if duration <= 6 else 10, size, image_url, None, audio, aspect_ratio)
+    # "pro" modu: aynı fiyata 1080p (varsayılan mod 720p üretiyor). Sesli istekte Kling 2.6 sesi açar.
+    body["providerOptions"] = {"klingai": {"mode": "pro", **({"sound": "on"} if audio else {})}}
     job = _start(model, body)
     job["fallback"] = True
     return job
