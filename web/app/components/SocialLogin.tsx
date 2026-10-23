@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { ApiError, api, setToken } from "../lib/api";
+import { track } from "../lib/pixel";
 
 type Providers = { google_client_id: string | null; apple_client_id: string | null };
 
@@ -42,8 +43,9 @@ export default function SocialLogin({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError("");
     try {
-      const data = await api<{ token: string }>(path, { method: "POST", body: JSON.stringify(body) });
+      const data = await api<{ token: string; created?: boolean }>(path, { method: "POST", body: JSON.stringify(body) });
       setToken(data.token);
+      if (data.created) track("CompleteRegistration", { content_name: path.includes("apple") ? "apple" : "google" });
       onDone();
     } catch (err) {
       setError((err as ApiError).message);

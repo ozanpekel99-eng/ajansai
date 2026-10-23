@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import SocialLogin from "../components/SocialLogin";
 import { api, setToken } from "../lib/api";
+import { track } from "../lib/pixel";
 
 export default function Login() {
   const mode = "login" as "login" | "register";
@@ -28,6 +29,7 @@ export default function Login() {
         body: JSON.stringify(body),
       });
       setToken(data.token);
+      if (mode === "register") track("CompleteRegistration", { content_name: "email" });
       window.location.href = "/";
     } catch (err: any) {
       setError(err.message);

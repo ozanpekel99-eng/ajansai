@@ -38,7 +38,17 @@ export default function Privacy() {
         <li>Ödeme: iyzico</li>
         <li>Giriş: Google (Google ile giriş yaparsan)</li>
         <li>Reklam: Meta Platforms (reklam hesabını bağlarsan)</li>
+        <li>Ziyaret ölçümü: Vercel Web Analytics (çerezsiz, kişisel veri saklamaz)</li>
+        <li>Reklam ölçümü: Meta Pikseli (sayfa görüntüleme, kayıt, ödeme başlatma ve satın alma olayları)</li>
       </ul>
+
+      <h2>Çerezler ve ölçüm</h2>
+      <p>
+        Sitemizde, ajansAI reklamlarının etkisini ölçmek için Meta Pikseli kullanılır. Piksel; ziyaret ettiğin sayfaları, kayıt
+        olduğunu, ödeme başlattığını veya satın aldığını (tutar ve paket bilgisiyle) Meta'ya bildirir ve bunun için çerez kullanabilir.
+        Ad, e-posta, kart bilgisi gibi kişisel verilerin piksel ile gönderilmez. Tarayıcı ayarlarından çerezleri silebilir veya
+        engelleyebilirsin.
+      </p>
 
       <h2>Google kullanıcı verileri</h2>
       <p>

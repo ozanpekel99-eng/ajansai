@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { api } from "../lib/api";
+import { track } from "../lib/pixel";
 import { Cycle, PLAN_ORDER, cyclePrice, money, perMonth, usePlans } from "../lib/plans";
 import Icon from "./Icon";
 
@@ -68,6 +69,7 @@ export default function CheckoutModal({
 
   const pay = async (e: FormEvent) => {
     e.preventDefault();
+    track("InitiateCheckout", { value: total, currency, content_ids: [kind === "credits" ? packId : planId], content_type: "product" });
     setPaying(true);
     setError("");
     try {

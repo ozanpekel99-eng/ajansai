@@ -1,5 +1,7 @@
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
+
+import MetaPixel from "./components/MetaPixel";
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
@@ -18,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         <Analytics />
+        <MetaPixel />
       </body>
     </html>
   );

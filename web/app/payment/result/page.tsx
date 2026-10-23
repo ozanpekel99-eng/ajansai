@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 import { api, getToken } from "../../lib/api";
+import { track } from "../../lib/pixel";
 
 type Status = "success" | "failure" | "pending";
 
@@ -22,8 +23,16 @@ function Result() {
     // Sonucu her zaman backend'den teyit ediyoruz (adres çubuğundaki status'a güvenmiyoruz).
     const check = async () => {
       try {
-        const data = await api<{ status: Status; plan_name: string }>(`/api/payments/${paymentId}`);
+        const data = await api<{ status: Status; plan_name: string; plan: string; amount?: number; currency?: string }>(`/api/payments/${paymentId}`);
         setStatus(data.status);
+        if (data.status === "success" && data.amount && !sessionStorage.getItem(`px-${paymentId}`)) {
+          try {
+            sessionStorage.setItem(`px-${paymentId}`, "1");
+          } catch {
+            // yok say
+          }
+          track("Purchase", { value: data.amount, currency: data.currency || "TRY", content_ids: [data.plan], content_type: "product" }, paymentId);
+        }
         setPlanName(data.plan_name);
         if (data.status === "pending" && tries++ < 10) timer = setTimeout(check, 3000);
       } catch {

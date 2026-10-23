@@ -95,6 +95,7 @@ def providers():
 def _social_login(email: str, name: str) -> dict:
     with get_engine().connect() as conn:
         row = conn.execute(select(users).where(func.lower(users.c.email) == email)).first()
+    created = row is None
     if row is None:
         user = _new_user(email, SOCIAL_PASSWORD, name)
         try:
@@ -105,7 +106,7 @@ def _social_login(email: str, name: str) -> dict:
                 user = dict(conn.execute(select(users).where(func.lower(users.c.email) == email)).first()._mapping)
     else:
         user = dict(row._mapping)
-    return {"token": create_token(user["id"]), "user": _public_user(user)}
+    return {"token": create_token(user["id"]), "user": _public_user(user), "created": created}
 
 
 class GoogleLogin(BaseModel):

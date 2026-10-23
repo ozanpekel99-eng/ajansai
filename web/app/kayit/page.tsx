@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 
 import SocialLogin from "../components/SocialLogin";
 import { api, setToken } from "../lib/api";
+import { track } from "../lib/pixel";
 import { Cycle, PENDING_PLAN_KEY, PLAN_ORDER, money, num, perMonth, usePricing } from "../lib/plans";
 
 const PITCH: Record<string, string> = {
@@ -137,6 +138,7 @@ function AccountStep({ plan, planName, onBack, onDone }: { plan: string; planNam
     try {
       const data = await api<{ token: string }>("/api/auth/register", { method: "POST", body: JSON.stringify(form) });
       setToken(data.token);
+      track("CompleteRegistration", { content_name: "email" });
       onDone();
     } catch (err: any) {
       setError(err.message);

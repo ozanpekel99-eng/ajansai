@@ -257,4 +257,6 @@ def payment_status(payment_id: str, user: dict = Depends(get_current_user)):
         except iyzico_service.IyzicoError:
             pass
 
-    return {"payment_id": payment_id, "status": status, "plan": payment.plan_id, "plan_name": item_name(payment.plan_id, payment.billing or "monthly")}
+    return {"payment_id": payment_id, "status": status, "plan": payment.plan_id,
+            "plan_name": item_name(payment.plan_id, payment.billing or "monthly"),
+            "amount": float(payment.amount_try), "currency": payment.currency or "TRY"}
