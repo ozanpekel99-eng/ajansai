@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/health/qa-run?video=auto", "schedule": "0 4 * * *" }
+  ]
+}
