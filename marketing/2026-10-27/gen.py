@@ -1,70 +1,84 @@
 import pathlib
 from playwright.sync_api import sync_playwright
-HEAD='<!doctype html><html lang="tr"><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>{css}</style></head><body class="{cls}"><div class="glow"></div><div class="grid"></div>{body}</body></html>'
+HEAD='<!doctype html><html lang="tr"><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>.chk{{display:flex;gap:22px;align-items:center;font-size:40px;font-weight:500}}.chk i{{font-style:normal;width:54px;height:54px;border-radius:50%;background:var(--indigo);display:grid;place-items:center;font-size:30px;flex:none}}.x i{{background:#2A2A3A;color:#8A8AA0}}.vs{{display:grid;grid-template-columns:1fr 1fr;gap:18px}}.col{{background:#15152A;border:1px solid #2E2E4C;border-radius:26px;padding:30px;display:flex;flex-direction:column;gap:14px}}.col.on{{background:var(--indigo);border-color:var(--indigo)}}.col h3{{font-family:SG;font-size:34px}}.col p{{font-size:30px;line-height:1.3}}.lab{{font-size:24px;font-weight:700;color:var(--mut);letter-spacing:.04em}}.on .lab{{color:#DCDCFF}}{css}</style></head><body class="{cls}"><div class="glow"></div><div class="grid"></div>{body}</body></html>'
 FOOT='<div class="foot"><img class="logo" src="logo-on-dark.png" style="height:36px"><span><b>ajansai.tr</b></span></div>'
+def ui(prompt, done):
+    return f'<div class="bubble" style="align-self:flex-end;max-width:880px">{prompt}</div><div style="display:flex;gap:16px;align-items:center;font-size:32px;color:var(--soft);font-weight:700"><span style="width:46px;height:46px;border-radius:50%;background:var(--indigo);color:#fff;display:grid;place-items:center">✓</span>{done}</div>'
 S={}
-# P1 tanıtım
-S['p1_tanitim']=('',  '''<div class="pad" style="justify-content:center;gap:60px">
-<img class="logo" src="logo-on-dark.png" style="height:58px;align-self:flex-start">
-<h1 style="font-size:132px"><span class="ind">5 dakikada</span><br>reklamın<br>yayında.</h1>
-<div style="display:flex;flex-direction:column;gap:18px">
-<div class="bubble" style="border-radius:24px;display:flex;gap:24px;align-items:center"><span class="tag">1</span>Fikrini üret</div>
-<div class="bubble" style="border-radius:24px;display:flex;gap:24px;align-items:center"><span class="tag">2</span>Görselini ya da videonu üret</div>
-<div class="bubble" style="border-radius:24px;display:flex;gap:24px;align-items:center;background:var(--indigo);border-color:var(--indigo)"><span class="tag" style="background:#fff;color:var(--indigo)">3</span>Tek tıkla reklamını ver<span style="margin-left:auto;font-size:22px;font-weight:700;background:rgba(255,255,255,.2);padding:8px 16px;border-radius:999px">Çok yakında</span></div>
-</div></div><div class="foot" style="justify-content:flex-end"><span><b>ajansai.tr</b> · ücretsiz dene</span></div>''')
-# P2 carousel tek cümle
-S['p2_1']=('', '''<div class="pad" style="gap:48px;justify-content:center">
-<span class="tag" style="align-self:flex-start">ajansAI'a yazdığımız tek cümle</span>
-<div class="bubble" style="font-size:52px;align-self:flex-end;max-width:900px">“Mobilya mağazası için kampanya görseli: Tüm ürünlerde %40 indirim, ücretsiz teslimat ve montaj”</div>
-<h1 style="font-size:96px">Ajans yok.<br>Tasarımcı yok.<br><span class="ind">Sonuç →</span></h1></div>'''+FOOT)
-S['p2_2']=('.img{position:absolute;inset:0;background:url(src/qa_mobilya.png) center/cover}', '<div class="img"></div>')
-S['p2_3']=('', '''<div class="pad" style="justify-content:center;gap:46px">
-<h1 style="font-size:104px">Sıra senin<br><span class="ind">işletmende.</span></h1>
-<p style="font-size:40px;line-height:1.4" class="mut">Ürün fotoğrafını yükle, kampanyanı Türkçe yaz. Fiyatlar, indirim ve yazılar birebir doğru çıkar.</p>
-<span class="cta" style="align-self:flex-start">Ücretsiz dene → ajansai.tr</span></div>'''+FOOT)
-# P4 sektör carousel
-S['p4_1']=('', '''<div class="pad" style="justify-content:center;gap:50px">
-<span class="tag" style="align-self:flex-start">Kaydır →</span>
-<h1 style="font-size:118px">Her sektöre<br>tek cümleyle<br><span class="ind">kampanya.</span></h1>
-<p style="font-size:40px" class="mut">Mobilya · Beyaz eşya · Kafe · Güzellik merkezi<br>Hepsi ajansAI'da, Türkçe tek cümleyle üretildi.</p></div>'''+FOOT)
-for i,(n,f,prompt) in enumerate([('mobilya','qa_mobilya.png','Tüm ürünlerde %40 indirim, ücretsiz teslimat ve montaj'),('beyaz','qa_beyaz.png','Çamaşır + kurutma makinesi ikili alımda 10.000 TL indirim, peşin fiyatına 9 taksit'),('kafe','qa_kafe.png','Yeni sezon kabak baharatlı latte, 120 TL'),('guzellik','qa_guzellik.png','Lazer epilasyonda 6 seans alana 2 seans hediye')],start=2):
-    S[f'p4_{i}']=('.wrap{position:absolute;left:0;right:0;top:0;height:1110px;background:#111 url(src/'+f+') center/contain no-repeat}.cap{position:absolute;left:0;right:0;bottom:0;height:240px;padding:34px 60px;display:flex;flex-direction:column;gap:12px;background:var(--ink)}',
-     f'<div class="wrap"></div><div class="cap"><span class="mut" style="font-size:24px;font-weight:700">YAZILAN</span><div style="font-size:36px;font-weight:500;line-height:1.3">“{prompt}”</div></div>')
-# P5 fiyat
-S['p5_fiyat']=('.row{display:flex;justify-content:space-between;align-items:center;background:#15152A;border:1px solid #2E2E4C;border-radius:26px;padding:34px 40px}.row.on{background:var(--indigo);border-color:var(--indigo)}.n{font-family:SG;font-weight:700;font-size:48px}.p{font-family:SG;font-weight:700;font-size:56px;text-align:right}.d{font-size:27px;color:var(--mut);margin-top:6px}.on .d{color:#E3E3FF}.k{font-size:24px;color:var(--mut);text-align:right}.on .k{color:#E3E3FF}',
-'''<div class="pad" style="gap:34px">
-<img class="logo" src="logo-on-dark.png" style="align-self:flex-start">
+# 1 Pzt: ajans masrafı (hedef 1)
+S['g1']=('', '''<div class="pad" style="justify-content:center;gap:56px"><img class="logo" src="logo-on-dark.png" style="height:56px;align-self:flex-start">
+<h1 style="font-size:116px">Ajansa her ay<br>para ödemeyi<br><span class="ind">bırak.</span></h1>
+<p style="font-size:44px;line-height:1.35">İşletmenin sosyal medyasını<br><b>kendin yönet.</b> Fikir, görsel, video<br>ve reklam tek yerde.</p>
+<span class="cta" style="align-self:flex-start">Ücretsiz başla → ajansai.tr</span></div>''')
+# 2 Sal: Ajans vs ajansAI carousel
+S['g2_1']=('', '''<div class="pad" style="justify-content:center;gap:50px"><span class="tag" style="align-self:flex-start">Kaydır →</span>
+<h1 style="font-size:124px">Ajans mı,<br><span class="ind">ajansAI mı?</span></h1><p class="mut" style="font-size:42px">4 soruda karşılaştırdık.</p></div>'''+FOOT)
+rows=[('Ne kadar beklersin?','Brief, toplantı, onay… günler sürebilir.','Yaz, dakikalar içinde hazır.'),
+      ('Ne kadar ödersin?','Her ay sabit ajans ücreti.','Aylık $10\'dan başlayan paketler.'),
+      ('Değişiklik istersen?','Her revize için yeniden yazışma.','Tek cümleyle düzenle.'),
+      ('Reklamı kim verir?','Ajans yönetir, sen raporu beklersin.','Tek tıkla kendin yayına alırsın.')]
+for i,(q,a,b) in enumerate(rows,start=2):
+    S[f'g2_{i}']=('', f'''<div class="pad" style="justify-content:center;gap:44px"><span class="mut" style="font-size:30px;font-weight:700">{i-1}/4</span><h1 style="font-size:88px">{q}</h1>
+<div class="vs"><div class="col"><span class="lab">AJANS</span><p>{a}</p></div><div class="col on"><span class="lab">AJANSAI</span><p>{b}</p></div></div></div>'''+FOOT)
+S['g2_6']=('', '''<div class="pad" style="justify-content:center;gap:46px"><h1 style="font-size:104px">Kontrol sende,<br><span class="ind">masraf yok.</span></h1>
+<p style="font-size:40px;line-height:1.4" class="mut">Ücretsiz paketle dene. Beğenirsen aylık $10'dan başlayan paketlerle devam et.</p>
+<span class="cta" style="align-self:flex-start">ajansai.tr</span></div>'''+FOOT)
+# 4 Per: freelancer carousel (hedef 2)
+S['g4_1']=('', '''<div class="pad" style="justify-content:center;gap:50px"><span class="tag" style="align-self:flex-start">Freelance sosyal medya yöneticilerine</span>
+<h1 style="font-size:112px">Daha çok müşteri,<br><span class="ind">daha az mesai.</span></h1><p class="mut" style="font-size:42px">Haftalık içerik işini dakikalara indir. →</p></div>'''+FOOT)
+fl=[('Fikir','Her müşterin için haftalık gönderi ve Reels fikirleri, metinleri ve hashtag\'leriyle.','“Kafe müşterim için bu haftanın 5 gönderi fikri”'),
+    ('Görsel','Ürün fotoğrafını yükle, kampanyayı yaz. Yazılar ve fiyatlar doğru, tasarım hazır.','“Hafta sonu tüm menüde %20 indirim görseli”'),
+    ('Video','Görselden ya da tek cümleden 1080p Reels videosu.','“Bu ürün fotoğrafından Reels videosu yap”'),
+    ('Reklam','Bütçeyi ve bölgeyi seç, Instagram reklamını tek tıkla yayına al.','“Günlük 300 TL, İstanbul, 25-45 yaş”')]
+for i,(t,d,p) in enumerate(fl,start=2):
+    S[f'g4_{i}']=('', f'''<div class="pad" style="justify-content:center;gap:40px"><span class="tag" style="align-self:flex-start">{t}</span><h1 style="font-size:84px">{d}</h1>{ui(p, t+" hazır")}</div>'''+FOOT)
+# 5 Cum fiyat
+S['g5']=('.row{display:flex;justify-content:space-between;align-items:center;background:#15152A;border:1px solid #2E2E4C;border-radius:26px;padding:34px 40px}.row.on{background:var(--indigo);border-color:var(--indigo)}.n{font-family:SG;font-weight:700;font-size:48px}.p{font-family:SG;font-weight:700;font-size:56px;text-align:right}.d{font-size:27px;color:var(--mut);margin-top:6px}.on .d{color:#E3E3FF}.k{font-size:24px;color:var(--mut);text-align:right}.on .k{color:#E3E3FF}',
+'''<div class="pad" style="gap:34px"><img class="logo" src="logo-on-dark.png" style="align-self:flex-start">
 <h1 style="font-size:84px;margin-top:10px">Ajans faturası yerine<br><span class="ind">aylık $10'dan</span> başlayan paketler</h1>
 <div class="row"><div><div class="n">Başlangıç</div><div class="d">200 kredi · ~40 görsel ya da 5 video</div></div><div><div class="p">$10</div><div class="k">+ KDV / ay</div></div></div>
 <div class="row on"><div><div class="n">Pro</div><div class="d">500 kredi · ~100 görsel ya da 13 video</div></div><div><div class="p">$20</div><div class="k">+ KDV / ay</div></div></div>
 <div class="row"><div><div class="n">Advanced</div><div class="d">1.000 kredi · ~200 görsel ya da 27 video</div></div><div><div class="p">$35</div><div class="k">+ KDV / ay</div></div></div>
-<p class="mut" style="font-size:28px">Video: 1080p, 6 saniye. Ödeme TL olarak iyzico ile. Ücretsiz paketle dene, beğenirsen geç.</p>
-</div>'''+FOOT)
-# P7 nasıl çalışır
-S['p7_1']=('', '''<div class="pad" style="justify-content:center;gap:50px"><span class="tag" style="align-self:flex-start">Nasıl çalışır?</span>
+<p class="mut" style="font-size:28px">Video: 1080p, 6 saniye. Ödeme TL olarak iyzico ile. Ücretsiz paketle dene, beğenirsen geç.</p></div>'''+FOOT)
+# 7 Paz nasıl çalışır
+S['g7_1']=('', '''<div class="pad" style="justify-content:center;gap:50px"><span class="tag" style="align-self:flex-start">Nasıl çalışır?</span>
 <h1 style="font-size:120px">3 adım.<br><span class="ind">5 dakika.</span></h1><p class="mut" style="font-size:40px">Teknik bilgi gerekmez. Türkçe yazman yeterli.</p></div>'''+FOOT)
-steps=[('1','Fikrini üret','Sohbete işletmeni anlat: “Bu hafta ne paylaşayım?” ajansAI gönderi fikirlerini ve metinlerini hazırlasın.',''),
-       ('2','Görselini ya da videonu üret','Ürün fotoğrafını yükle, kampanyanı yaz. Ürünün bozulmadan, fiyatların doğru yazıldığı görsel ve Reels videosu hazır.',''),
-       ('3','Tek tıkla reklamını ver','Bütçeni ve bölgeni seç, reklamın Instagram\'da yayına girsin.','Çok yakında')]
-for i,(n,t,d,soon) in enumerate(steps,start=2):
-    S[f'p7_{i}']=('', f'''<div class="pad" style="justify-content:center;gap:44px"><div style="font-family:SG;font-weight:700;font-size:220px;color:var(--indigo);line-height:.9">{n}</div>
-<h1 style="font-size:92px">{t}</h1><p style="font-size:40px;line-height:1.45" class="mut">{d}</p>{f'<span class="tag" style="align-self:flex-start">{soon}</span>' if soon else ''}</div>'''+FOOT)
-S['p7_5']=S['p2_3']
-# Reels intro/outro cards (1080x1920)
-def card(top, bubble, bottom):
-    return ('', f'''<div class="pad" style="justify-content:center;gap:70px;padding:200px 84px"><span class="tag" style="align-self:flex-start;font-size:30px">{top}</span>
-<div class="bubble" style="font-size:58px;align-self:flex-end">“{bubble}”</div><h1 style="font-size:110px">{bottom}</h1></div>''')
-S['r1_intro']=card("ajansAI'a yazdık","Bu kampanya görselinden Instagram reklam videosu yap","Ve video<br><span class='ind'>hazır ↓</span>")
-S['r2_intro']=card("Tatlının fotoğrafını yükledik","Bir kadın bu tatlıdan bir çatal alıp keyifle yesin","Çekim yok.<br><span class='ind'>Sonuç ↓</span>")
-S['r_outro']=('', '''<div class="pad" style="justify-content:center;gap:60px;padding:200px 84px"><img class="logo" src="logo-on-dark.png" style="height:70px;align-self:flex-start">
-<h1 style="font-size:130px"><span class="ind">5 dakikada</span><br>reklamın<br>yayında.</h1><span class="cta" style="align-self:flex-start;font-size:54px">ajansai.tr · ücretsiz dene</span></div>''')
+st=[('1','Fikrini üret','Sohbete işletmeni anlat. Gönderi fikirleri, metinler ve hashtag\'ler hazır.','“Butiğim için bu haftanın gönderi fikirleri”','Fikirler hazır'),
+    ('2','Görselini ya da videonu üret','Ürün fotoğrafını yükle, kampanyanı yaz. Görsel ve Reels hazır.','“Yeni sezon montlarda %30 indirim görseli”','Görsel hazır'),
+    ('3','Tek tıkla reklamını ver','Bütçeni ve bölgeni seç, reklamın Instagram\'da yayında.','“Günlük 250 TL, Ankara”','Reklam yayında')]
+for i,(n,t,d,p,dn) in enumerate(st,start=2):
+    S[f'g7_{i}']=('', f'''<div class="pad" style="justify-content:center;gap:36px"><div style="font-family:SG;font-weight:700;font-size:180px;color:var(--indigo);line-height:.9">{n}</div>
+<h1 style="font-size:84px">{t}</h1><p style="font-size:38px;line-height:1.4" class="mut">{d}</p>{ui(p,dn)}</div>'''+FOOT)
+S['g7_5']=('', '''<div class="pad" style="justify-content:center;gap:46px"><h1 style="font-size:112px"><span class="ind">5 dakikada</span><br>reklamın<br>yayında.</h1>
+<span class="cta" style="align-self:flex-start">Ücretsiz dene → ajansai.tr</span></div>'''+FOOT)
+# Reels frames (1080x1920)
+def rf(inner): return ('', f'<div class="pad" style="justify-content:center;gap:64px;padding:220px 84px">{inner}</div>')
+R1=[ # hedef 1: işletme sahibi
+ rf('<span class="tag" style="align-self:flex-start;font-size:30px">İşletme sahibiysen</span><h1 style="font-size:120px">Sosyal medya<br>için ajans mı<br><span class="ind">arıyorsun?</span></h1>'),
+ rf('<h1 style="font-size:110px">Önce şunu<br>bir dene. ↓</h1>'),
+ rf('<span class="tag" style="align-self:flex-start;font-size:30px">1 · Fikir</span>'+ui('“Mobilya mağazam için bu haftanın gönderi fikirleri”','Fikirler hazır')),
+ rf('<span class="tag" style="align-self:flex-start;font-size:30px">2 · Görsel & video</span>'+ui('“Tüm ürünlerde %40 indirim görseli ve Reels videosu”','Görsel ve video hazır')),
+ rf('<span class="tag" style="align-self:flex-start;font-size:30px">3 · Reklam</span>'+ui('“Günlük 300 TL, İstanbul, Instagram”','Reklam yayında')),
+ rf('<h1 style="font-size:120px">Ajans yok.<br>Bekleme yok.<br><span class="ind">5 dakika.</span></h1>'),
+ rf('<img class="logo" src="logo-on-dark.png" style="height:70px;align-self:flex-start"><h1 style="font-size:110px">Sosyal medyanı<br><span class="ind">kendin yönet.</span></h1><span class="cta" style="align-self:flex-start;font-size:52px">ajansai.tr · ücretsiz dene</span>'),
+]
+R2=[ # hedef 3: bireysel
+ rf('<span class="tag" style="align-self:flex-start;font-size:30px">Tasarım bilmiyorum diyenlere</span><h1 style="font-size:120px">Paylaşacak<br>şey bulamıyor<br><span class="ind">musun?</span></h1>'),
+ rf('<h1 style="font-size:104px">El yapımı ürünlerin,<br>küçük işin,<br>kendi hesabın…</h1>'),
+ rf('<span class="tag" style="align-self:flex-start;font-size:30px">Türkçe yaz</span>'+ui('“El yapımı mumlarım için yılbaşı gönderisi hazırla”','Görsel ve metin hazır')),
+ rf('<span class="tag" style="align-self:flex-start;font-size:30px">İstersen videoya çevir</span>'+ui('“Bunu Reels videosu yap”','Reels hazır')),
+ rf('<h1 style="font-size:120px">Tasarım<br>programı yok.<br><span class="ind">Sadece yaz.</span></h1>'),
+ rf('<img class="logo" src="logo-on-dark.png" style="height:70px;align-self:flex-start"><h1 style="font-size:110px">Ücretsiz<br><span class="ind">başla.</span></h1><span class="cta" style="align-self:flex-start;font-size:52px">ajansai.tr</span>'),
+]
+for k,frames in (('r1',R1),('r2',R2)):
+    for i,f in enumerate(frames): S[f'{k}_{i}']=f
 with sync_playwright() as p:
     b=p.chromium.launch()
     for name,(css,body) in S.items():
         story=name.startswith('r')
         pg=b.new_page(viewport={'width':1080,'height':1920 if story else 1350})
         f=pathlib.Path(f'_{name}.html'); f.write_text(HEAD.format(css=css,cls='story' if story else '',body=body))
-        pg.goto('file://'+str(f.resolve())); pg.wait_for_timeout(500)
-        pg.screenshot(path=f'out/{name}.png'); pg.close()
+        pg.goto('file://'+str(f.resolve())); pg.wait_for_timeout(400)
+        pg.screenshot(path=f'out2/{name}.png'); pg.close()
     b.close()
 print(len(S))
