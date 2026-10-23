@@ -5,7 +5,7 @@ kredi düşer. Kredi maliyetleri sağlayıcı maliyetine göre belirlendi
 (Vercel AI Gateway fiyatları, Ekim 2026); 1 kredi ≈ en fazla $0.011 maliyet:
 
 - Fikir (Claude Haiku 5.5): 2 fikir ≈ $0.001 → her 2 fikir 1 kredi
-- Görsel (Seedream 5.0 Pro): $0.035 → 4 kredi
+- Görsel (GPT Image 2 + istem yazımı + kalite kontrolü): ~$0.11 → 5 kredi
 - Sohbet mesajı (Claude Sonnet 5.5, $2/$10 per 1M token; video ekinde Gemini 3.6 Flash): tipik ≈ $0.01-0.02
   → 1 kredi, her ek +1. Kredinin en düşük satış değeri $0.03 (Advanced), marj korunur.
   (ücretsiz pakette Claude Haiku 5.5, günlük bütçe dolunca Groq/Cerebras ücretsiz katmanları)
@@ -29,7 +29,7 @@ CREDIT_COSTS = {
     "chat_attachment": 1,  # mesaja eklenen her dosya
     "chat_pdf_pages": 10,  # PDF ekinde her 10 sayfa 1 kredi (ilk 10 sayfa eke dahil)
     "describe": 1,  # örnek görsel/videodan konsept çıkarma
-    "image": 4,
+    "image": 5,
     "file": 3,  # sohbetten sunum / belge / tablo dosyası (Claude ile tasarımlı içerik)
     "ads_draft": 0,
     # çözünürlük → süre (sn) → kredi. Veo 3.1 maliyeti: 720p (Lite) $0,03/sn, 1080p (Fast) $0,10/sn,

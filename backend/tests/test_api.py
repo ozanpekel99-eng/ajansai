@@ -237,8 +237,8 @@ def test_paid_plan_makes_images_and_pays_four_credits(client, monkeypatch):
     r = client.post("/api/content/image", json={"concept": "kahve", "aspect_ratio": "ASPECT_9_16"}, headers=auth(token))
     assert r.status_code == 200, r.text
     assert r.json()["image_url"].startswith("data:image/png;base64,")
-    assert r.json()["credits_spent"] == 4 and calls["aspect"] == "9:16"
-    assert _credits(client, token)["used"] == 4
+    assert r.json()["credits_spent"] == 5 and calls["aspect"] == "9:16"
+    assert _credits(client, token)["used"] == 5
 
 
 def test_image_saved_to_blob_when_configured(client, monkeypatch):
@@ -464,11 +464,11 @@ def test_describe_sample_for_video(client, monkeypatch):
 
 def test_plans_endpoint_shows_credit_examples(client):
     data = client.get("/api/plans/").json()
-    assert data["costs"]["image"] == 4
+    assert data["costs"]["image"] == 5
     assert data["costs"]["video"]["1080p"] == {"4": 25, "6": 36, "8": 48}
     assert data["costs"]["video"]["4k"]["8"] == 144
     pro = data["plans"]["pro"]
-    assert pro["credits"] == 500 and pro["examples"]["images"] == 125 and pro["price"] == 20 and pro["price_yearly"] == 192
+    assert pro["credits"] == 500 and pro["examples"]["images"] == 100 and pro["price"] == 20 and pro["price_yearly"] == 192
     assert pro["examples"]["videos"] == {"720p": 15, "1080p": 13, "4k": 4}
     assert data["plans"]["ajans"]["name"] == "Advanced" and data["plans"]["ajans"]["credits"] == 900 and data["plans"]["ajans"]["price_yearly"] == 288
     assert data["trial"]["examples"]["videos"]["1080p"] == 0

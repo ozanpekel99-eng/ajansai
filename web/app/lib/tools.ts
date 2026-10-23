@@ -40,7 +40,7 @@ export const TOOLS: Tool[] = [
     short: "Konseptten veya ürün fotoğrafından yüksek kaliteli görsel üret.",
     long: "Yazdığın konsepte göre sosyal medya görseli üretir. Ürün fotoğrafını örnek alabilir; kare, hikâye, gönderi ve yatay formatlar. Ürettiklerin Kütüphane'de birikir.",
     quota: "image",
-    costLabel: "Görsel başı 4 kredi",
+    costLabel: "Görsel başı 5 kredi",
     ready: true,
   },
   {

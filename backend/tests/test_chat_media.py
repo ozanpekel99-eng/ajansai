@@ -73,7 +73,7 @@ def test_video_with_multiple_images_composes_start_frame(client, monkeypatch):
     r = client.post("/api/content/video", json={"concept": "ürün masada dönüyor", "reference_urls": refs}, headers=auth(token))
     assert r.status_code == 200, r.text
     assert calls["refs"] == refs and calls["aspect"] == "9:16" and calls["start"] == BLOB_URL + "kare.png"
-    assert r.json()["credits_spent"] == 36 + 4 and r.json()["start_frame"] == BLOB_URL + "kare.png"
+    assert r.json()["credits_spent"] == 36 + 5 and r.json()["start_frame"] == BLOB_URL + "kare.png"
 
     # Tek görsel: doğrudan başlangıç karesi, birleştirme yok
     calls.clear()

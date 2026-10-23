@@ -481,7 +481,7 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
 
 
 def _chat_image(user: dict, prompt: str, refs: list[str], request_text: str = "") -> tuple[str | None, str | None, int]:
-    """Sohbette istenen görsel: önce Seedream (4 kredi); olmazsa ücretsiz görsel hakkıyla FLUX.
+    """Sohbette istenen görsel: önce GPT Image (5 kredi); olmazsa ücretsiz görsel hakkıyla FLUX.
 
     (adres, hata, harcanan kredi) döndürür.
     """
