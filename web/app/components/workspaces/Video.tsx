@@ -32,7 +32,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
   });
   const uploader = useUploader(["image"], 4, images.length, (f) => setImages((x) => [...x, f]));
   const [duration, setDuration] = useState<VideoDuration>(6);
-  const [resolution, setResolution] = useState<VideoResolution>("720p");
+  const [resolution, setResolution] = useState<VideoResolution>("1080p");
   const [ratio, setRatio] = useState<Ratio>("9:16");
   const [audio, setAudio] = useState(false);
   const [status, setStatus] = useState<"idle" | "starting" | "running">("idle");
@@ -248,9 +248,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
               text={
                 status === "starting"
                   ? "Sahne planlanıyor ve açılış karesi hazırlanıyor…"
-                  : resolution === "720p"
-                    ? "Video üretiliyor. Genelde 1 dakika sürer; sayfadan ayrılma."
-                    : "Video üretiliyor. Genelde 1–2 dakika sürer; sayfadan ayrılma."
+                  : "Video üretiliyor. Genelde 1–2 dakika sürer; sayfadan ayrılma."
               }
             />
           </>
@@ -284,7 +282,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
         <div className="price-note">
           <strong>Fiyat</strong>
           <p>
-            Kredi = süre × çözünürlük{audio ? " (sesli)" : ""}. Saniye başına: 720p {perSecond("720p")}, 1080p {perSecond("1080p")}, 4K{" "}
+            Kredi = süre × çözünürlük{audio ? " (sesli)" : ""}. Saniye başına: 1080p {perSecond("1080p")}, 4K{" "}
             {perSecond("4k")} kredi. Tek görsel ek kredi harcamaz; birden fazla görsel birleştirilirse +{costs.image} kredi. Üretim başarısız olursa kredi iade edilir.
           </p>
         </div>

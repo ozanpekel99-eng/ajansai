@@ -19,7 +19,7 @@ function sampleMonth(p: Plan, c: CreditCosts) {
   const ideaCredits = Math.floor(p.credits * 0.03);
   const ideas = Math.floor(ideaCredits / c.chat_message);
   const images = Math.floor((p.credits * 0.37) / c.image);
-  const videos = p.video_enabled ? Math.floor((p.credits - ideaCredits - images * c.image) / c.video["720p"]["6"]) : 0;
+  const videos = p.video_enabled ? Math.floor((p.credits - ideaCredits - images * c.image) / c.video["1080p"]["6"]) : 0;
   return { ideas, images, videos };
 }
 
@@ -94,7 +94,7 @@ export default function Paketler() {
                     <li>{num(p.examples.messages)} sohbet mesajı</li>
                     <li>{num(p.examples.images)} görsel</li>
                     <li>
-                      6 sn video: {num(p.examples.videos["720p"])} adet 720p, {num(p.examples.videos["1080p"])} adet 1080p ya da {num(p.examples.videos["4k"])} adet 4K
+                      6 sn video: {num(p.examples.videos["1080p"])} adet 1080p ya da {num(p.examples.videos["4k"])} adet 4K
                     </li>
                     <li className={p.ads_enabled ? "" : "no"}>Instagram reklam taslağı (Meta){p.ads_enabled ? ", kredi harcamaz" : ""}</li>
                   </ul>
@@ -204,7 +204,7 @@ export default function Paketler() {
                   </tr>
                   <tr>
                     <td>Video</td>
-                    <td className="num">{costs.video["720p"]["4"]}–{num(costs.video_audio["4k"]["8"])}</td>
+                    <td className="num">{costs.video["1080p"]["4"]}–{num(costs.video_audio["4k"]["8"])}</td>
                     <td>Reels ve hikâye için dikey video; süre ve çözünürlüğe göre, aşağıdaki tabloya bak</td>
                   </tr>
                   <tr>
@@ -248,11 +248,9 @@ export default function Paketler() {
                         </td>
                       ))}
                       <td className="muted">
-                        {r.value === "720p"
-                          ? "Instagram Reels ve hikâye için yeterli, en ekonomik"
-                          : r.value === "1080p"
-                            ? "Daha net görüntü, reklam videoları için"
-                            : "Ekran, mağaza içi tabela ve sinema kalitesi gereken işler"}
+                        {r.value === "1080p"
+                          ? "Gerçekçi, net görüntü; Instagram Reels, hikâye ve reklam videoları için"
+                          : "Ekran, mağaza içi tabela ve sinema kalitesi gereken işler"}
                       </td>
                     </tr>
                   ))}
@@ -275,7 +273,7 @@ export default function Paketler() {
                   <div key={id} className="panel stat">
                     <div className="name">{plans[id].name}</div>
                     <div className="value" style={{ fontSize: 22 }}>
-                      {m.ideas} sohbet mesajı · {m.images} görsel · {m.videos} video (720p, 6 sn)
+                      {m.ideas} sohbet mesajı · {m.images} görsel · {m.videos} video (1080p, 6 sn)
                     </div>
                     <div className="foot">{num(plans[id].credits)} kredinin karşılığı</div>
                   </div>
@@ -310,7 +308,7 @@ export default function Paketler() {
                     ["Dosya ekleyerek sohbet", (p: Plan) => (p.credits ? "Var" : "—")],
                     ["Seedream görsel (yalnızca)", (p: Plan) => (p.credits ? num(p.examples.images) : "—")],
                     ["Sohbette ücretsiz görsel (30 gün)", (p: Plan) => (p.credits ? "—" : String(pricing.free?.images_per_month ?? 6))],
-                    ["6 sn 720p video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["720p"]) : "—")],
+                    ["6 sn 1080p video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["1080p"]) : "—")],
                     ["6 sn 1080p video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["1080p"]) : "—")],
                     ["6 sn 4K video (yalnızca)", (p: Plan) => (p.video_enabled ? num(p.examples.videos["4k"]) : "—")],
                     ["Meta reklam taslağı", (p: Plan) => (p.ads_enabled ? "Var" : "—")],

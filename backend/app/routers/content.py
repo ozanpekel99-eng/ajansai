@@ -130,7 +130,7 @@ class VideoRequest(BaseModel):
     # birleştirilip (görsel kredisi) açılış karesi yapılır. Görsel yoksa açılış karesi üretilir.
     reference_urls: list[str] = Field(default_factory=list, max_length=4)
     duration: Literal[4, 6, 8] = 6
-    resolution: Literal["720p", "1080p", "4k"] = "720p"
+    resolution: Literal["720p", "1080p", "4k"] = "1080p"  # 720p eski istemciler için; 1080p olarak işlenir
     aspect_ratio: Literal["9:16", "16:9"] = "9:16"
     audio: bool = False
     # Revizyon: önceki videonun iş kimliği; aynı açılış karesi ve istem korunup yalnızca istenen değişir
@@ -187,6 +187,8 @@ def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
     birleştirilmiş görseller veya üretilen kare; video oranına uyarlanır) → Veo ile görselden video.
     Revizyonda önceki açılış karesi ve istem korunur. Kredi iş başlamadan önce düşülür.
     """
+    if payload.resolution == "720p":  # 720p kaldırıldı: kaliteli modelle 1080p
+        payload.resolution = "1080p"
     if not gateway_media.is_enabled():
         raise HTTPException(status_code=503, detail="Video üretimi henüz yapılandırılmadı.")
     need = video_cost(payload.duration, payload.resolution, payload.audio)

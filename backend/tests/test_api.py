@@ -302,9 +302,9 @@ def test_video_costs_and_failed_job_refunded_once(client, monkeypatch):
         },
         headers=auth(token),
     ).json()
-    assert (r5["credits_spent"], r10["credits_spent"]) == (12, 48)
-    assert started == [(6, "720p", None, None, False, "9:16"), (8, "1080p", BLOB_URL + "a.png", BLOB_URL + "b.png", False, "16:9")]
-    assert _credits(client, token)["used"] == 60
+    assert (r5["credits_spent"], r10["credits_spent"]) == (36, 48)  # varsayılan 1080p (720p kaldırıldı)
+    assert started == [(6, "1080p", None, None, False, "9:16"), (8, "1080p", BLOB_URL + "a.png", BLOB_URL + "b.png", False, "16:9")]
+    assert _credits(client, token)["used"] == 84
     # Desteklenmeyen süre/çözünürlük reddedilir
     assert client.post("/api/content/video", json={"concept": "x", "duration": 5}, headers=auth(token)).status_code == 422
     assert client.post("/api/content/video", json={"concept": "x", "resolution": "8k"}, headers=auth(token)).status_code == 422
@@ -347,7 +347,7 @@ def test_cannot_read_other_users_video(client, monkeypatch):
     other = register(client, "b@example.com")
     assert client.get(f"/api/content/video/{job}", headers=auth(other)).status_code == 404
     # Başkası sorgulayamadığı için sahibin kredisi iade edilmemiş olmalı
-    assert _credits(client, owner)["used"] == 12
+    assert _credits(client, owner)["used"] == 36
 
 
 def test_video_audio_costs_more_and_foreign_urls_rejected(client, monkeypatch):
@@ -465,13 +465,13 @@ def test_describe_sample_for_video(client, monkeypatch):
 def test_plans_endpoint_shows_credit_examples(client):
     data = client.get("/api/plans/").json()
     assert data["costs"]["image"] == 4
-    assert data["costs"]["video"]["720p"] == {"4": 8, "6": 12, "8": 16}
+    assert data["costs"]["video"]["1080p"] == {"4": 25, "6": 36, "8": 48}
     assert data["costs"]["video"]["4k"]["8"] == 144
     pro = data["plans"]["pro"]
     assert pro["credits"] == 500 and pro["examples"]["images"] == 125 and pro["price"] == 20 and pro["price_yearly"] == 192
-    assert pro["examples"]["videos"] == {"720p": 41, "1080p": 13, "4k": 4}
+    assert pro["examples"]["videos"] == {"1080p": 13, "4k": 4}
     assert data["plans"]["ajans"]["name"] == "Advanced" and data["plans"]["ajans"]["credits"] == 900 and data["plans"]["ajans"]["price_yearly"] == 288
-    assert data["trial"]["examples"]["videos"]["720p"] == 0
+    assert data["trial"]["examples"]["videos"]["1080p"] == 0
 
 
 def test_gateway_media_request_format(monkeypatch):

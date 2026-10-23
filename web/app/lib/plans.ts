@@ -53,12 +53,12 @@ export const DEFAULT_COSTS: CreditCosts = {
   image: 4,
   ads_draft: 0,
   video: {
-    "720p": { "4": 8, "6": 12, "8": 16 },
+    "720p": { "4": 25, "6": 36, "8": 48 },
     "1080p": { "4": 25, "6": 36, "8": 48 },
     "4k": { "4": 72, "6": 108, "8": 144 },
   },
   video_audio: {
-    "720p": { "4": 12, "6": 18, "8": 24 },
+    "720p": { "4": 36, "6": 54, "8": 72 },
     "1080p": { "4": 36, "6": 54, "8": 72 },
     "4k": { "4": 84, "6": 126, "8": 168 },
   },
@@ -66,7 +66,6 @@ export const DEFAULT_COSTS: CreditCosts = {
 
 export const VIDEO_DURATIONS: VideoDuration[] = [4, 6, 8];
 export const VIDEO_RESOLUTIONS: { value: VideoResolution; label: string }[] = [
-  { value: "720p", label: "Standart 720p" },
   { value: "1080p", label: "Yüksek kalite 1080p" },
   { value: "4k", label: "4K" },
 ];
@@ -76,7 +75,7 @@ export const ideaCredits = (count: number, costs: CreditCosts = DEFAULT_COSTS) =
 
 export const videoCredits = (
   duration: VideoDuration,
-  resolution: VideoResolution = "720p",
+  resolution: VideoResolution = "1080p",
   costs: CreditCosts = DEFAULT_COSTS,
   audio = false,
 ) => (audio ? costs.video_audio ?? DEFAULT_COSTS.video_audio : costs.video)[resolution][String(duration)];

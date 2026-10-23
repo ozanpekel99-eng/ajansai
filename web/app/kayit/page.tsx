@@ -104,7 +104,7 @@ function Signup() {
                       <>
                         <li>Her ay {num(p.credits)} kredi</li>
                         <li>Sınırsız sohbet (mesaj başı 1 kredi), dosya ekleme</li>
-                        <li>{num(p.examples.images)} yüksek kaliteli görsel ya da {num(p.examples.videos["720p"])} kısa video</li>
+                        <li>{num(p.examples.images)} yüksek kaliteli görsel ya da {num(p.examples.videos["1080p"])} kısa video</li>
                         <li className={p.ads_enabled ? "" : "no"}>Instagram reklamları (Meta)</li>
                       </>
                     ) : null}

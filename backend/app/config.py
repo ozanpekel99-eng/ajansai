@@ -107,7 +107,7 @@ CHAT_VIDEO_MODEL = _env("CHAT_VIDEO_MODEL", "google/gemini-3.6-flash")
 # Veo 3.1: karşılaştırmada en gerçekçi fizik (yemek kesme, el hareketi) ve en hızlı (~50-80 sn).
 # Süreler 4 / 6 / 8 sn.
 VIDEO_MODELS = {
-    "720p": (_env("VIDEO_MODEL_720P", "google/veo-3.1-lite-generate-001"), "1280x720"),
+    "720p": (_env("VIDEO_MODEL_720P", "google/veo-3.1-fast-generate-001"), "1920x1080"),  # eski kayıtlar: 1080p ile aynı
     "1080p": (_env("VIDEO_MODEL_1080P", "google/veo-3.1-fast-generate-001"), "1920x1080"),
     "4k": (_env("VIDEO_MODEL_4K", "google/veo-3.1-fast-generate-001"), "3840x2160"),
 }

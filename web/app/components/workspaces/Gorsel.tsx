@@ -26,14 +26,6 @@ type ImageResponse = { image_url: string | null; error: string | null; prompt?: 
 
 const REVISE_EXAMPLES = ["Yazıyı daha büyük ve dikkat çekici yap", "Arka planı daha sıcak tonlara çevir", "Sağ alta \"Son 3 gün\" rozeti ekle"];
 
-/** Ne yazacağını bilmeyenler için doldurulacak hazır kalıplar */
-const TEMPLATES = [
-  { label: "Kampanya / indirim", text: "Ürün: \nSatış fiyatı: \nKampanya fiyatı: \nTaksit: \nSon gün: \nMağaza adı: " },
-  { label: "Yeni ürün", text: "Yeni ürünümüz: \nÖne çıkan özelliği: \nFiyatı: \nMağaza adı: " },
-  { label: "Özel gün", text: "Özel gün: \nMesaj: \nVarsa indirim: \nMağaza adı: " },
-  { label: "Duyuru", text: "Duyuru: \nTarih / saat: \nMağaza adı: " },
-];
-
 export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
   const params = useSearchParams();
   const { usage, refresh, openCheckout } = useSession();
@@ -150,13 +142,6 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
         </div>
         <div className="field">
           <label htmlFor="g-concept">2. Görselde ne olsun?</label>
-          <div className="chip-row template-chips">
-            {TEMPLATES.map((t) => (
-              <button key={t.label} type="button" className="chip" onClick={() => setConcept(t.text)}>
-                {t.label}
-              </button>
-            ))}
-          </div>
           <textarea
             id="g-concept"
             required

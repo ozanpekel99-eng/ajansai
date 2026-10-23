@@ -73,12 +73,12 @@ def test_video_with_multiple_images_composes_start_frame(client, monkeypatch):
     r = client.post("/api/content/video", json={"concept": "ürün masada dönüyor", "reference_urls": refs}, headers=auth(token))
     assert r.status_code == 200, r.text
     assert calls["refs"] == refs and calls["aspect"] == "9:16" and calls["start"] == BLOB_URL + "kare.png"
-    assert r.json()["credits_spent"] == 12 + 4 and r.json()["start_frame"] == BLOB_URL + "kare.png"
+    assert r.json()["credits_spent"] == 36 + 4 and r.json()["start_frame"] == BLOB_URL + "kare.png"
 
     # Tek görsel: doğrudan başlangıç karesi, birleştirme yok
     calls.clear()
     r = client.post("/api/content/video", json={"concept": "x", "reference_urls": refs[:1]}, headers=auth(token))
-    assert calls == {"start": refs[0]} and r.json()["credits_spent"] == 12
+    assert calls == {"start": refs[0]} and r.json()["credits_spent"] == 36
 
 
 def test_generated_media_appear_in_library(client, monkeypatch):

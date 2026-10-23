@@ -40,7 +40,7 @@ export default function UpgradeCard({ reason, onPick }: { reason: LimitReason; o
                 {money(p.price, p.currency)} <small>/ ay + KDV</small>
               </span>
               <span className="upgrade-meta">
-                {num(p.credits)} kredi · {num(p.examples.images)} görsel ya da {num(p.examples.videos["720p"])} video
+                {num(p.credits)} kredi · {num(p.examples.images)} görsel ya da {num(p.examples.videos["1080p"])} video
               </span>
               {onPick ? (
                 <button type="button" className={`btn btn-sm ${featured ? "btn-primary" : "btn-light"}`} onClick={() => onPick(p.id)}>
