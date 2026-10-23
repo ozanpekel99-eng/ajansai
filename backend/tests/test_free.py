@@ -580,3 +580,19 @@ def test_chatgpt_mode_writes_ad_prompt_from_user_words(monkeypatch):
     assert out.startswith("4:5 | Poster") and seen["model"] == config.IMAGE_PROMPT_MODEL
     assert "2 product photo(s) attached" in seen["user"] and "46.350₺" in seen["user"]
     assert media_planner.direct_ad_prompt.__doc__
+
+
+def test_image_qa_regenerates_once_with_fixes(monkeypatch):
+    from app.services import gateway_media, media_qa
+
+    calls = []
+    monkeypatch.setattr(gateway_media, "generate_image", lambda p, a, r=None: calls.append(p) or (b"img%d" % len(calls), "image/png"))
+    verdicts = iter([["price 46.350₺ missing"], []])
+    monkeypatch.setattr(media_qa, "check_image", lambda data, req, urls=None: next(verdicts))
+    data, _ = media_qa.generate_checked("P", "4:5", None, "istek")
+    assert data == b"img2" and len(calls) == 2 and "price 46.350₺ missing" in calls[1]
+    # Kusur yoksa tek üretim
+    calls.clear()
+    monkeypatch.setattr(media_qa, "check_image", lambda data, req, urls=None: [])
+    media_qa.generate_checked("P", "4:5", None, "istek")
+    assert len(calls) == 1

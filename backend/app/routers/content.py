@@ -12,7 +12,7 @@ from sqlalchemy import and_, select, update
 from app import config
 from app.db import get_engine, utcnow, video_tasks
 from app.security import get_current_user
-from app.services import assistant, chat_files, free_tier, gateway_media, library, media_planner, storage
+from app.services import assistant, chat_files, free_tier, gateway_media, library, media_planner, media_qa, storage
 from app.services.claude_service import generate_content_ideas
 from app.services.llm_service import LLMError
 from app.services.plans import CREDIT_COSTS, chat_cost, idea_cost, video_cost
@@ -111,7 +111,8 @@ def create_image(payload: ImageRequest, user: dict = Depends(get_current_user)):
         plan = media_planner.plan_image(payload.concept, aspect, edit=bool(base), ref_count=len(refs),
                                         previous_prompt=payload.previous_prompt)
     try:
-        data, mime = gateway_media.generate_image(plan["prompt"], aspect, ([base] if base else []) + refs or None)
+        data, mime = media_qa.generate_checked(plan["prompt"], aspect, ([base] if base else []) + refs,
+                                               payload.concept, refs)
     except gateway_media.MediaError as e:
         logger.error("Görsel üretilemedi: %s", e)
         refund(event_id)
@@ -438,7 +439,7 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
             refs = [ref_url] + refs[:3]
         image_prompt = free_tier.direct_image_prompt(image_prompt, last.content, editing=bool(ref_url),
                                                      ref_count=len(refs) - (1 if ref_url else 0), image_urls=refs)
-        url, image_error, image_credits = _chat_image(user, image_prompt, refs)
+        url, image_error, image_credits = _chat_image(user, image_prompt, refs, last.content)
         if url:
             images.append(url)
             if image_credits:  # ücretsiz FLUX yedeği kendi kaydını yapar
@@ -481,7 +482,7 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
     }
 
 
-def _chat_image(user: dict, prompt: str, refs: list[str]) -> tuple[str | None, str | None, int]:
+def _chat_image(user: dict, prompt: str, refs: list[str], request_text: str = "") -> tuple[str | None, str | None, int]:
     """Sohbette istenen görsel: önce Seedream (4 kredi); olmazsa ücretsiz görsel hakkıyla FLUX.
 
     (adres, hata, harcanan kredi) döndürür.
@@ -495,7 +496,7 @@ def _chat_image(user: dict, prompt: str, refs: list[str]) -> tuple[str | None, s
         if event_id:
             try:
                 aspect, clean = free_tier.image_aspect(prompt)
-                data, mime = gateway_media.generate_image(clean, aspect, refs or None)
+                data, mime = media_qa.generate_checked(clean, aspect, refs, request_text or clean, refs)
                 if storage.is_enabled():
                     return storage.save(data, mime, f"gorsel/{user['id']}"), None, cost
                 return f"data:{mime};base64,{base64.b64encode(data).decode()}", None, cost

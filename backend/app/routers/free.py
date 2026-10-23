@@ -108,7 +108,9 @@ def _premium_image(prompt: str, refs: list[str], translate: bool) -> tuple[bytes
             clean = media_planner.direct_ad_prompt(clean, aspect, ref_count=len(refs))
         elif translate and not config.IMAGE_DIRECT:
             clean = media_planner.plan_image(clean, aspect, ref_count=len(refs)).get("prompt") or clean
-        data, mime = gateway_media.generate_image(clean, aspect, refs or None)
+        from app.services import media_qa
+
+        data, mime = media_qa.generate_checked(clean, aspect, refs, prompt, refs)
     except Exception as e:  # yedek: Cloudflare FLUX
         logger.warning("Ücretsiz görsel Gemini ile üretilemedi, FLUX'a geçiliyor: %s", e)
         return None, ""

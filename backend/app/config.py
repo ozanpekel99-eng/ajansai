@@ -96,6 +96,9 @@ PLANNER_MODEL = _env("PLANNER_MODEL", "anthropic/claude-haiku-5.5")
 IMAGE_PROMPT_MODE = _env("IMAGE_PROMPT_MODE", "chatgpt")
 IMAGE_PROMPT_MODEL = _env("IMAGE_PROMPT_MODEL", "anthropic/claude-sonnet-5.5")
 IMAGE_DIRECT = IMAGE_PROMPT_MODE != "planner"
+# Görsel otomatik kalite kontrolü: kusur bulunursa bir kez düzeltilerek yeniden üretilir
+IMAGE_QA = _env("IMAGE_QA", "1") == "1"
+IMAGE_QA_MODEL = _env("IMAGE_QA_MODEL", "anthropic/claude-sonnet-5.5")
 # Video yönetmeni: başlangıç karesini görür, gerekirse kareye kişi/el ekletir (Sonnet)
 VIDEO_PROMPT_MODEL = _env("VIDEO_PROMPT_MODEL", "anthropic/claude-sonnet-5.5")
 # Sohbet (ücretli paketler): Claude Sonnet 5.5 (mesaj başı ~$0,01-0,02); olmazsa Haiku 5.5.
