@@ -10,11 +10,8 @@ export default function LegalPage({ title, updated, children }: { title: string;
           <img src="/logo-on-dark.png" alt="ajansAI" />
         </Link>
         <nav className="actions">
-          <Link href="/gizlilik" className="btn btn-ghost btn-sm">
-            Gizlilik
-          </Link>
-          <Link href="/kosullar" className="btn btn-ghost btn-sm">
-            Koşullar
+          <Link href="/yasal" className="btn btn-ghost btn-sm">
+            Yasal
           </Link>
           <Link href="/iletisim" className="btn btn-ghost btn-sm">
             İletişim

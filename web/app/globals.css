@@ -3994,20 +3994,25 @@ table.data td.num {
 .site-footer {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 24px max(16px, env(safe-area-inset-left, 0px)) 28px;
+  gap: 12px;
+  padding: 18px max(16px, env(safe-area-inset-left, 0px)) calc(18px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--line);
   color: var(--text-3);
   font-size: 13px;
 }
-.site-footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.site-footer nav { display: flex; flex-wrap: wrap; gap: 6px 20px; }
 .site-footer a { color: var(--text-2); }
 .site-footer a:hover { color: var(--text); }
-.site-footer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-.payment-band { height: 26px; width: auto; max-width: 100%; }
+.site-footer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.payment-band { height: 24px; width: auto; max-width: 100%; align-self: flex-start; }
 .payment-band-text { font-weight: 600; color: var(--text-2); }
-.site-footer.compact { padding-top: 16px; padding-bottom: 18px; gap: 10px; }
-.site-footer.compact .payment-band { height: 22px; }
+.site-footer.compact { padding-top: 14px; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+
+/* /yasal: belge listesi */
+.legal-index { list-style: none; padding: 0; margin: 20px 0; display: grid; gap: 10px; }
+.legal-index a { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--text); text-decoration: none; }
+.legal-index a:hover { border-color: var(--line-strong); }
+.legal-index span { color: var(--text-2); font-size: 14px; }
 
 .company-info { display: grid; gap: 6px; margin: 8px 0 16px; }
 .company-info div { display: grid; grid-template-columns: 160px 1fr; gap: 12px; }
@@ -4035,7 +4040,7 @@ table.data td.num {
   .summary div > span:last-child { text-align: right; }
   /* Sonuç alanı boşken kısa kalsın */
   .result-area .result-empty { min-height: 180px; }
-  .site-footer .payment-band { height: 22px; }
+  .site-footer .payment-band { height: 20px; }
 }
 @media (max-width: 760px) {
   /* Boş sohbette de + menüsü yukarı açılsın: aşağıda yer kalmıyor */
@@ -4043,3 +4048,16 @@ table.data td.num {
   .plus-menu { max-height: 60dvh; overflow-y: auto; }
 }
 
+
+/* Sohbet: uzun kelime/bağlantılar ve geniş tablolar sayfayı yana kaydırmasın */
+.md { overflow-wrap: anywhere; }
+.md pre { overflow-x: auto; max-width: 100%; }
+.md .md-table { max-width: 100%; -webkit-overflow-scrolling: touch; }
+.md td, .md th { overflow-wrap: normal; word-break: normal; }
+.chat, .messages, .msg.user { min-width: 0; max-width: 100%; }
+.guest, .shell { overflow-x: clip; }
+@media (max-width: 640px) {
+  .md table { font-size: 13px; }
+  .md th, .md td { padding: 7px 8px; min-width: 130px; }
+  .md th:first-child, .md td:first-child { min-width: 110px; }
+}

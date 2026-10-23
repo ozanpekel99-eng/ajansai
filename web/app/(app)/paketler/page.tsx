@@ -358,7 +358,7 @@ export default function Paketler() {
           </section>
         </>
       )}
-      <SiteFooter />
+      <SiteFooter payments />
     </div>
   );
 }

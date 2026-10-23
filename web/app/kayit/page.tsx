@@ -96,8 +96,8 @@ function Signup() {
                   <ul>
                     {id === "deneme" ? (
                       <>
-                        <li>Günde {pricing?.free?.chat_per_day ?? 20} sohbet mesajı</li>
-                        <li>30 günde {pricing?.free?.images_per_month ?? 6} görsel</li>
+                        <li>Günde {pricing?.free?.chat_per_day ?? 10} sohbet mesajı</li>
+                        <li>30 günde {pricing?.free?.images_per_month ?? 3} görsel</li>
                         <li>Görselden görsel üretimi</li>
                         <li className="no">Video ve Meta reklamları</li>
                       </>
@@ -118,7 +118,7 @@ function Signup() {
             })}
           </div>
         </main>
-        <SiteFooter />
+        <SiteFooter payments />
       </div>
     );
   }
