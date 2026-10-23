@@ -4018,3 +4018,22 @@ table.data td.num {
 .modal .agree { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--text-2); margin: 4px 0 12px; line-height: 1.5; }
 .modal .agree input { margin-top: 3px; accent-color: var(--indigo); }
 .modal .agree a { color: var(--text); text-decoration: underline; }
+
+/* ---------- Mobil düzeltmeler ---------- */
+.stats.stats-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 760px) {
+  .stats.stats-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat { min-width: 0; }
+}
+@media (max-width: 560px) {
+  /* Ödeme penceresi: tam ekran, paketler alt alta */
+  .modal-scrim { padding: 0; place-items: stretch; }
+  .modal { max-width: none; max-height: 100dvh; height: 100dvh; border-radius: 0; border: 0; padding: 16px max(16px, env(safe-area-inset-left, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .plan-pick { grid-template-columns: 1fr; }
+  .plan-pick button { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+  .summary div { gap: 12px; }
+  .summary div > span:last-child { text-align: right; }
+  /* Sonuç alanı boşken kısa kalsın */
+  .result-area .result-empty { min-height: 180px; }
+  .site-footer .payment-band { height: 22px; }
+}

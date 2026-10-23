@@ -210,7 +210,7 @@ export default function Paketler() {
                   <tr>
                     <td>Meta reklam taslağı</td>
                     <td className="num">{costs.ads_draft === 0 ? "Ücretsiz" : costs.ads_draft}</td>
-                    <td>Instagram için duraklatılmış kampanya taslağı (Pro ve Advanced)</td>
+                    <td>Instagram reklamı oluşturma ve yayınlama (Pro ve Advanced)</td>
                   </tr>
                 </tbody>
               </table>

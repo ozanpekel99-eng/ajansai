@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 
 import { HistoryEntry, timeAgo } from "../../lib/history";
 import { useSession } from "../../lib/session";
@@ -100,4 +101,15 @@ export function UpgradeLink() {
       Paketleri karşılaştır
     </Link>
   );
+}
+
+/** Mobilde sonuç alanı formun altında kalır: üretim başlayınca oraya kaydırır. */
+export function useRevealOnMobile<T extends HTMLElement>(active: boolean) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (active && typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches) {
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [active]);
+  return ref;
 }

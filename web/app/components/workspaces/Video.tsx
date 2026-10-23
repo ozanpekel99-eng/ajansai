@@ -11,7 +11,7 @@ import { useSession } from "../../lib/session";
 import { PendingFile, UploadProgress, useUploader } from "../Attachments";
 import { ChipSelect, SampleToConcept, Toggle } from "../Controls";
 import Icon from "../Icon";
-import { CreditLine, EmptyResult, LockedNotice, NoCreditsNotice, WorkspaceProps } from "./common";
+import { CreditLine, EmptyResult, LockedNotice, NoCreditsNotice, WorkspaceProps, useRevealOnMobile } from "./common";
 import { LibraryGrid } from "./Library";
 
 type Result = { url: string; concept: string; jobId?: string };
@@ -42,6 +42,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
   const [note, setNote] = useState("");
   const [frame, setFrame] = useState<string | null>(null);
   const [revision, setRevision] = useState("");
+  const resultRef = useRevealOnMobile<HTMLElement>(status === "starting");
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -224,7 +225,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
         </div>
       </form>
 
-      <section className="panel ws-panel result-area" aria-live="polite">
+      <section ref={resultRef} className="panel ws-panel result-area" aria-live="polite">
         <h2>
           Sonuç
           {result && (

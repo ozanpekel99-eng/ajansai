@@ -70,7 +70,7 @@ export default function Kullanim() {
       </section>
 
       {usage && (
-        <div className="stats" style={{ marginTop: 16, gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <div className="stats stats-4" style={{ marginTop: 16 }}>
           {[
             ["İçerik fikri üretimi", usage.counts.idea],
             ["Görsel", usage.counts.image],

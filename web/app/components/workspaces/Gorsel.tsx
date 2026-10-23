@@ -10,7 +10,7 @@ import { useSession } from "../../lib/session";
 import { FileChips, PendingFile, UploadProgress, useUploader } from "../Attachments";
 import { ChipSelect, SampleToConcept } from "../Controls";
 import Icon from "../Icon";
-import { CreditLine, EmptyResult, NoCreditsNotice, WorkspaceProps } from "./common";
+import { CreditLine, EmptyResult, NoCreditsNotice, WorkspaceProps, useRevealOnMobile } from "./common";
 import { LibraryGrid } from "./Library";
 
 const RATIOS = [
@@ -39,6 +39,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
   const [revision, setRevision] = useState("");
   const [loading, setLoading] = useState<false | "new" | "revise">(false);
   const [error, setError] = useState("");
+  const resultRef = useRevealOnMobile<HTMLElement>(loading === "new");
   const result = versions[current] || null;
 
   const cost = usage?.costs.image ?? 4;
@@ -165,7 +166,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
         </div>
       </form>
 
-      <section className="panel ws-panel result-area" aria-live="polite">
+      <section ref={resultRef} className="panel ws-panel result-area" aria-live="polite">
         <h2>
           Sonuç
           {result && (
