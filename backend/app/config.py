@@ -113,9 +113,10 @@ FREE_CHAT_CHAIN = _env(
     "cerebras:gpt-oss-120b,groq:openai/gpt-oss-120b,cerebras:qwen-3.8-27b,groq:qwen/qwen3.8-27b",
 )
 FREE_CHAT_MODEL = _env("FREE_CHAT_MODEL", "anthropic/claude-haiku-5.5")
-# Ücretsiz paket ve misafir ücretli paketle aynı modelle (Claude Sonnet 5.5, mesaj başı ~$0,01) yanıtlanır;
-# site geneli günlük bu bütçe dolunca ücretsiz katmanlara (Groq / Cerebras) geçilir.
-FREE_GATEWAY_DAILY_USD = float(_env("FREE_GATEWAY_DAILY_USD", "30"))
+# Ücretsiz paket ve misafir Claude Haiku 5.5 ile yanıtlanır (mesaj başı ~$0,0006; karşılaştırmada Türkçe
+# içerik ve analizde Groq/Cerebras modellerinden belirgin iyi). Site geneli günlük bu bütçe (~15.000 mesaj)
+# dolunca ücretsiz katmanlara (Groq / Cerebras) geçilir.
+FREE_GATEWAY_DAILY_USD = float(_env("FREE_GATEWAY_DAILY_USD", "10"))
 FREE_CHAT_PER_DAY_USER = _int("FREE_CHAT_PER_DAY_USER", 10)
 FREE_CHAT_PER_DAY_ANON = _int("FREE_CHAT_PER_DAY_ANON", 5)
 FREE_CHAT_PER_DAY_TOTAL = _int("FREE_CHAT_PER_DAY_TOTAL", 10000)  # tüm site, günlük tavan

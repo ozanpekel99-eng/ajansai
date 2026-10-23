@@ -3,7 +3,7 @@
 Maliyet sıfıra yakın tutulur:
 - Sohbet Groq / Cerebras ücretsiz katmanlarıyla ($0), kotalar dolarsa Claude Haiku 5.5 ile
   (mesaj başı ~$0,0007); yalnızca metin, kısa geçmiş.
-- Sohbet ve görsel ücretli paketle aynı modellerle (Claude Sonnet, Gemini görsel) yapılır; site geneli
+- Sohbet Claude Haiku, görsel ücretli paketle aynı model (Gemini) ile yapılır; site geneli
   günlük bütçe / tavan dolunca ücretsiz yedeklere (Groq / Cerebras, Cloudflare FLUX) geçilir.
 - Stok fotoğraflar Pexels'ten (ücretsiz, ticari kullanım serbest).
 

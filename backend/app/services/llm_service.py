@@ -249,16 +249,16 @@ def smart_chat_completion(messages: list[dict], max_tokens: int = 1800, paid: bo
     """En iyi uygun modelle yanıtlar. (metin, model) döndürür.
 
     Ücretli: Sonnet → Haiku → ücretsiz zincir.
-    Ücretsiz paket ve misafir: ücretli paketle aynı model (Sonnet → Haiku), günlük ücretsiz bütçe
-    (FREE_GATEWAY_DAILY_USD) içinde; bütçe dolunca ücretsiz zincir. premium=False: arka plan
-    yardımcı işleri (istem çevirisi vb.) yalnızca Haiku kullanır.
+    Ücretsiz paket ve misafir: Claude Haiku 5.5, günlük ücretsiz bütçe (FREE_GATEWAY_DAILY_USD)
+    içinde; bütçe dolunca ücretsiz zincir (Groq / Cerebras). premium şimdilik etkisiz (ileride
+    ücretsiz sohbete Sonnet açılırsa kullanılır).
     """
     errors = []
     if gateway_ready():
         if paid:
             models = [config.CHAT_MODEL, config.FREE_CHAT_MODEL]
         elif free_budget_left():
-            models = [config.CHAT_MODEL, config.FREE_CHAT_MODEL] if premium else [config.FREE_CHAT_MODEL]
+            models = [config.FREE_CHAT_MODEL]
         else:
             models = []
         for model in dict.fromkeys(m for m in models if m not in skip):

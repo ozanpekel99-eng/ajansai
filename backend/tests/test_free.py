@@ -292,7 +292,7 @@ def test_free_chain_falls_through_to_haiku(monkeypatch):
 
 
 
-def test_free_chat_uses_paid_model_within_daily_budget(monkeypatch):
+def test_free_chat_uses_haiku_within_daily_budget(monkeypatch):
     from app.services import llm_service as ls
 
     monkeypatch.setattr(config, "GROQ_API_KEY", "gk")
@@ -307,9 +307,9 @@ def test_free_chat_uses_paid_model_within_daily_budget(monkeypatch):
         return f"{model} yanıtı"
 
     monkeypatch.setattr(ls, "chat_completion", fake_gateway)
-    # Ücretsiz sohbet ücretli paketle aynı modeli (Sonnet) kullanır; yardımcı işler Haiku
+    # Ücretsiz sohbet Claude Haiku ile (bütçe içinde)
     assert ls.free_chat_completion([{"role": "user", "content": "selam"}], premium=False)[1] == "anthropic/claude-haiku-5.5"
-    assert ls.free_chat_completion([{"role": "user", "content": "selam"}])[1] == "anthropic/claude-sonnet-5.5"
+    assert ls.free_chat_completion([{"role": "user", "content": "selam"}])[1] == "anthropic/claude-haiku-5.5"
     # Günlük ücretsiz bütçe ($0,001) aşıldı: ücretsiz zincire geçilir
     assert ls.free_chat_completion([{"role": "user", "content": "selam"}]) == ("Groq yanıtı", "groq:openai/gpt-oss-120b")
     assert ls.spent_today(free=True) > 0.001 and ls.spent_today() == ls.spent_today(free=True)
