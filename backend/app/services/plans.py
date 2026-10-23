@@ -21,7 +21,7 @@ Paketler $10 / $20 / $30 (aylık) + %20 KDV; yıllıkta %20 indirim, kredi her 3
 import math
 
 VIDEO_DURATIONS = (4, 6, 8)
-VIDEO_RESOLUTIONS = ("1080p", "4k")  # 720p kaldırıldı: tüm videolar kaliteli modelle (Veo 3.1 Fast)
+VIDEO_RESOLUTIONS = ("720p", "1080p", "4k")  # hepsi kaliteli modelle (Veo 3.1 Fast)
 
 CREDIT_COSTS = {
     "idea_per_2": 1,  # her 2 fikir için (eski form akışı)
@@ -35,13 +35,13 @@ CREDIT_COSTS = {
     # çözünürlük → süre (sn) → kredi. Veo 3.1 maliyeti: 720p (Lite) $0,03/sn, 1080p (Fast) $0,10/sn,
     # 4K $0,30/sn; sesli: $0,05 / $0,15 / $0,35. Kredi ~$0,04 → en az ~2,4 kat pay.
     "video": {
-        "720p": {"4": 25, "6": 36, "8": 48},  # eski istekler 1080p olarak işlenir
+        "720p": {"4": 22, "6": 32, "8": 42},  # Veo 3.1 Fast 720p: 1080p ile aynı maliyet ($0,10/sn), biraz daha ucuz satılır
         "1080p": {"4": 25, "6": 36, "8": 48},
         "4k": {"4": 72, "6": 108, "8": 144},
     },
     # sesli video
     "video_audio": {
-        "720p": {"4": 36, "6": 54, "8": 72},
+        "720p": {"4": 32, "6": 48, "8": 64},
         "1080p": {"4": 36, "6": 54, "8": 72},
         "4k": {"4": 84, "6": 126, "8": 168},
     },

@@ -53,12 +53,12 @@ export const DEFAULT_COSTS: CreditCosts = {
   image: 4,
   ads_draft: 0,
   video: {
-    "720p": { "4": 25, "6": 36, "8": 48 },
+    "720p": { "4": 22, "6": 32, "8": 42 },
     "1080p": { "4": 25, "6": 36, "8": 48 },
     "4k": { "4": 72, "6": 108, "8": 144 },
   },
   video_audio: {
-    "720p": { "4": 36, "6": 54, "8": 72 },
+    "720p": { "4": 32, "6": 48, "8": 64 },
     "1080p": { "4": 36, "6": 54, "8": 72 },
     "4k": { "4": 84, "6": 126, "8": 168 },
   },
@@ -66,6 +66,7 @@ export const DEFAULT_COSTS: CreditCosts = {
 
 export const VIDEO_DURATIONS: VideoDuration[] = [4, 6, 8];
 export const VIDEO_RESOLUTIONS: { value: VideoResolution; label: string }[] = [
+  { value: "720p", label: "720p" },
   { value: "1080p", label: "Yüksek kalite 1080p" },
   { value: "4k", label: "4K" },
 ];

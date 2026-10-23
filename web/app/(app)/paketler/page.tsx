@@ -94,7 +94,7 @@ export default function Paketler() {
                     <li>{num(p.examples.messages)} sohbet mesajı</li>
                     <li>{num(p.examples.images)} görsel</li>
                     <li>
-                      6 sn video: {num(p.examples.videos["1080p"])} adet 1080p ya da {num(p.examples.videos["4k"])} adet 4K
+                      6 sn video: {num(p.examples.videos["720p"])} adet 720p, {num(p.examples.videos["1080p"])} adet 1080p ya da {num(p.examples.videos["4k"])} adet 4K
                     </li>
                     <li className={p.ads_enabled ? "" : "no"}>Instagram reklam taslağı (Meta){p.ads_enabled ? ", kredi harcamaz" : ""}</li>
                   </ul>
@@ -204,7 +204,7 @@ export default function Paketler() {
                   </tr>
                   <tr>
                     <td>Video</td>
-                    <td className="num">{costs.video["1080p"]["4"]}–{num(costs.video_audio["4k"]["8"])}</td>
+                    <td className="num">{costs.video["720p"]["4"]}–{num(costs.video_audio["4k"]["8"])}</td>
                     <td>Reels ve hikâye için dikey video; süre ve çözünürlüğe göre, aşağıdaki tabloya bak</td>
                   </tr>
                   <tr>
@@ -248,9 +248,11 @@ export default function Paketler() {
                         </td>
                       ))}
                       <td className="muted">
-                        {r.value === "1080p"
-                          ? "Gerçekçi, net görüntü; Instagram Reels, hikâye ve reklam videoları için"
-                          : "Ekran, mağaza içi tabela ve sinema kalitesi gereken işler"}
+                        {r.value === "720p"
+                          ? "Instagram Reels ve hikâye için yeterli, daha ekonomik"
+                          : r.value === "1080p"
+                            ? "Daha net görüntü; reklam videoları için"
+                            : "Ekran, mağaza içi tabela ve sinema kalitesi gereken işler"}
                       </td>
                     </tr>
                   ))}

@@ -469,7 +469,7 @@ def test_plans_endpoint_shows_credit_examples(client):
     assert data["costs"]["video"]["4k"]["8"] == 144
     pro = data["plans"]["pro"]
     assert pro["credits"] == 500 and pro["examples"]["images"] == 125 and pro["price"] == 20 and pro["price_yearly"] == 192
-    assert pro["examples"]["videos"] == {"1080p": 13, "4k": 4}
+    assert pro["examples"]["videos"] == {"720p": 15, "1080p": 13, "4k": 4}
     assert data["plans"]["ajans"]["name"] == "Advanced" and data["plans"]["ajans"]["credits"] == 900 and data["plans"]["ajans"]["price_yearly"] == 288
     assert data["trial"]["examples"]["videos"]["1080p"] == 0
 

@@ -282,7 +282,7 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
         <div className="price-note">
           <strong>Fiyat</strong>
           <p>
-            Kredi = süre × çözünürlük{audio ? " (sesli)" : ""}. Saniye başına: 1080p {perSecond("1080p")}, 4K{" "}
+            Kredi = süre × çözünürlük{audio ? " (sesli)" : ""}. Saniye başına: 720p {perSecond("720p")}, 1080p {perSecond("1080p")}, 4K{" "}
             {perSecond("4k")} kredi. Tek görsel ek kredi harcamaz; birden fazla görsel birleştirilirse +{costs.image} kredi. Üretim başarısız olursa kredi iade edilir.
           </p>
         </div>
