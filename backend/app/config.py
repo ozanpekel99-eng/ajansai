@@ -113,9 +113,9 @@ FREE_CHAT_CHAIN = _env(
     "cerebras:gpt-oss-120b,groq:openai/gpt-oss-120b,cerebras:qwen-3.8-27b,groq:qwen/qwen3.8-27b",
 )
 FREE_CHAT_MODEL = _env("FREE_CHAT_MODEL", "anthropic/claude-haiku-5.5")
-# Ücretsiz paket önce Claude Haiku 5.5 ile yanıtlanır (mesaj başı ~$0,0006); günlük bu bütçe
-# dolunca ücretsiz katmanlara (Groq / Cerebras) geçilir.
-FREE_GATEWAY_DAILY_USD = float(_env("FREE_GATEWAY_DAILY_USD", "1.0"))
+# Ücretsiz paket ve misafir ücretli paketle aynı modelle (Claude Sonnet 5.5, mesaj başı ~$0,01) yanıtlanır;
+# site geneli günlük bu bütçe dolunca ücretsiz katmanlara (Groq / Cerebras) geçilir.
+FREE_GATEWAY_DAILY_USD = float(_env("FREE_GATEWAY_DAILY_USD", "30"))
 FREE_CHAT_PER_DAY_USER = _int("FREE_CHAT_PER_DAY_USER", 20)
 FREE_CHAT_PER_DAY_ANON = _int("FREE_CHAT_PER_DAY_ANON", 10)
 FREE_CHAT_PER_DAY_TOTAL = _int("FREE_CHAT_PER_DAY_TOTAL", 10000)  # tüm site, günlük tavan
@@ -129,6 +129,9 @@ FREE_IMAGE_MODEL = _env("FREE_IMAGE_MODEL", "@cf/black-forest-labs/flux-2-klein-
 FREE_IMAGE_REF_MODEL = _env("FREE_IMAGE_REF_MODEL", "@cf/black-forest-labs/flux-2-klein-4b")
 FREE_IMAGES_PER_MONTH = _int("FREE_IMAGES_PER_MONTH", 6)
 FREE_IMAGES_PER_DAY_TOTAL = _int("FREE_IMAGES_PER_DAY_TOTAL", 1500)
+# Ücretsiz görseller de ücretli paketle aynı modelle (Gemini 3.1 Flash Image, ~$0,068) üretilir;
+# site geneli günde bu kadarı aşılırsa günün kalanında FLUX (Cloudflare) yedeğine geçilir.
+FREE_PREMIUM_IMAGES_PER_DAY = _int("FREE_PREMIUM_IMAGES_PER_DAY", 400)
 # Doğal sesli okuma: Google Cloud Text-to-Speech (Chirp 3 HD). Ayda 1M karakter ücretsiz;
 # günlük tavan bunun altında tutulur, aşılırsa tarayıcının kendi sesine düşülür.
 GOOGLE_TTS_API_KEY = _env("GOOGLE_TTS_API_KEY")

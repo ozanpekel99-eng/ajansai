@@ -83,7 +83,7 @@ def test_free_chat_sends_short_history(client, monkeypatch):
 def _enable_free_images(monkeypatch, calls):
     monkeypatch.setattr(config, "CLOUDFLARE_ACCOUNT_ID", "acc123")
     monkeypatch.setattr(config, "CLOUDFLARE_AI_TOKEN", "cf-token")
-    monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0, vision=False: ("a fridge in a white kitchen", "groq:x"))
+    monkeypatch.setattr(free_tier, "free_chat_completion", lambda messages, max_tokens=0, vision=False, premium=True: ("a fridge in a white kitchen", "groq:x"))
 
     def fake_post(url, headers=None, json=None, data=None, files=None, timeout=None):
         calls.append({"url": url, "headers": headers, "json": json or data, "files": files})
@@ -109,6 +109,30 @@ def test_free_images_monthly_limit_and_cloudflare_request(client, monkeypatch):
     r = client.post("/api/free/image", json={"concept": "beyaz mutfakta buzdolabı"}, headers=IP_A)
     assert r.status_code == 429 and "Stok kütüphanesinden" in r.json()["detail"]
     assert len(calls) == 2
+
+
+def test_free_images_use_paid_model_then_flux_after_daily_cap(client, monkeypatch):
+    from app.services import gateway_media, media_planner
+
+    calls = []
+    _enable_free_images(monkeypatch, calls)
+    gemini = []
+    monkeypatch.setattr(gateway_media, "is_enabled", lambda: True)
+    monkeypatch.setattr(media_planner, "plan_image", lambda req, aspect, **k: {"prompt": "planned " + req, "note": None})
+
+    def fake_generate(prompt, aspect, refs=None):
+        gemini.append((prompt, aspect))
+        return b"\x89PNGgemini", "image/png"
+
+    monkeypatch.setattr(gateway_media, "generate_image", fake_generate)
+    monkeypatch.setattr(config, "FREE_PREMIUM_IMAGES_PER_DAY", 1)
+    r = client.post("/api/free/image", json={"concept": "kahve fincanı"}, headers=IP_A)
+    assert r.status_code == 200 and r.json()["image_url"].startswith("data:image/png;base64,")
+    assert gemini == [("planned kahve fincanı", "1:1")] and calls == []
+    # Günlük Gemini tavanı doldu: aynı hak FLUX yedeğiyle üretilir
+    r = client.post("/api/free/image", json={"concept": "kahve fincanı"}, headers=IP_B)
+    assert r.status_code == 200 and r.json()["image_url"].startswith("data:image/jpeg;base64,")
+    assert len(gemini) == 1 and len(calls) == 1
 
 
 def test_free_images_site_wide_daily_cap(client, monkeypatch):
@@ -268,7 +292,7 @@ def test_free_chain_falls_through_to_haiku(monkeypatch):
 
 
 
-def test_free_chat_prefers_haiku_within_daily_budget(monkeypatch):
+def test_free_chat_uses_paid_model_within_daily_budget(monkeypatch):
     from app.services import llm_service as ls
 
     monkeypatch.setattr(config, "GROQ_API_KEY", "gk")
@@ -283,8 +307,9 @@ def test_free_chat_prefers_haiku_within_daily_budget(monkeypatch):
         return f"{model} yanıtı"
 
     monkeypatch.setattr(ls, "chat_completion", fake_gateway)
-    assert ls.free_chat_completion([{"role": "user", "content": "selam"}])[1] == "anthropic/claude-haiku-5.5"
-    assert ls.free_chat_completion([{"role": "user", "content": "selam"}])[1] == "anthropic/claude-haiku-5.5"
+    # Ücretsiz sohbet ücretli paketle aynı modeli (Sonnet) kullanır; yardımcı işler Haiku
+    assert ls.free_chat_completion([{"role": "user", "content": "selam"}], premium=False)[1] == "anthropic/claude-haiku-5.5"
+    assert ls.free_chat_completion([{"role": "user", "content": "selam"}])[1] == "anthropic/claude-sonnet-5.5"
     # Günlük ücretsiz bütçe ($0,001) aşıldı: ücretsiz zincire geçilir
     assert ls.free_chat_completion([{"role": "user", "content": "selam"}]) == ("Groq yanıtı", "groq:openai/gpt-oss-120b")
     assert ls.spent_today(free=True) > 0.001 and ls.spent_today() == ls.spent_today(free=True)

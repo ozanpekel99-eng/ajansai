@@ -69,20 +69,43 @@ def make_free_image(subject: str, user: dict | None, prompt: str, refs: list[str
         event_id = free_tier.reserve_image(subject, user is not None, with_reference=bool(refs))
     except free_tier.FreeLimitError as e:
         return None, str(e), True
-    try:
-        ref_bytes = [storage.fetch(u, max_bytes=20 * 1024 * 1024) for u in refs]
-        data = free_tier.generate_image(prompt, ref_bytes, translate=translate)
-    except (free_tier.FreeServiceError, storage.StorageError) as e:
-        logger.error("Ücretsiz görsel üretilemedi: %s", e)
-        free_tier.release(event_id)
-        return None, "Görsel üretilemedi, hakkın düşülmedi. Tekrar dene.", False
+    data, mime = _premium_image(prompt, refs, translate)
+    if data is None:
+        if not free_tier.cloudflare_enabled():
+            free_tier.release(event_id)
+            return None, "Görsel üretilemedi, hakkın düşülmedi. Tekrar dene.", False
+        try:
+            ref_bytes = [storage.fetch(u, max_bytes=20 * 1024 * 1024) for u in refs]
+            data, mime = free_tier.generate_image(prompt, ref_bytes, translate=translate), "image/jpeg"
+        except (free_tier.FreeServiceError, storage.StorageError) as e:
+            logger.error("Ücretsiz görsel üretilemedi: %s", e)
+            free_tier.release(event_id)
+            return None, "Görsel üretilemedi, hakkın düşülmedi. Tekrar dene.", False
     folder = f"gorsel/{user['id']}" if user else "gorsel/ucretsiz"
-    url = _save_image(data, "image/jpeg", folder)
+    url = _save_image(data, mime, folder)
     if user:
         from app.services import library
 
         library.add(user["id"], "image", url, prompt, "sohbet")
     return url, None, False
+
+
+def _premium_image(prompt: str, refs: list[str], translate: bool) -> tuple[bytes | None, str]:
+    """Ücretli paketle aynı görsel hattı (planlayıcı + Gemini). Günlük tavan dolduysa ya da olmazsa None."""
+    if not free_tier.premium_image_available():
+        return None, ""
+    from app.services import gateway_media, media_planner
+
+    try:
+        aspect, clean = free_tier.image_aspect(prompt)
+        if translate:
+            clean = media_planner.plan_image(clean, aspect, ref_count=len(refs)).get("prompt") or clean
+        data, mime = gateway_media.generate_image(clean, aspect, refs or None)
+    except Exception as e:  # yedek: Cloudflare FLUX
+        logger.warning("Ücretsiz görsel Gemini ile üretilemedi, FLUX'a geçiliyor: %s", e)
+        return None, ""
+    free_tier.mark_premium_image()
+    return data, mime
 
 
 def _load_attachments(attachments: list[FreeAttachment]) -> list[dict]:

@@ -245,16 +245,22 @@ def chat_completion(model: str, messages: list[dict], max_tokens: int = 2000, fr
 
 
 def smart_chat_completion(messages: list[dict], max_tokens: int = 1800, paid: bool = False,
-                          vision: bool = False, skip: tuple[str, ...] = ()) -> tuple[str, str]:
+                          vision: bool = False, skip: tuple[str, ...] = (), premium: bool = True) -> tuple[str, str]:
     """En iyi uygun modelle yanıtlar. (metin, model) döndürür.
 
-    Ücretli: Sonnet → Haiku → ücretsiz zincir. Ücretsiz: Haiku (günlük bütçe içinde) → ücretsiz zincir.
+    Ücretli: Sonnet → Haiku → ücretsiz zincir.
+    Ücretsiz paket ve misafir: ücretli paketle aynı model (Sonnet → Haiku), günlük ücretsiz bütçe
+    (FREE_GATEWAY_DAILY_USD) içinde; bütçe dolunca ücretsiz zincir. premium=False: arka plan
+    yardımcı işleri (istem çevirisi vb.) yalnızca Haiku kullanır.
     """
     errors = []
     if gateway_ready():
-        models = [config.CHAT_MODEL, config.FREE_CHAT_MODEL] if paid else (
-            [config.FREE_CHAT_MODEL] if free_budget_left() else []
-        )
+        if paid:
+            models = [config.CHAT_MODEL, config.FREE_CHAT_MODEL]
+        elif free_budget_left():
+            models = [config.CHAT_MODEL, config.FREE_CHAT_MODEL] if premium else [config.FREE_CHAT_MODEL]
+        else:
+            models = []
         for model in dict.fromkeys(m for m in models if m not in skip):
             try:
                 return chat_completion(model, messages, max_tokens, free=not paid), model
@@ -329,9 +335,10 @@ def _free_chain_completion(messages: list[dict], max_tokens: int, vision: bool) 
     raise LLMError("; ".join(errors) or "Ücretsiz sağlayıcı yok")
 
 
-def free_chat_completion(messages: list[dict], max_tokens: int = 1200, vision: bool = False) -> tuple[str, str]:
-    """Ücretsiz paket ve yardımcı işler: önce Claude Haiku (günlük bütçe içinde), sonra ücretsiz katmanlar.
+def free_chat_completion(messages: list[dict], max_tokens: int = 1200, vision: bool = False,
+                         premium: bool = True) -> tuple[str, str]:
+    """Ücretsiz paket: ücretli paketle aynı model (günlük bütçe içinde), sonra ücretsiz katmanlar.
 
-    (metin, model) döndürür.
+    Yardımcı işler premium=False ile yalnızca Haiku kullanır. (metin, model) döndürür.
     """
-    return smart_chat_completion(messages, max_tokens, paid=False, vision=vision)
+    return smart_chat_completion(messages, max_tokens, paid=False, vision=vision, premium=premium)

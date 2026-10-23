@@ -19,7 +19,7 @@ export default function FikirWorkspace({ initial = null }: { initial?: Conversat
       ? `/araclar/video?konsept=${encodeURIComponent((extractConcept(text, "Video") || text).slice(0, 400))}`
       : null;
 
-  // Ücretsiz paket: Haiku ile kredisiz sohbet, günlük mesaj hakkı, dosya eklenemez.
+  // Ücretsiz paket: ücretli paketle aynı model (Sonnet) ile kredisiz sohbet, günlük mesaj hakkı, dosya eklenemez.
   if (usage.plan === "deneme") {
     const left = status?.chat.remaining;
     return (

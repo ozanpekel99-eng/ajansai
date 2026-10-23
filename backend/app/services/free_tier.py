@@ -3,8 +3,8 @@
 Maliyet sıfıra yakın tutulur:
 - Sohbet Groq / Cerebras ücretsiz katmanlarıyla ($0), kotalar dolarsa Claude Haiku 5.5 ile
   (mesaj başı ~$0,0007); yalnızca metin, kısa geçmiş.
-- Görsel Cloudflare Workers AI'ın günlük ücretsiz kotasıyla (FLUX.1 schnell); site geneli
-  günlük tavan ücretsiz kotanın altında tutulur, aşılırsa üretim ertesi güne kalır.
+- Sohbet ve görsel ücretli paketle aynı modellerle (Claude Sonnet, Gemini görsel) yapılır; site geneli
+  günlük bütçe / tavan dolunca ücretsiz yedeklere (Groq / Cerebras, Cloudflare FLUX) geçilir.
 - Stok fotoğraflar Pexels'ten (ücretsiz, ticari kullanım serbest).
 
 Giriş yapmamış ziyaretçiler IP adresinin özetiyle sayılır (IP'nin kendisi saklanmaz).
@@ -350,8 +350,32 @@ def reserve_file(subject: str) -> str:
 
 # ---------------- Ücretsiz AI görseli (Cloudflare Workers AI) ----------------
 
-def image_enabled() -> bool:
+def cloudflare_enabled() -> bool:
     return bool(config.CLOUDFLARE_ACCOUNT_ID and config.CLOUDFLARE_AI_TOKEN)
+
+
+def premium_image_enabled() -> bool:
+    from app.services import gateway_media
+
+    return gateway_media.is_enabled()
+
+
+def image_enabled() -> bool:
+    return premium_image_enabled() or cloudflare_enabled()
+
+
+def premium_image_available() -> bool:
+    """Ücretsiz görsel bugün ücretli paketteki modelle (Gemini) üretilebilir mi (site geneli günlük tavan)."""
+    if not premium_image_enabled():
+        return False
+    with get_engine().connect() as conn:
+        used = _count(conn, "image_premium", utcnow() - DAY)
+    return used < config.FREE_PREMIUM_IMAGES_PER_DAY
+
+
+def mark_premium_image() -> None:
+    with get_engine().begin() as conn:
+        conn.execute(free_events.insert().values(id=str(uuid.uuid4()), subject="site", kind="image_premium", created_at=utcnow()))
 
 
 ENHANCE_PROMPT = (
@@ -373,6 +397,7 @@ def _english_prompt(concept: str) -> str:
                 }
             ],
             max_tokens=300,
+            premium=False,
         )
         return text.strip() or concept
     except Exception as e:  # çeviri olmazsa özgün metinle devam
