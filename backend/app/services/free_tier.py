@@ -212,7 +212,8 @@ def extract_ref(prompt: str, labels: dict[str, str]) -> tuple[str | None, str]:
     return labels.get(key), re.sub(r"\s{2,}", " ", clean)
 
 
-def direct_image_prompt(image_prompt: str, user_text: str, editing: bool, ref_count: int = 0) -> str:
+def direct_image_prompt(image_prompt: str, user_text: str, editing: bool, ref_count: int = 0,
+                        image_urls: list[str] | None = None) -> str:
     """ChatGPT gibi: görsel isteğinde kullanıcının kendi cümlesi modele aynen gider.
 
     Sohbet modelinin yazdığı İngilizce istem yalnızca oran için ve kullanıcı kısa bir onay verdiğinde
@@ -226,7 +227,7 @@ def direct_image_prompt(image_prompt: str, user_text: str, editing: bool, ref_co
         if config.IMAGE_PROMPT_MODE == "chatgpt":
             from app.services import media_planner
 
-            return f"{aspect} | {media_planner.direct_ad_prompt(text, aspect, edit=editing, ref_count=ref_count)}"
+            return f"{aspect} | {media_planner.direct_ad_prompt(text, aspect, edit=editing, ref_count=ref_count, image_urls=image_urls)}"
         return f"{aspect} | {text}"
     return image_prompt
 

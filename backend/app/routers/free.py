@@ -170,7 +170,7 @@ def chat(payload: FreeChatRequest, request: Request, user: dict | None = Depends
         if ref_url:
             refs = [ref_url] + refs[:1]
         image_prompt = free_tier.direct_image_prompt(image_prompt, last.content, editing=bool(ref_url),
-                                                     ref_count=len(refs) - (1 if ref_url else 0))
+                                                     ref_count=len(refs) - (1 if ref_url else 0), image_urls=refs)
         url, image_error, limited = make_free_image(subject, user, image_prompt, refs, translate=False)
         if limited:
             limit = "image"  # arayüz paketleri gösterir

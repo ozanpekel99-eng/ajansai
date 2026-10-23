@@ -102,7 +102,8 @@ def create_image(payload: ImageRequest, user: dict = Depends(get_current_user)):
     event_id = _charge(user["id"], "image", credits, ("Revize: " if base else "") + payload.concept)
 
     if config.IMAGE_PROMPT_MODE == "chatgpt":  # ChatGPT gibi güçlü istem yazımı, yazılar aynen korunur
-        plan = {"prompt": media_planner.direct_ad_prompt(payload.concept, aspect, edit=bool(base), ref_count=len(refs)),
+        plan = {"prompt": media_planner.direct_ad_prompt(payload.concept, aspect, edit=bool(base), ref_count=len(refs),
+                                                         image_urls=([base] if base else []) + refs),
                 "note": None}
     elif config.IMAGE_DIRECT:  # istek aynen modele gider
         plan = {"prompt": payload.concept, "note": None}
@@ -430,7 +431,7 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
         if ref_url:
             refs = [ref_url] + refs[:3]
         image_prompt = free_tier.direct_image_prompt(image_prompt, last.content, editing=bool(ref_url),
-                                                     ref_count=len(refs) - (1 if ref_url else 0))
+                                                     ref_count=len(refs) - (1 if ref_url else 0), image_urls=refs)
         url, image_error, image_credits = _chat_image(user, image_prompt, refs)
         if url:
             images.append(url)

@@ -114,7 +114,10 @@ Product photos: if reference images are attached, they are the client's REAL pro
 all. Say "Use the exact products from the attached photos as they are: same shape, proportions, color, materials,
 handles, buttons, display, panel text and logos. Do not redesign, restyle, recolor or add details to them; only
 place them in the scene with matching lighting and shadows." Make them large, sharp heroes; never cover them
-with text or badges.
+with text or badges. Look at the attached photos, identify each product and state their REAL-WORLD relative
+sizes explicitly so the scale is correct (e.g. "the refrigerator is about 185 cm tall and the washing machine
+about 85 cm tall, so the washing machine reaches roughly the fridge's lower half; both stand on the same floor
+line"). Never enlarge a small product to match a big one or shrink a big one; keep true proportions.
 Edit mode (the FIRST attached image is the current poster): start with "Edit the attached poster.", describe
 only the requested change concretely, then "Keep everything else exactly the same" and list every existing
 on-image text verbatim in quotes.
@@ -124,8 +127,17 @@ exactly: "Render ONLY the quoted texts above, exactly as written. No other text,
 installation claims, logos or prices." Output ONLY the prompt text, no preamble."""
 
 
-def direct_ad_prompt(request: str, aspect: str, edit: bool = False, ref_count: int = 0) -> str:
-    """ChatGPT tarzı istem yazımı (Sonnet). Çalışmazsa istek aynen döner."""
+def _with_images(text: str, urls: list[str] | None):
+    if not urls:
+        return text
+    return [{"type": "text", "text": text}] + [{"type": "image_url", "image_url": {"url": u}} for u in urls[:5]]
+
+
+def direct_ad_prompt(request: str, aspect: str, edit: bool = False, ref_count: int = 0,
+                     image_urls: list[str] | None = None) -> str:
+    """ChatGPT tarzı istem yazımı (Sonnet). Ürün fotoğraflarını görür (gerçek boyutları için).
+
+    Çalışmazsa istek aynen döner."""
     parts = [f"Aspect ratio: {aspect}."]
     if edit:
         parts.append("EDIT MODE: the first attached image is the current poster to edit.")
@@ -135,7 +147,7 @@ def direct_ad_prompt(request: str, aspect: str, edit: bool = False, ref_count: i
     try:
         raw = llm_service.chat_completion(
             config.IMAGE_PROMPT_MODEL,
-            [{"role": "system", "content": AD_DIRECTOR_SYSTEM}, {"role": "user", "content": "\n".join(parts)}],
+            [{"role": "system", "content": AD_DIRECTOR_SYSTEM}, {"role": "user", "content": _with_images("\n".join(parts), image_urls)}],
             max_tokens=4000,  # Sonnet 5.5 düşünme token'ları da bu sınıra dahil
         ).strip()
         if raw:
