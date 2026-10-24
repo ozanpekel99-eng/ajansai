@@ -193,6 +193,8 @@ META_APP_SECRET = _env("META_APP_SECRET")
 # Facebook Login for Business yapılandırma kimliği (izinler: ads_management, ads_read,
 # business_management, pages_show_list). Gizli değildir.
 META_CONFIG_ID = _env("META_CONFIG_ID")
+# Yönetici bağlantısı: ajansAI'nin kendi Instagram hesabı için paylaşım/DM/yorum izinlerini de isteyen yapılandırma
+META_ADMIN_CONFIG_ID = _env("META_ADMIN_CONFIG_ID", "975266095640154")
 META_API_VERSION = _env("META_API_VERSION", "v26.0")
 META_REDIRECT_URI = _env("META_REDIRECT_URI", f"{WEB_URL}/ads/callback")
 

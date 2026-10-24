@@ -58,11 +58,20 @@ def meta_status(user: dict = Depends(get_current_user)):
 
 
 @router.get("/meta/connect")
-def meta_connect(user: dict = Depends(get_current_user)):
-    """Kullanıcının Meta hesabını bağlaması için yönlendirme URL'si döndürür."""
+def meta_connect(publishing: bool = False, user: dict = Depends(get_current_user)):
+    """Kullanıcının Meta hesabını bağlaması için yönlendirme URL'si döndürür.
+
+    publishing=1 yalnızca yöneticiler içindir: ajansAI'nin kendi Instagram hesabına paylaşım,
+    DM ve yorum izinlerini de isteyen yapılandırmayla bağlanır (uygulamada rolü olan hesaplar için
+    Meta'nın standart erişimi yeterlidir).
+    """
     _require_ads(user)
+    admin = (user.get("email") or "").lower() in config.ADMIN_EMAILS
+    if publishing and not admin:
+        raise HTTPException(status_code=403, detail="Bu bağlantı yalnızca yöneticiler içindir.")
     state = create_token(user["id"], purpose="meta_oauth", expires=timedelta(minutes=15))
-    return {"oauth_url": get_oauth_url(config.META_REDIRECT_URI, state)}
+    cfg = config.META_ADMIN_CONFIG_ID if publishing else None
+    return {"oauth_url": get_oauth_url(config.META_REDIRECT_URI, state, cfg)}
 
 
 class MetaCallbackRequest(BaseModel):

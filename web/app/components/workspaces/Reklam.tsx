@@ -121,10 +121,13 @@ export default function ReklamWorkspace(_: WorkspaceProps) {
   const [view, setView] = useState<"new" | "list">("new");
   const [error, setError] = useState("");
 
+  // Yönetici: ?yayin=1 ile kendi Instagram hesabımız için paylaşım/DM izinleri de istenir
+  const publishing = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("yayin") === "1";
+
   const connect = async () => {
     setError("");
     try {
-      const d = await api<{ oauth_url: string }>("/api/ads/meta/connect");
+      const d = await api<{ oauth_url: string }>(`/api/ads/meta/connect${publishing ? "?publishing=1" : ""}`);
       window.location.href = d.oauth_url;
     } catch (e) {
       setError((e as ApiError).message);
@@ -140,7 +143,7 @@ export default function ReklamWorkspace(_: WorkspaceProps) {
     return <LockedNotice text="Meta reklam entegrasyonu Pro ve Advanced paketlerinde açılır." plan="pro" />;
   }
 
-  if (!metaConnected) {
+  if (!metaConnected || publishing) {
     return (
       <div className="panel ws-panel" style={{ maxWidth: 560 }}>
         <h2>Meta hesabını bağla</h2>

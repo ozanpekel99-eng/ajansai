@@ -20,16 +20,17 @@ class MetaError(Exception):
     pass
 
 
-def get_oauth_url(redirect_uri: str, state: str) -> str:
+def get_oauth_url(redirect_uri: str, state: str, config_id: str | None = None) -> str:
     """Kullanıcıyı Meta'nın izin ekranına yönlendirecek URL'yi üretir.
 
     `state`, CSRF'e karşı imzalı ve kısa ömürlü bir değerdir; callback'te
     doğrulanır. ads_management izni Meta App Review onayı gerektirir.
     """
     params = {"client_id": config.META_APP_ID, "redirect_uri": redirect_uri, "state": state}
-    if config.META_CONFIG_ID:
+    config_id = config_id or config.META_CONFIG_ID
+    if config_id:
         # Facebook Login for Business: izinler Meta panelindeki yapılandırmadan gelir.
-        params["config_id"] = config.META_CONFIG_ID
+        params["config_id"] = config_id
         params["response_type"] = "code"
         params["override_default_response_type"] = "true"
     else:
