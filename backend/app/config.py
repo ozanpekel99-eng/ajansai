@@ -227,7 +227,3 @@ ADMIN_EMAILS = {e.strip().lower() for e in _env("ADMIN_EMAILS", "ozanpekel99@gma
 
 # Ücretsiz kullanıcıların (misafir ve hiç ödeme yapmamış üyeler) dosyalarının saklanma süresi (gün)
 FREE_RETENTION_DAYS = _int("FREE_RETENTION_DAYS", 7)
-
-# Reklam modu: "manual" = ajansAI reklam paketini hazırlar, kullanıcı Instagram'da "Öne çıkar" ya da
-# Reklam Yöneticisi'nde kendisi yayına alır (Meta işletme doğrulaması gelene kadar). "api" = Meta API ile otomatik.
-ADS_MODE = _env("ADS_MODE", "manual")

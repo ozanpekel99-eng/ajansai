@@ -29,12 +29,12 @@ router = APIRouter()
 logger = logging.getLogger("ajansai.ads")
 
 
-def _require_ads(user: dict, needs_meta: bool = True) -> None:
+def _require_ads(user: dict) -> None:
     try:
         check_ads_access(user["id"])
     except AdsNotAvailableError as e:
         raise HTTPException(status_code=403, detail=str(e))
-    if needs_meta and not (config.META_APP_ID and config.META_APP_SECRET):
+    if not (config.META_APP_ID and config.META_APP_SECRET):
         raise HTTPException(status_code=503, detail="Meta entegrasyonu henüz yapılandırılmadı.")
 
 
@@ -54,7 +54,7 @@ def meta_status(user: dict = Depends(get_current_user)):
         row = conn.execute(
             select(meta_connections.c.updated_at).where(meta_connections.c.user_id == user["id"])
         ).first()
-    return {"connected": row is not None, "mode": config.ADS_MODE}
+    return {"connected": row is not None}
 
 
 @router.get("/meta/connect")
@@ -426,12 +426,14 @@ def meta_ad_copy(payload: AdCopyRequest, user: dict = Depends(get_current_user))
     """Yapay zeka ile Instagram reklam metni (ana metin + başlık) yazar. 1 kredi."""
     from app.services.llm_service import LLMError, chat_completion
 
-    _require_ads(user, needs_meta=False)
+    _require_ads(user)
     try:
         event_id = consume(user["id"], "describe", CREDIT_COSTS["describe"], f"Reklam metni: {payload.brief[:150]}")
     except QuotaExceededError as e:
         raise HTTPException(status_code=402, detail=str(e))
-    goal = _GOAL_TEXT[payload.objective]
+    goal = {"traffic": "web sitesine tıklama", "whatsapp": "WhatsApp'tan mesaj atma", "awareness": "markayı tanıma"}[
+        payload.objective
+    ]
     prompt = (
         "Türkçe bir Instagram reklamı için metin yaz. Amaç: " + goal + ".\n"
         "Ürün/işletme bilgisi: " + payload.brief + "\n"
@@ -450,70 +452,3 @@ def meta_ad_copy(payload: AdCopyRequest, user: dict = Depends(get_current_user))
         raise HTTPException(status_code=503, detail="Reklam metni yazılamadı, kredin iade edildi. Tekrar dene.")
     return {"primary_text": data["primary_text"][:2000], "headline": (data.get("headline") or "")[:120]}
 
-
-
-_GOAL_TEXT = {
-    "profile": "Instagram profilini ziyaret etme",
-    "traffic": "web sitesine tıklama",
-    "whatsapp": "WhatsApp'tan mesaj atma",
-    "instagram_dm": "Instagram'dan DM atma",
-    "awareness": "markayı tanıma",
-}
-
-
-class AdPackageRequest(BaseModel):
-    brief: str = Field(..., min_length=3, max_length=1500)
-    objective: Literal["profile", "traffic", "whatsapp", "instagram_dm", "awareness"] = "profile"
-    location: str = Field("Türkiye", max_length=200)
-    age_min: int = Field(18, ge=18, le=65)
-    age_max: int = Field(65, ge=18, le=65)
-    daily_budget: int = Field(150, ge=30, le=100000)
-    days: int = Field(7, ge=1, le=60)
-
-
-@router.post("/package")
-def ad_package(payload: AdPackageRequest, user: dict = Depends(get_current_user)):
-    """Reklam paketi: metin, başlık, buton ve hedef kitle önerisi (Meta API'siz mod). 1 kredi."""
-    from app.services.llm_service import LLMError, chat_completion
-
-    _require_ads(user, needs_meta=False)
-    try:
-        event_id = consume(user["id"], "describe", CREDIT_COSTS["describe"], f"Reklam paketi: {payload.brief[:150]}")
-    except QuotaExceededError as e:
-        raise HTTPException(status_code=402, detail=str(e))
-    prompt = (
-        "Türkiye'deki küçük bir işletme için Instagram reklamı hazırlıyorsun. Amaç: " + _GOAL_TEXT[payload.objective] + ".\n"
-        "İşletme/ürün/kampanya: " + payload.brief + "\n"
-        "Konum: " + payload.location + f", yaş {payload.age_min}-{payload.age_max}.\n"
-        "Sadece şu JSON'u döndür (Türkçe, sade, abartısız, fiyat/indirim gibi bilgileri yalnızca verildiyse kullan): "
-        '{"primary_text": "reklam ana metni, en fazla 300 karakter, 1-2 emoji olabilir, harekete geçiren", '
-        '"headline": "en fazla 40 karakter", '
-        '"interests": ["Instagram reklam hedeflemesinde aranabilecek 4-6 ilgi alanı, Türkçe, kısa"], '
-        '"audience_note": "bu kitleyi neden seçtiğimizi anlatan tek cümle"}'
-    )
-    try:
-        text = chat_completion(config.CHAT_MODEL, [{"role": "user", "content": prompt}], max_tokens=700)
-        match = re.search(r"\{.*\}", text, re.S)
-        data = json.loads(match.group(0)) if match else {}
-        if not data.get("primary_text"):
-            raise ValueError("boş")
-    except (LLMError, ValueError) as e:
-        logger.error("Reklam paketi hazırlanamadı: %s", e)
-        refund(event_id)
-        raise HTTPException(status_code=503, detail="Reklam paketi hazırlanamadı, kredin iade edildi. Tekrar dene.")
-    cta = {"profile": "Profili ziyaret et", "traffic": "Daha fazla bilgi", "whatsapp": "WhatsApp'tan mesaj gönder",
-           "instagram_dm": "Mesaj gönder", "awareness": "Daha fazla bilgi"}[payload.objective]
-    interests = [str(i)[:60] for i in (data.get("interests") or []) if str(i).strip()][:6]
-    return {
-        "primary_text": str(data["primary_text"])[:2000],
-        "headline": str(data.get("headline") or "")[:120],
-        "cta": cta,
-        "interests": interests,
-        "audience_note": str(data.get("audience_note") or "")[:300],
-        "location": payload.location,
-        "age_min": min(payload.age_min, payload.age_max),
-        "age_max": max(payload.age_min, payload.age_max),
-        "daily_budget": payload.daily_budget,
-        "days": payload.days,
-        "total_budget": payload.daily_budget * payload.days,
-    }

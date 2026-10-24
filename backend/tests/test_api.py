@@ -1118,31 +1118,3 @@ def test_lifetime_budget_and_draft(client, monkeypatch):
     adset = next(d for m, p, d in calls if p.endswith("/adsets"))
     assert adset["lifetime_budget"] == 300000 and "daily_budget" not in adset
     assert not [d for m, p, d in calls if d.get("status") == "ACTIVE"]
-
-
-def test_ad_package_manual_mode(client, monkeypatch):
-    from app.services import llm_service
-
-    token = register(client)
-    assert client.post("/api/ads/package", json={"brief": "Kafe, yeni latte"}, headers=auth(token)).status_code == 403
-    _set_plan(_user_id(client, token), "pro")
-    assert client.get("/api/ads/meta/status", headers=auth(token)).json()["mode"] == "manual"
-    monkeypatch.setattr(llm_service, "chat_completion", lambda *a, **k: (
-        '{"primary_text": "Yeni latte burada ☕", "headline": "Yeni sezon latte", '
-        '"interests": ["Kahve", "Kafe", "Tatlı"], "audience_note": "Kahve sevenler"}'))
-    r = client.post("/api/ads/package", json={"brief": "Kafe, yeni latte", "objective": "instagram_dm", "location": "Kadıköy",
-                                              "age_min": 22, "age_max": 40, "daily_budget": 200, "days": 5}, headers=auth(token)).json()
-    assert r["headline"] == "Yeni sezon latte" and r["interests"] == ["Kahve", "Kafe", "Tatlı"]
-    assert r["cta"] == "Mesaj gönder" and r["total_budget"] == 1000
-    assert _credits(client, token)["used"] == 1
-
-
-def test_ad_copy_supports_all_objectives(client, monkeypatch):
-    from app.services import llm_service
-
-    token = register(client)
-    _set_plan(_user_id(client, token), "pro")
-    monkeypatch.setattr(llm_service, "chat_completion", lambda *a, **k: '{"primary_text": "Metin", "headline": "B"}')
-    for obj in ("profile", "instagram_dm"):
-        r = client.post("/api/ads/meta/ad-copy", json={"brief": "Kafe", "objective": obj}, headers=auth(token))
-        assert r.status_code == 200, r.text

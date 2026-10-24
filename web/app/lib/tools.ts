@@ -56,13 +56,12 @@ export const TOOLS: Tool[] = [
   },
   {
     slug: "reklam",
-    // Not: ADS_MODE=api'ye geçildiğinde (Meta doğrulaması) metinler otomatik yayın akışına göre güncellenmeli.
-    name: "Instagram Reklamı",
+    name: "Meta Reklam Kampanyası",
     kind: "reklam",
-    short: "Görselini seç, kampanyanı yaz: reklam metni, hedef kitle ve bütçe planı hazır; Instagram'da birkaç dokunuşla yayına al.",
-    long: "Reklam görselini ya da videosunu seç, neyin reklamını yaptığını yaz. Yapay zeka reklam metnini, başlığı, hedef kitleyi (konum, yaş, ilgi alanları) ve bütçe planını hazırlar. Sonra Instagram'da gönderinin altındaki \"Öne çıkar\" ile ya da Meta Reklam Yöneticisi'nden adım adım yayına alırsın; bütçe kendi Meta hesabından ödenir.",
+    short: "Instagram reklamını buradan kur: hesap, kitle, bütçe, görsel/video ve metin; sonuçları izle.",
+    long: "Meta hesabını bağla, Instagram\'a özel reklamını adım adım oluştur: amaç, konum ve yaş hedefleme, günlük bütçe, görsel veya video, yapay zeka destekli metin. Reklamı yayınla dediğinde Meta incelemesinden sonra yayına girer; harcama ve sonuçları buradan anlık izlersin.",
     quota: null,
-    costLabel: "1 kredi",
+    costLabel: "Kredi harcamaz",
     ready: true,
     plan: "Pro",
   },

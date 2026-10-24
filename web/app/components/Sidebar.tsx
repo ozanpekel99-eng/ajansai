@@ -30,8 +30,8 @@ function isActive(pathname: string, href: string) {
 export default function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, usage, metaConnected, adsMode, openCheckout } = useSession();
-  const steps = onboardingSteps(usage, metaConnected, adsMode);
+  const { user, usage, metaConnected, openCheckout } = useSession();
+  const steps = onboardingSteps(usage, metaConnected);
   const doneCount = steps.filter((s) => s.done).length;
 
   return (
