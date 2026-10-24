@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import config
 from app.db import init_db
-from app.routers import admin, ads, auth, chats, content, free, health, payments, plans, support, uploads, voice
+from app.routers import admin, ads, auth, chats, content, free, health, meta_webhook, payments, plans, support, uploads, voice
 from app.services import iyzico_service, llm_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -61,6 +61,8 @@ app.include_router(chats.router, prefix="/api/chats", tags=["chats"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(support.router, prefix="/api/support", tags=["support"])
 app.include_router(health.router, prefix="/api/health", tags=["health"])
+app.include_router(meta_webhook.router, prefix="/api/meta", tags=["meta"])
+app.include_router(meta_webhook.admin_router, prefix="/api/admin/instagram", tags=["admin"])
 
 
 @app.get("/health")

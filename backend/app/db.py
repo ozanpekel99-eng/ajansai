@@ -226,6 +226,23 @@ app_settings = Table(
     Column("value", Text, nullable=False),
 )
 
+# @ajansai.tr Instagram hesabına gelen (in) ve hesaptan gönderilen (out) DM'ler. Meta webhook'u ile gelir;
+# aynı mesaj (mid) iki kez kaydedilmez. `thread` müşterinin Instagram kimliğidir (IGSID).
+instagram_messages = Table(
+    "instagram_messages",
+    metadata,
+    Column("id", String(200), primary_key=True),  # Meta mesaj kimliği (mid)
+    Column("thread", String(64), nullable=False, index=True),
+    Column("ig_account", String(64), nullable=False, default=""),
+    Column("direction", String(3), nullable=False),  # in | out
+    Column("text", Text, nullable=False, default=""),
+    Column("attachments", Text, nullable=True),  # JSON: [{"type": "image", "url": "..."}]
+    Column("status", String(12), nullable=False),  # received | replied | escalated | skipped | error | sent
+    Column("note", String(300), nullable=True),
+    Column("sent_at", DateTime, nullable=False, index=True),  # Meta'daki mesaj zamanı (naive UTC)
+    Column("created_at", DateTime, nullable=False),
+)
+
 
 def _normalize_url(url: str) -> str:
     # Railway "postgresql://" veya "postgres://" verir; psycopg 3 sürücüsünü seçiyoruz.
