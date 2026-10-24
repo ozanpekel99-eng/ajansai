@@ -74,3 +74,10 @@ def test_inbound_endpoint_rejects_bad_signature(client, monkeypatch):
     body = json.dumps({"type": "email.received", "data": {"email_id": "x"}}).encode()
     r = client.post("/api/support/inbound", content=body, headers={"svix-id": "a", "svix-timestamp": "1", "svix-signature": "v1,zz"})
     assert r.status_code == 401
+
+
+def test_platform_emails_are_not_auto_replied():
+    from app.services import support
+
+    assert support.skip_reason({"from": "Meta <security@facebookmail.com>"}) == "platform bildirimi"
+    assert support.skip_reason({"from": "x@business.facebook.com"}) == "platform bildirimi"

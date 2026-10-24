@@ -170,6 +170,13 @@ def sender_address(email: dict) -> str:
     return parseaddr(email.get("from") or "")[1].lower()
 
 
+SERVICE_DOMAINS = {
+    "facebookmail.com", "facebook.com", "meta.com", "instagram.com", "mail.instagram.com", "whatsapp.com",
+    "google.com", "accounts.google.com", "apple.com", "id.apple.com", "iyzico.com", "vercel.com", "github.com",
+    "expo.dev", "resend.com",
+}
+
+
 def skip_reason(email: dict) -> str | None:
     """Otomatik yanıt verilmemesi gereken e-postalar (döngü ve spam koruması)."""
     addr = sender_address(email)
@@ -179,6 +186,9 @@ def skip_reason(email: dict) -> str | None:
     own = config.SUPPORT_ADDRESS.split("@", 1)[-1].lower()
     if domain == own or domain.endswith("." + own):
         return "kendi alan adımızdan"
+    # Platformların hesap/doğrulama e-postaları (Meta, Google, Apple, iyzico vb.): yanıt verilmez, yalnızca iletilir
+    if domain in SERVICE_DOMAINS or any(domain.endswith("." + d) for d in SERVICE_DOMAINS):
+        return "platform bildirimi"
     local = addr.split("@", 1)[0]
     if re.match(r"^(no-?reply|do-?not-?reply|mailer-daemon|postmaster|bounce|bounces|notifications?|noreply-.*)$", local):
         return "otomatik gönderici"
