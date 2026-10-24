@@ -99,6 +99,7 @@ function Signup() {
                         <li>Günde {pricing?.free?.chat_per_day ?? 10} sohbet mesajı</li>
                         <li>30 günde {pricing?.free?.images_per_month ?? 3} görsel</li>
                         <li>Görselden görsel üretimi</li>
+                        <li>Dosyalar 7 gün saklanır</li>
                         <li className="no">Video ve Meta reklamları</li>
                       </>
                     ) : p ? (

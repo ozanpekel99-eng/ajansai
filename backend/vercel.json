@@ -1,6 +1,16 @@
 {
   "crons": [
-    { "path": "/api/health/qa-run?video=auto", "schedule": "0 4 * * *" },
-    { "path": "/api/health/daily-report", "schedule": "50 4 * * *" }
+    {
+      "path": "/api/health/qa-run?video=auto",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/health/daily-report",
+      "schedule": "50 4 * * *"
+    },
+    {
+      "path": "/api/health/cleanup",
+      "schedule": "20 3 * * *"
+    }
   ]
 }

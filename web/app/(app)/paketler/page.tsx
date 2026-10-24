@@ -121,6 +121,7 @@ export default function Paketler() {
               <ul>
                 <li>Günde {pricing.free.chat_per_day} sohbet mesajı (yalnızca metin)</li>
                 <li>30 günde {pricing.free.images_per_month} ücretsiz AI görseli</li>
+                <li>Ürettiğin ve yüklediğin dosyalar 7 gün saklanır</li>
               </ul>
             </section>
           )}

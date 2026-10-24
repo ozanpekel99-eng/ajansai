@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Gizlilik Politikası — ajansAI" };
 
 export default function Privacy() {
   return (
-    <LegalPage title="Gizlilik Politikası" updated="22 Ekim 2026">
+    <LegalPage title="Gizlilik Politikası" updated="24 Ekim 2026">
       <p>
         Bu politika, ajansAI'ı (www.ajansai.tr) kullanırken hangi kişisel verilerinin işlendiğini, neden işlendiğini ve
         haklarını açıklar. 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) kapsamında aydınlatma metni yerine de geçer.
@@ -58,7 +58,7 @@ export default function Privacy() {
       </p>
 
       <h2>Saklama süresi</h2>
-      <p>Hesap bilgilerini hesabın açık olduğu sürece saklarız. Hesabını silmeni istediğinde verilerini 30 gün içinde sileriz; yasal olarak saklamamız gereken ödeme kayıtları ilgili süre boyunca saklanır.</p>
+      <p>Hesap bilgilerini hesabın açık olduğu sürece saklarız. Ücretsiz pakette (ve üye olmadan kullanırken) ürettiğin ve yüklediğin dosyalar 7 gün sonra otomatik silinir; ücretli paket satın almış kullanıcıların dosyaları hesap açık olduğu sürece saklanır. Hesabını silmeni istediğinde verilerini 30 gün içinde sileriz; yasal olarak saklamamız gereken ödeme kayıtları ilgili süre boyunca saklanır.</p>
 
       <h2>Hakların</h2>
       <p>

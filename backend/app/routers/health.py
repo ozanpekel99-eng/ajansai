@@ -209,3 +209,27 @@ def daily_report():
         return {"sent": False, "reason": "E-posta gönderilemedi."}
     _set(DAILY_KEY, datetime.now(timezone.utc).isoformat())
     return {"sent": True}
+
+
+CLEANUP_KEY = "retention_cleanup_at"
+
+
+@router.api_route("/cleanup", methods=["GET", "POST"])
+def cleanup(dry_run: bool = False):
+    """Ücretsiz kullanıcı dosyalarını saklama süresi dolunca siler (Vercel Cron, günde bir)."""
+    if not storage.is_enabled():
+        return {"deleted": 0, "reason": "Blob deposu bağlı değil."}
+    if not dry_run:
+        last = _get(CLEANUP_KEY)
+        if last and (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() < MIN_INTERVAL_S:
+            return {"deleted": 0, "reason": "Son 20 saatte çalıştı."}
+    from app.services import retention
+
+    try:
+        result = retention.run(dry_run=dry_run)
+    except storage.StorageError as e:
+        logger.error("Saklama temizliği başarısız: %s", e)
+        return {"deleted": 0, "reason": "Depoya ulaşılamadı."}
+    if not dry_run:
+        _set(CLEANUP_KEY, datetime.now(timezone.utc).isoformat())
+    return result

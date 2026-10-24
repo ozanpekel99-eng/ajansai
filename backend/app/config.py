@@ -222,3 +222,6 @@ SUPPORT_REPLIES_PER_SENDER_PER_DAY = _int("SUPPORT_REPLIES_PER_SENDER_PER_DAY", 
 
 # Yönetici e-postaları (model karşılaştırma uçları vb.)
 ADMIN_EMAILS = {e.strip().lower() for e in _env("ADMIN_EMAILS", "ozanpekel99@gmail.com").split(",") if e.strip()}
+
+# Ücretsiz kullanıcıların (misafir ve hiç ödeme yapmamış üyeler) dosyalarının saklanma süresi (gün)
+FREE_RETENTION_DAYS = _int("FREE_RETENTION_DAYS", 7)

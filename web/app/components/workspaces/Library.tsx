@@ -6,6 +6,7 @@ import Link from "next/link";
 import { api } from "../../lib/api";
 import { onDownload } from "../../lib/download";
 import { readHistory } from "../../lib/history";
+import { useSession } from "../../lib/session";
 import Icon from "../Icon";
 
 export type LibraryItem = { id: string; kind: "image" | "video"; url: string; prompt: string; source?: string; job_id?: string | null; created_at: string };
@@ -16,6 +17,11 @@ const SOURCE: Record<string, string> = { gorsel: "Görsel aracı", video: "Video
 export function LibraryGrid({ kind, onOpen }: { kind: "image" | "video"; onOpen?: (item: LibraryItem) => void }) {
   const [items, setItems] = useState<LibraryItem[] | null>(null);
   const [error, setError] = useState("");
+  const { usage } = useSession();
+  const freeNote =
+    usage?.plan === "deneme" ? (
+      <p className="notice">Ücretsiz pakette dosyaların 7 gün saklanır. Saklamak istediklerini indir ya da bir paket seç.</p>
+    ) : null;
 
   useEffect(() => {
     let alive = true;
@@ -46,6 +52,7 @@ export function LibraryGrid({ kind, onOpen }: { kind: "image" | "video"; onOpen?
   if (!items.length) {
     return (
       <div className="panel empty">
+        {freeNote}
         <h3>Henüz {kind === "image" ? "görsel" : "video"} yok</h3>
         <p>Ürettiğin {kind === "image" ? "görseller (sohbette üretilenler dahil)" : "videolar"} burada birikir; buradan indirebilirsin.</p>
       </div>
@@ -53,6 +60,8 @@ export function LibraryGrid({ kind, onOpen }: { kind: "image" | "video"; onOpen?
   }
 
   return (
+    <>
+    {freeNote}
     <div className={`library-grid ${kind}`}>
       {items.map((item) => (
         <figure key={item.id} className="library-item">
@@ -86,5 +95,6 @@ export function LibraryGrid({ kind, onOpen }: { kind: "image" | "video"; onOpen?
         </figure>
       ))}
     </div>
+    </>
   );
 }

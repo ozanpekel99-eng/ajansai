@@ -145,3 +145,41 @@ def fetch(url: str, max_bytes: int = 50 * 1024 * 1024) -> bytes:
         if len(data) > max_bytes:
             raise StorageError("Dosya çok büyük.")
     return data
+
+
+# ---------------- Listeleme ve silme (saklama süresi temizliği) ----------------
+
+def _api_headers() -> dict:
+    return {"authorization": f"Bearer {config.BLOB_READ_WRITE_TOKEN}", "x-api-version": "13"}
+
+
+def list_blobs(prefix: str, max_items: int = 20000) -> list[dict]:
+    """Önekteki dosyalar: [{url, pathname, size, uploadedAt}] (sayfalı okunur)."""
+    if not is_enabled():
+        raise StorageError("Blob deposu bağlı değil (BLOB_READ_WRITE_TOKEN).")
+    out, cursor = [], None
+    while len(out) < max_items:
+        params = {"prefix": prefix, "limit": "1000"}
+        if cursor:
+            params["cursor"] = cursor
+        r = requests.get(f"{BLOB_API_URL}", params=params, headers=_api_headers(), timeout=60)
+        if r.status_code >= 400:
+            raise StorageError(f"Blob listesi alınamadı ({r.status_code}): {r.text[:200]}")
+        body = r.json()
+        out += body.get("blobs", [])
+        cursor = body.get("cursor")
+        if not body.get("hasMore") or not cursor:
+            break
+    return out
+
+
+def delete(urls: list[str]) -> int:
+    """Kendi depomuzdaki dosyaları siler (Blob'da silme ücretsizdir)."""
+    urls = [u for u in urls if is_own_blob_url(u)]
+    for i in range(0, len(urls), 500):
+        chunk = urls[i : i + 500]
+        r = requests.post(f"{BLOB_API_URL}/delete", json={"urls": chunk},
+                          headers={**_api_headers(), "content-type": "application/json"}, timeout=60)
+        if r.status_code >= 400:
+            raise StorageError(f"Blob silinemedi ({r.status_code}): {r.text[:200]}")
+    return len(urls)
