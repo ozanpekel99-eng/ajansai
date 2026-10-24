@@ -81,3 +81,26 @@ def test_platform_emails_are_not_auto_replied():
 
     assert support.skip_reason({"from": "Meta <security@facebookmail.com>"}) == "platform bildirimi"
     assert support.skip_reason({"from": "x@business.facebook.com"}) == "platform bildirimi"
+
+
+def test_send_email_merges_headers(monkeypatch):
+    """Idempotency-Key başlığı Authorization ile birleşmeli (önceden TypeError veriyordu)."""
+    seen = {}
+
+    class R:
+        status_code = 200
+        content = b'{"id":"x"}'
+
+        def json(self):
+            return {"id": "x"}
+
+    def fake_request(method, url, headers=None, timeout=None, **kw):
+        seen.update(headers=headers, json=kw.get("json"))
+        return R()
+
+    monkeypatch.setattr(support.config, "RESEND_API_KEY", "re_test")
+    monkeypatch.setattr(support.requests, "request", fake_request)
+    assert support.send_email(["a@b.com"], "Konu", "Merhaba", headers={"In-Reply-To": "<m>"}) == {"id": "x"}
+    assert seen["headers"]["Authorization"] == "Bearer re_test"
+    assert "Idempotency-Key" in seen["headers"]
+    assert seen["json"]["headers"] == {"In-Reply-To": "<m>"}

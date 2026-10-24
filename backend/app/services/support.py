@@ -69,15 +69,12 @@ def verify_signature(headers: dict, body: bytes, secret: str | None = None, tole
 # ---------------------------------------------------------------- Resend API
 
 
-def _resend(method: str, path: str, **kwargs) -> dict:
+def _resend(method: str, path: str, headers: dict | None = None, **kwargs) -> dict:
     if not config.RESEND_API_KEY:
         raise SupportError("RESEND_API_KEY tanımlı değil.")
+    all_headers = {"Authorization": f"Bearer {config.RESEND_API_KEY}", **(headers or {})}
     try:
-        r = requests.request(
-            method, RESEND_API + path,
-            headers={"Authorization": f"Bearer {config.RESEND_API_KEY}"},
-            timeout=30, **kwargs,
-        )
+        r = requests.request(method, RESEND_API + path, headers=all_headers, timeout=30, **kwargs)
     except requests.RequestException as e:
         raise SupportError(f"Resend'e ulaşılamadı: {e}") from e
     if r.status_code >= 300:
@@ -373,10 +370,10 @@ def handle_inbound(email_id: str) -> dict:
     status = "escalated" if draft["escalate"] else "replied"
     try:
         send_email([addr], _reply_subject(subject), reply, reply_to=config.SUPPORT_ADDRESS, headers=thread)
-    except SupportError as e:
+    except Exception as e:  # noqa: BLE001 — beklenmeyen hata da kaydedilir, sahibine iletilir
         record(email_id, addr, subject, body, reply, "error", str(e))
         _forward(addr, subject, body, reply, label="Yanıt GÖNDERİLEMEDİ")
-        raise
+        raise SupportError(f"Yanıt gönderilemedi: {e}") from e
     record(email_id, addr, subject, body, reply, status, draft["reason"])
     _forward(addr, subject, body, reply, label="İnsan gerekli" if draft["escalate"] else "Otomatik yanıtlandı")
     return {"status": status}

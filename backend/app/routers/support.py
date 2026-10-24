@@ -26,7 +26,8 @@ async def inbound(request: Request):
     email_id = (event.get("data") or {}).get("email_id")
     if not email_id:
         raise HTTPException(status_code=400, detail="email_id yok.")
-    to = [a.lower() for a in (event.get("data") or {}).get("to") or []]
+    data = event.get("data") or {}
+    to = [a.lower() for a in (data.get("to") or []) + (data.get("received_for") or [])]
     if to and not any(config.SUPPORT_ADDRESS.lower() in a for a in to):
         # Alan adındaki başka adreslere gelenler yalnızca iletilir, otomatik yanıtlanmaz
         logger.info("Destek dışı adrese e-posta: %s", to)
