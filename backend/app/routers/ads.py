@@ -431,9 +431,13 @@ def meta_ad_copy(payload: AdCopyRequest, user: dict = Depends(get_current_user))
         event_id = consume(user["id"], "describe", CREDIT_COSTS["describe"], f"Reklam metni: {payload.brief[:150]}")
     except QuotaExceededError as e:
         raise HTTPException(status_code=402, detail=str(e))
-    goal = {"traffic": "web sitesine tıklama", "whatsapp": "WhatsApp'tan mesaj atma", "awareness": "markayı tanıma"}[
-        payload.objective
-    ]
+    goal = {
+        "profile": "Instagram profilini ziyaret etme",
+        "traffic": "web sitesine tıklama",
+        "whatsapp": "WhatsApp'tan mesaj atma",
+        "instagram_dm": "Instagram'dan DM atma",
+        "awareness": "markayı tanıma",
+    }[payload.objective]
     prompt = (
         "Türkçe bir Instagram reklamı için metin yaz. Amaç: " + goal + ".\n"
         "Ürün/işletme bilgisi: " + payload.brief + "\n"
