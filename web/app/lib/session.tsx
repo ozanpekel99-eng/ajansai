@@ -10,6 +10,8 @@ type Session = {
   user: User | null;
   usage: Usage | null;
   metaConnected: boolean;
+  /** "manual": Meta API'siz reklam paketi; "api": Meta ile otomatik yayın */
+  adsMode: "manual" | "api";
   refresh: () => Promise<void>;
   openCheckout: (planId?: string) => void;
 };
@@ -34,6 +36,7 @@ export function SessionProvider({
   const [user, setUser] = useState<User | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [metaConnected, setMetaConnected] = useState(false);
+  const [adsMode, setAdsMode] = useState<"manual" | "api">("manual");
 
   const refresh = useCallback(async () => {
     try {
@@ -41,8 +44,11 @@ export function SessionProvider({
       setUser(data.user);
       setUsage(data.usage);
       if (data.usage.ads_enabled) {
-        api<{ connected: boolean }>("/api/ads/meta/status")
-          .then((d) => setMetaConnected(d.connected))
+        api<{ connected: boolean; mode?: "manual" | "api" }>("/api/ads/meta/status")
+          .then((d) => {
+            setMetaConnected(d.connected);
+            setAdsMode(d.mode === "api" ? "api" : "manual");
+          })
           .catch(() => setMetaConnected(false));
       }
     } catch {
@@ -63,7 +69,7 @@ export function SessionProvider({
   if (!ready) return null;
 
   return (
-    <SessionContext.Provider value={{ user, usage, metaConnected, refresh, openCheckout: onCheckout }}>
+    <SessionContext.Provider value={{ user, usage, metaConnected, adsMode, refresh, openCheckout: onCheckout }}>
       {children}
     </SessionContext.Provider>
   );
@@ -83,11 +89,13 @@ export function firstName(user: User | null) {
 }
 
 /** Başlangıç adımları: kenar menü ve ana sayfa aynı listeyi kullanır. */
-export function onboardingSteps(usage: Usage | null, metaConnected: boolean) {
-  return [
+export function onboardingSteps(usage: Usage | null, metaConnected: boolean, adsMode: "manual" | "api" = "api") {
+  const steps = [
     { key: "account", title: "Hesabını oluştur", done: true },
     { key: "idea", title: "İlk sohbetini başlat", done: (!!usage && usage.counts.idea > 0) || hasChats() },
     { key: "plan", title: "Paketini seç", done: !!usage && usage.plan !== "deneme" },
     { key: "meta", title: "Meta reklam hesabını bağla", done: metaConnected },
   ];
+  // Reklam paketi modunda Meta bağlantısı gerekmez
+  return adsMode === "manual" ? steps.filter((s) => s.key !== "meta") : steps;
 }

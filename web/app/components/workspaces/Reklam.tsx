@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError, api } from "../../lib/api";
 import { readHistory } from "../../lib/history";
+import { onDownload } from "../../lib/download";
 import { money } from "../../lib/plans";
 import { useSession } from "../../lib/session";
 import { UploadProgress, useUploader } from "../Attachments";
@@ -117,7 +118,7 @@ const isVertical = (p: Placement) => /story|reels/.test(p);
 const igOnly = (o: Objective) => o === "profile" || o === "instagram_dm";
 
 export default function ReklamWorkspace(_: WorkspaceProps) {
-  const { usage, metaConnected, refresh } = useSession();
+  const { usage, metaConnected, adsMode, refresh } = useSession();
   const [view, setView] = useState<"new" | "list">("new");
   const [error, setError] = useState("");
 
@@ -142,6 +143,12 @@ export default function ReklamWorkspace(_: WorkspaceProps) {
   if (usage && !usage.ads_enabled) {
     return <LockedNotice text="Meta reklam entegrasyonu Pro ve Advanced paketlerinde açılır." plan="pro" />;
   }
+
+  // Meta doğrulaması gelene kadar: reklam paketi hazırlanır, kullanıcı kendisi yayına alır.
+  // Yönetici ?api=1 ya da ?yayin=1 ile otomatik akışı kullanmaya devam edebilir.
+  const apiOverride =
+    publishing || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("api") === "1");
+  if (adsMode === "manual" && !apiOverride) return <AdPackage />;
 
   if (!metaConnected || publishing) {
     return (
@@ -1566,5 +1573,207 @@ function AdList() {
         </>
       )}
     </div>
+  );
+}
+
+
+/* ---------------- Reklam paketi (Meta API'siz mod) ---------------- */
+
+type AdPack = {
+  primary_text: string; headline: string; cta: string; interests: string[]; audience_note: string;
+  location: string; age_min: number; age_max: number; daily_budget: number; days: number; total_budget: number;
+};
+
+const PACK_GOALS: { value: Objective; label: string; boost: string; manager: string }[] = [
+  { value: "profile", label: "Profil ziyareti", boost: "Daha fazla profil ziyareti", manager: "Trafik → Instagram profili" },
+  { value: "instagram_dm", label: "Instagram'dan mesaj", boost: "Daha fazla mesaj", manager: "Etkileşim → Mesajlar → Instagram" },
+  { value: "whatsapp", label: "WhatsApp'tan mesaj", boost: "Daha fazla mesaj (WhatsApp)", manager: "Etkileşim → Mesajlar → WhatsApp" },
+  { value: "traffic", label: "Web sitesi ziyareti", boost: "Daha fazla web sitesi ziyareti", manager: "Trafik → İnternet sitesi" },
+  { value: "awareness", label: "Daha çok kişiye ulaşmak", boost: "Daha fazla erişim (öne çıkar)", manager: "Bilinirlik → Erişim" },
+];
+
+function CopyField({ label, text }: { label: string; text: string }) {
+  const [done, setDone] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setDone(true);
+      setTimeout(() => setDone(false), 1500);
+    } catch {
+      /* pano izni yoksa metin seçilebilir durumda kalır */
+    }
+  };
+  return (
+    <div className="pack-field">
+      <div className="pack-field-head">
+        <span>{label}</span>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={copy}>
+          {done ? "Kopyalandı" : "Kopyala"}
+        </button>
+      </div>
+      <p>{text}</p>
+    </div>
+  );
+}
+
+function AdPackage() {
+  const { refresh } = useSession();
+  const lib = useAdLibrary();
+  const [media, setMedia] = useState<Media | null>(null);
+  const [brief, setBrief] = useState("");
+  const [goal, setGoal] = useState<Objective>("profile");
+  const [location, setLocation] = useState("");
+  const [ageMin, setAgeMin] = useState(18);
+  const [ageMax, setAgeMax] = useState(55);
+  const [budget, setBudget] = useState(150);
+  const [days, setDays] = useState(7);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [pack, setPack] = useState<AdPack | null>(null);
+  const [guide, setGuide] = useState<"boost" | "manager">("boost");
+  const g = PACK_GOALS.find((x) => x.value === goal)!;
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!media) return setError("Önce reklamda kullanılacak görseli ya da videoyu seç.");
+    setBusy(true);
+    try {
+      const d = await api<AdPack>("/api/ads/package", {
+        method: "POST",
+        body: JSON.stringify({
+          brief, objective: goal, location: location.trim() || "Türkiye",
+          age_min: Math.min(ageMin, ageMax), age_max: Math.max(ageMin, ageMax), daily_budget: budget, days,
+        }),
+      });
+      setPack(d);
+      refresh();
+      setTimeout(() => document.getElementById("reklam-paketi")?.scrollIntoView({ behavior: "smooth" }), 50);
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const targeting = pack
+    ? `Konum: ${pack.location}\nYaş: ${pack.age_min}-${pack.age_max}\nİlgi alanları: ${pack.interests.join(", ")}`
+    : "";
+
+  return (
+    <>
+      <form className="panel ws-panel" onSubmit={submit} style={{ maxWidth: 760 }}>
+        <h2>Reklam paketini hazırla</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Görselini seç, kampanyanı yaz. Reklam metnini, hedef kitleyi ve bütçe planını hazırlarız; Instagram&apos;da birkaç
+          dokunuşla yayına alırsın.
+        </p>
+        <MediaPicker value={media} onChange={setMedia} title="Reklam görseli ya da videosu" lib={lib} hint="Kütüphanenden seç ya da yükle." />
+        <div className="field">
+          <label htmlFor="pack-brief">Neyin reklamını yapıyorsun?</label>
+          <textarea id="pack-brief" rows={3} required minLength={3} value={brief} onChange={(e) => setBrief(e.target.value)}
+            placeholder="Örn: Kadıköy'deki kafemiz, yeni sezon kabak baharatlı latte 120 TL" />
+        </div>
+        <div className="field">
+          <label htmlFor="pack-goal">Reklamdan ne bekliyorsun?</label>
+          <select id="pack-goal" value={goal} onChange={(e) => setGoal(e.target.value as Objective)}>
+            {PACK_GOALS.map((x) => (
+              <option key={x.value} value={x.value}>{x.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="pack-grid">
+          <div className="field">
+            <label htmlFor="pack-loc">Konum</label>
+            <input id="pack-loc" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Örn: İstanbul, Kadıköy" />
+          </div>
+          <div className="field">
+            <label>Yaş aralığı</label>
+            <div className="pack-ages">
+              <select value={ageMin} onChange={(e) => setAgeMin(+e.target.value)} aria-label="En küçük yaş">
+                {AGES.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+              <span>–</span>
+              <select value={ageMax} onChange={(e) => setAgeMax(+e.target.value)} aria-label="En büyük yaş">
+                {AGES.map((a) => <option key={a} value={a}>{a === 65 ? "65+" : a}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="pack-budget">Günlük bütçe (TL)</label>
+            <input id="pack-budget" type="number" min={30} step={10} value={budget} onChange={(e) => setBudget(Math.max(30, +e.target.value || 30))} />
+          </div>
+          <div className="field">
+            <label htmlFor="pack-days">Kaç gün?</label>
+            <input id="pack-days" type="number" min={1} max={60} value={days} onChange={(e) => setDays(Math.min(60, Math.max(1, +e.target.value || 1)))} />
+          </div>
+        </div>
+        {error && <div className="notice error">{error}</div>}
+        <button className="btn btn-primary btn-block" disabled={busy}>
+          {busy ? "Hazırlanıyor…" : "Reklam paketini hazırla (1 kredi)"}
+        </button>
+      </form>
+
+      {pack && media && (
+        <section id="reklam-paketi" className="panel ws-panel pack" style={{ maxWidth: 760, marginTop: 16 }}>
+          <h2>Reklam paketin hazır</h2>
+          <div className="pack-top">
+            <div className="pack-media">
+              {media.kind === "image" ? <img src={media.url} alt="Reklam görseli" /> : <video src={media.url} controls playsInline />}
+              <button type="button" className="btn btn-light btn-sm btn-block" onClick={() => onDownload(media.url)}>
+                <Icon name="download" size={14} /> {media.kind === "image" ? "Görseli indir" : "Videoyu indir"}
+              </button>
+            </div>
+            <div className="pack-copy">
+              <CopyField label="Reklam metni" text={pack.primary_text} />
+              {pack.headline && <CopyField label="Başlık" text={pack.headline} />}
+              <CopyField label="Hedef kitle" text={targeting} />
+              {pack.audience_note && <p className="muted small">{pack.audience_note}</p>}
+              <div className="pack-field">
+                <div className="pack-field-head"><span>Bütçe</span></div>
+                <p>
+                  Günlük {money(pack.daily_budget, "TRY")} × {pack.days} gün = <strong>{money(pack.total_budget, "TRY")}</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <h3 style={{ marginTop: 20 }}>Nasıl yayına alırsın?</h3>
+          <div className="segmented small" role="tablist" aria-label="Yayın yöntemi">
+            <button type="button" role="tab" aria-selected={guide === "boost"} className={guide === "boost" ? "active" : ""} onClick={() => setGuide("boost")}>
+              Instagram uygulamasından (en kolay)
+            </button>
+            <button type="button" role="tab" aria-selected={guide === "manager"} className={guide === "manager" ? "active" : ""} onClick={() => setGuide("manager")}>
+              Reklam Yöneticisi&apos;nden
+            </button>
+          </div>
+          {guide === "boost" ? (
+            <ol className="connect-tips pack-steps">
+              <li>Görseli indir ve Instagram&apos;da <strong>gönderi olarak paylaş</strong>; açıklamaya reklam metnini yapıştır.</li>
+              <li>Paylaştığın gönderinin altındaki <strong>Öne çıkar</strong> düğmesine dokun.</li>
+              <li>Hedef olarak <strong>{g.boost}</strong> seçeneğini seç.</li>
+              <li>Hedef kitlede <strong>Kendin oluştur</strong>&apos;a dokun; konum, yaş ve ilgi alanlarını yukarıdaki &quot;Hedef kitle&quot; bilgisine göre gir.</li>
+              <li>Günlük bütçeyi <strong>{money(pack.daily_budget, "TRY")}</strong>, süreyi <strong>{pack.days} gün</strong> yap.</li>
+              <li>Ödeme yöntemini seç ve <strong>Gönderiyi öne çıkar</strong>&apos;a dokun. Meta kısa bir incelemeden sonra reklamı yayına alır.</li>
+            </ol>
+          ) : (
+            <ol className="connect-tips pack-steps">
+              <li>
+                <a href="https://adsmanager.facebook.com/adsmanager/manage/campaigns" target="_blank" rel="noreferrer">Meta Reklam Yöneticisi&apos;ni aç</a> ve{" "}
+                <strong>Oluştur</strong>&apos;a tıkla.
+              </li>
+              <li>Kampanya amacı: <strong>{g.manager}</strong>.</li>
+              <li>Reklam setinde bütçeyi günlük <strong>{money(pack.daily_budget, "TRY")}</strong>, bitiş tarihini {pack.days} gün sonrası yap; konum, yaş ve ilgi alanlarını &quot;Hedef kitle&quot;den gir.</li>
+              <li>Yerleşimlerde <strong>Manuel yerleşimler</strong>&apos;i seç ve yalnızca <strong>Instagram</strong>&apos;ı işaretli bırak.</li>
+              <li>Reklamda Instagram hesabını seç, görseli yükle, reklam metnini ve başlığı yapıştır.</li>
+              <li><strong>Yayınla</strong>&apos;ya tıkla.</li>
+            </ol>
+          )}
+          <p className="muted small" style={{ marginBottom: 0 }}>
+            Reklam bütçesi kendi Meta hesabından ödenir; ajansAI ek ücret almaz.
+          </p>
+        </section>
+      )}
+    </>
   );
 }

@@ -4061,3 +4061,22 @@ table.data td.num {
   .md th, .md td { padding: 7px 8px; min-width: 130px; }
   .md th:first-child, .md td:first-child { min-width: 110px; }
 }
+
+/* Reklam paketi (Meta API'siz mod) */
+.pack-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
+.pack-ages { display: flex; align-items: center; gap: 8px; }
+.pack-ages select { flex: 1; min-width: 0; }
+.pack-top { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 18px; align-items: start; }
+.pack-media { display: flex; flex-direction: column; gap: 8px; }
+.pack-media img, .pack-media video { width: 100%; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); }
+.pack-copy { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pack-field { border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 12px; background: var(--surface); }
+.pack-field-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); font-weight: 600; }
+.pack-field p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.pack-steps { margin-top: 12px; }
+.pack .segmented { margin-top: 4px; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .pack-grid, .pack-top { grid-template-columns: 1fr; }
+  .pack-media { max-width: 260px; }
+}
+.pack-steps strong { font-size: inherit; font-weight: 600; color: var(--text); }
