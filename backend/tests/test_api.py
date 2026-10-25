@@ -286,7 +286,7 @@ def test_video_costs_and_failed_job_refunded_once(client, monkeypatch):
     token = register(client)
     _set_plan(_user_id(client, token), "baslangic")
     started = []
-    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16": started.append((d, r, i, e, a, ar)) or {"model": "m", "operation": {"id": "op"}})
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16", **k: started.append((d, r, i, e, a, ar)) or {"model": "m", "operation": {"id": "op"}})
     monkeypatch.setattr(content.gateway_media, "video_status", lambda op: {"status": "error", "error": "model hatası"})
     monkeypatch.setattr(content.gateway_media, "start_fallback_video", lambda *a, **k: (_ for _ in ()).throw(content.gateway_media.MediaError("yedek yok")))
 
@@ -1022,7 +1022,7 @@ def test_video_revision_reuses_start_frame_and_prompt(client, monkeypatch):
     _set_plan(_user_id(client, token), "pro")
     started = []
     monkeypatch.setattr(content.gateway_media, "start_video",
-                        lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16": started.append((p, i)) or {"model": "m", "operation": {"id": "op"}})
+                        lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16", **k: started.append((p, i)) or {"model": "m", "operation": {"id": "op"}})
     seen = []
     monkeypatch.setattr(content.media_planner, "plan_video",
                         lambda req, aspect, duration, has_start_frame, audio, previous_prompt=None, start_image_url=None:
@@ -1043,7 +1043,7 @@ def test_video_adds_missing_person_to_uploaded_photo(client, monkeypatch):
     _set_plan(_user_id(client, token), "pro")
     started, frames = [], []
     monkeypatch.setattr(content.gateway_media, "start_video",
-                        lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16": started.append((p, i)) or {"model": "m", "operation": {"id": "op"}})
+                        lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16", **k: started.append((p, i)) or {"model": "m", "operation": {"id": "op"}})
     monkeypatch.setattr(content.gateway_media, "generate_image",
                         lambda prompt, aspect, refs=None: frames.append((prompt, refs)) or (b"\x89PNGx", "image/png"))
     monkeypatch.setattr(content.storage, "save", lambda data, mime, folder, filename=None: BLOB_URL + "kare.png")
@@ -1118,3 +1118,43 @@ def test_lifetime_budget_and_draft(client, monkeypatch):
     adset = next(d for m, p, d in calls if p.endswith("/adsets"))
     assert adset["lifetime_budget"] == 300000 and "daily_budget" not in adset
     assert not [d for m, p, d in calls if d.get("status") == "ACTIVE"]
+
+
+def test_video_without_fallback_fails_instead_of_kling(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "pro")
+    seen = {}
+    monkeypatch.setattr(content.gateway_media, "start_video",
+                        lambda *a, **k: seen.update(k) or {"model": "veo", "operation": {"id": "op"}})
+    monkeypatch.setattr(content.gateway_media, "start_fallback_video",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("yedek kapalıyken Kling başlamamalı")))
+    monkeypatch.setattr(content.gateway_media, "video_status",
+                        lambda op: {"status": "error", "error": "Video boş döndü. Neden: raiMediaFilteredReasons=x"})
+    job = client.post("/api/content/video", json={"concept": "x", "fallback": False}, headers=auth(token)).json()["job_id"]
+    assert seen["allow_fallback"] is False
+    assert client.get(f"/api/content/video/{job}", headers=auth(token)).json()["status"] == "FAILED"
+    assert _credits(client, token)["used"] == 0
+
+
+def test_empty_video_reports_filter_reason(monkeypatch):
+    from app.services import gateway_media
+    monkeypatch.setattr(gateway_media, "_post", lambda *a, **k: {
+        "status": "completed", "videos": [],
+        "providerMetadata": {"google": {"raiMediaFilteredReasons": ["filtered"]}}})
+    result = gateway_media.video_status({"model": "google/veo", "operation": {}})
+    assert result["status"] == "error" and "raiMediaFilteredReasons=filtered" in result["error"]
+
+
+def test_start_video_without_fallback_raises(monkeypatch):
+    from app.services import gateway_media
+
+    def fake_post(path, model, kind, body, timeout):
+        raise gateway_media.MediaError("veo yok")
+
+    monkeypatch.setattr(gateway_media, "_post", fake_post)
+    try:
+        gateway_media.start_video("x", 8, "1080p", allow_fallback=False)
+        raise AssertionError("hata yükselmeli")
+    except gateway_media.MediaError as e:
+        assert "veo yok" in str(e)

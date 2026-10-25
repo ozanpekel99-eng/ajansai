@@ -10,7 +10,9 @@ doğrulanır, maliyet Vercel faturasına yansır. İstek biçimi resmi
 """
 
 import base64
+import json
 import logging
+import re
 
 import requests
 
@@ -264,6 +266,7 @@ def start_video(
     end_image_url: str | None = None,
     audio: bool = False,
     aspect_ratio: str = "9:16",
+    allow_fallback: bool = True,
 ) -> dict:
     """Video işini başlatır. Durum sorgusu için {"model", "operation"} döndürür.
 
@@ -274,13 +277,31 @@ def start_video(
     try:
         return _start(model, _video_body(prompt, duration, size, image_url, end_image_url, audio, aspect_ratio))
     except MediaError as e:
-        if not config.VIDEO_FALLBACK:
+        if not (config.VIDEO_FALLBACK and allow_fallback):
             raise
         logger.warning("Video modeli %s başlatılamadı, yedeğe geçiliyor: %s", model, e)
         try:
             return start_fallback_video(prompt, duration, resolution, image_url, audio, aspect_ratio)
         except MediaError as e2:
             raise MediaError(f"{model}: {e} | yedek: {e2}") from e2
+
+
+def _filter_reason(data) -> str:
+    """Yanıtta güvenlik filtresi / uyarı nedeni varsa kısa metin olarak döndürür."""
+    found: list[str] = []
+
+    def walk(node, key=""):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                walk(v, k)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v, key)
+        elif isinstance(node, (str, int)) and re.search(r"filter|reason|warning|error|rai|safety", key, re.I):
+            found.append(f"{key}={node}")
+
+    walk(data)
+    return "; ".join(found)[:400]
 
 
 def video_status(job: dict) -> dict:
@@ -291,7 +312,10 @@ def video_status(job: dict) -> dict:
     if status == "completed":
         videos = data.get("videos") or []
         if not videos:
-            return {"status": "error", "error": "Video boş döndü."}
+            # Veo güvenlik filtresine takılan işler "tamamlandı" ama videosuz döner; nedeni kaybolmasın.
+            logger.warning("Video boş döndü, sağlayıcı yanıtı: %s", json.dumps(data, ensure_ascii=False)[:1500])
+            reason = _filter_reason(data)
+            return {"status": "error", "error": "Video boş döndü." + (f" Neden: {reason}" if reason else "")}
         return {"status": "completed", "video": videos[0]}
     if status in ("error", "cancelled"):
         return {"status": "error", "error": data.get("error") or "Video üretimi iptal edildi."}

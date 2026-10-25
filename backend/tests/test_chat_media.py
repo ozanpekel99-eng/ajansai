@@ -67,7 +67,7 @@ def test_video_with_multiple_images_composes_start_frame(client, monkeypatch):
     calls = {}
     monkeypatch.setattr(gateway_media, "generate_image", lambda prompt, aspect, refs: calls.update(refs=refs, aspect=aspect) or (b"\x89PNG\r\n\x1a\nx", "image/png"))
     monkeypatch.setattr(storage, "save", lambda data, mime, folder, filename=None: BLOB_URL + "kare.png")
-    monkeypatch.setattr(gateway_media, "start_video", lambda prompt, d, r, image_url, e, a, asp: calls.update(start=image_url) or {"model": "m", "operation": {}})
+    monkeypatch.setattr(gateway_media, "start_video", lambda prompt, d, r, image_url, e, a, asp, **k: calls.update(start=image_url) or {"model": "m", "operation": {}})
     token = register_paid(client, plan="pro")
     refs = [BLOB_URL + "urun.png", BLOB_URL + "mekan.png"]
     r = client.post("/api/content/video", json={"concept": "ürün masada dönüyor", "reference_urls": refs}, headers=auth(token))
