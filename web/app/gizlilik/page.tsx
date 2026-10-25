@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 
+import CookieSettingsLink from "../components/CookieSettingsLink";
 import LegalPage from "../components/LegalPage";
 
 export const metadata: Metadata = { title: "Gizlilik Politikası — ajansAI" };
 
 export default function Privacy() {
   return (
-    <LegalPage title="Gizlilik Politikası" updated="24 Ekim 2026">
+    <LegalPage title="Gizlilik Politikası" updated="25 Ekim 2026">
       <p>
         Bu politika, ajansAI'ı (www.ajansai.tr) kullanırken hangi kişisel verilerinin işlendiğini, neden işlendiğini ve
         haklarını açıklar. 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) kapsamında aydınlatma metni yerine de geçer.
@@ -46,8 +47,13 @@ export default function Privacy() {
       <p>
         Sitemizde, ajansAI reklamlarının etkisini ölçmek için Meta Pikseli kullanılır. Piksel; ziyaret ettiğin sayfaları, kayıt
         olduğunu, ödeme başlattığını veya satın aldığını (tutar ve paket bilgisiyle) Meta'ya bildirir ve bunun için çerez kullanabilir.
-        Ad, e-posta, kart bilgisi gibi kişisel verilerin piksel ile gönderilmez. Tarayıcı ayarlarından çerezleri silebilir veya
-        engelleyebilirsin.
+        Ad, e-posta, kart bilgisi gibi kişisel verilerin piksel ile gönderilmez.
+      </p>
+      <p>
+        Meta Pikseli yalnızca sitedeki çerez bandında <strong>Kabul et</strong> dersen yüklenir; <strong>Reddet</strong> dersen
+        veya seçim yapmazsan yüklenmez. Seçimin tarayıcında saklanır ve istediğin zaman değiştirebilirsin:{" "}
+        <CookieSettingsLink />. Vercel Web Analytics çerez kullanmadığı için onaydan bağımsız çalışır. Tarayıcı ayarlarından
+        çerezleri ayrıca silebilir veya engelleyebilirsin.
       </p>
 
       <h2>Google kullanıcı verileri</h2>
