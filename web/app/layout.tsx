@@ -1,6 +1,7 @@
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 
+import CookieBanner from "./components/CookieBanner";
 import MetaPixel from "./components/MetaPixel";
 import type { Metadata, Viewport } from "next";
 
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <Analytics />
         <MetaPixel />
+        <CookieBanner />
       </body>
     </html>
   );
