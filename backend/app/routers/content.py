@@ -134,6 +134,8 @@ class VideoRequest(BaseModel):
     resolution: Literal["720p", "1080p", "4k"] = "1080p"
     aspect_ratio: Literal["9:16", "16:9"] = "9:16"
     audio: bool = False
+    # False: ana model (Veo) olmazsa yedek modele (Kling) geçilmez; seri üretimde görüntü/ses tutarlılığı için
+    fallback: bool = True
     # Revizyon: önceki videonun iş kimliği; aynı açılış karesi ve istem korunup yalnızca istenen değişir
     revise_of: str | None = Field(None, max_length=36)
 
@@ -234,7 +236,7 @@ def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
 
     plan_record = {"prompt": plan["prompt"], "frame": image_url, "request": payload.concept,
                    "aspect": payload.aspect_ratio, "duration": payload.duration,
-                   "resolution": payload.resolution, "audio": payload.audio}
+                   "resolution": payload.resolution, "audio": payload.audio, "fallback": payload.fallback}
     job_id, error, credits = _start_video_job(
         user, payload.concept, payload.duration, payload.resolution, image_url, end_image_url, payload.audio,
         payload.aspect_ratio, model_prompt=plan["prompt"], plan=plan_record, event_id=event_id,
@@ -277,7 +279,8 @@ def _start_video_job(user: dict, concept: str, duration: int, resolution: str, i
 
     try:
         operation = gateway_media.start_video(model_prompt or concept, duration, resolution, image_url, end_image_url,
-                                              audio, aspect_ratio)
+                                              audio, aspect_ratio,
+                                              allow_fallback=(plan or {}).get("fallback", True) is not False)
     except gateway_media.MediaError as e:
         logger.error("Video başlatılamadı: %s", e)
         refund(event_id)
@@ -324,6 +327,8 @@ def _retry_with_fallback(task, error: str) -> bool:
     if operation.get("fallback"):
         return False
     plan = json.loads(task.plan or "{}")
+    if plan.get("fallback") is False:
+        return False
     prompt = plan.get("prompt") or task.prompt
     if not prompt:
         return False
