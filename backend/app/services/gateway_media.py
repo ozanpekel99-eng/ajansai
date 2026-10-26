@@ -17,6 +17,7 @@ import re
 import requests
 
 from app import config
+from app.services import vertex_video
 from app.services.llm_service import ai_gateway_token
 
 logger = logging.getLogger("ajansai.media")
@@ -293,6 +294,12 @@ def start_video(
     if tier == "lite" and resolution != "4k":  # Lite 4K desteklemiyor
         model = config.VIDEO_MODEL_LITE
     target = _oriented(size, aspect_ratio)
+    if vertex_video.handles(model) and not max_size:
+        # Vertex: istenen çözünürlükte, boyut sınırı yok
+        try:
+            return vertex_video.start(model, prompt, duration, resolution, image_url, end_image_url, audio, aspect_ratio)
+        except vertex_video.VertexError as e:
+            logger.warning("Vertex'te başlatılamadı, AI Gateway'e geçiliyor: %s", e)
     if max_size:
         size = max_size
     elif config.VIDEO_UPSCALE:
@@ -332,7 +339,12 @@ def _filter_reason(data) -> str:
 
 
 def fetch_video(video: dict) -> bytes:
-    """Sağlayıcının döndürdüğü videonun baytları (adres ya da gömülü veri)."""
+    """Sağlayıcının döndürdüğü videonun baytları (adres, gcs ya da gömülü veri)."""
+    if video.get("type") == "gcs":
+        try:
+            return vertex_video.download_gcs(video["uri"])
+        except vertex_video.VertexError as e:
+            raise MediaError(str(e)) from e
     if video.get("type") == "url":
         response = requests.get(video["url"], timeout=120)
         response.raise_for_status()
@@ -342,6 +354,11 @@ def fetch_video(video: dict) -> bytes:
 
 def video_status(job: dict) -> dict:
     """{"status": pending|completed|error, "video": {"url"} veya {"data", "mediaType"}, "error"}."""
+    if job.get("provider") == "vertex":
+        try:
+            return vertex_video.status(job)
+        except vertex_video.VertexError as e:
+            raise MediaError(str(e)) from e
     model = job.get("model") or config.VIDEO_MODELS["720p"][0]
     data = _post("/video-model/status", model, "video", {"operation": job.get("operation")}, timeout=60)
     status = data.get("status")

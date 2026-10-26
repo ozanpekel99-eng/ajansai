@@ -114,6 +114,13 @@ VIDEO_MODELS = {
     "1080p": (_env("VIDEO_MODEL_1080P", "google/veo-3.1-fast-generate-001"), "1920x1080"),
     "4k": (_env("VIDEO_MODEL_4K", "google/veo-3.1-fast-generate-001"), "3840x2160"),
 }
+# Veo doğrudan Vertex AI'dan (anahtar tanımlıysa ana yol; gateway yalnızca Vertex başlamazsa).
+# GOOGLE_VERTEX_CREDENTIALS: servis hesabı JSON'u (düz ya da base64), rolü "Vertex AI User".
+VERTEX_VIDEO = _env("VERTEX_VIDEO", "1") == "1"
+GOOGLE_VERTEX_CREDENTIALS = _env("GOOGLE_VERTEX_CREDENTIALS")
+VERTEX_PROJECT = _env("VERTEX_PROJECT")  # boşsa anahtardaki project_id
+VERTEX_LOCATION = _env("VERTEX_LOCATION", "us-central1")
+VERTEX_VIDEO_BUCKET = _env("VERTEX_VIDEO_BUCKET")  # isteğe bağlı: videolar gs://<bucket>/video/ altına yazılır
 # AI Gateway ~16 MiB'tan büyük Veo videolarını geri vermiyor ("inlineTooLarge": iş "tamamlandı" ama video
 # boş; Google yine ücretlendiriyor). 1080p/8 sn/sesli videolar bu sınırı sık aşıyor. Bu yüzden Veo gateway'den
 # sınırın altında kalan boyutta istenir ve sunucuda hedef çözünürlüğe büyütülür (lanczos + hafif keskinleştirme).

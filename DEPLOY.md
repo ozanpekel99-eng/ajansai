@@ -147,3 +147,16 @@ Ardından `npm install` ve `npx expo start` komutlarını çalıştır. Mobilde 
 | Fikirler geliyor ama OmniRoute günlüğünde görünmüyor | OmniRoute hata veriyor ve sistem Claude'a düşüyor. Railway backend loglarında `OmniRoute başarısız` satırını ara. |
 | Ödeme sonrası paket açılmadı | Backend loglarında `iyzico` satırlarına bak. `PUBLIC_API_URL` doğru mu? |
 | Her deploy'da kullanıcılar siliniyor | `DATABASE_URL` Postgres'e bağlı değil (`/health` → `"database":"sqlite"`) |
+
+## Veo videoları: Google Cloud Vertex AI (önerilen)
+
+AI Gateway ~16 MiB'tan büyük Veo videolarını geri vermiyor. Vertex tanımlıysa Veo doğrudan oradan,
+istenen çözünürlükte çağrılır; Vertex başlamazsa AI Gateway (720p üret + sunucuda büyüt), o da olmazsa Kling.
+
+| Değişken | Açıklama |
+|---|---|
+| `GOOGLE_VERTEX_CREDENTIALS` | Servis hesabı anahtarı (JSON, düz ya da base64). Rol: **Vertex AI User** |
+| `VERTEX_PROJECT` | İsteğe bağlı; boşsa anahtardaki `project_id` |
+| `VERTEX_LOCATION` | Varsayılan `us-central1` |
+| `VERTEX_VIDEO_BUCKET` | İsteğe bağlı; videolar `gs://<bucket>/video/` altına yazılır (servis hesabına bu bucket'ta Storage Object Admin) |
+| `VERTEX_VIDEO` | `0` yapılırsa Vertex kullanılmaz |
