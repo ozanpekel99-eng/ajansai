@@ -114,6 +114,8 @@ VIDEO_MODELS = {
     "1080p": (_env("VIDEO_MODEL_1080P", "google/veo-3.1-fast-generate-001"), "1920x1080"),
     "4k": (_env("VIDEO_MODEL_4K", "google/veo-3.1-fast-generate-001"), "3840x2160"),
 }
+# İstek bazında seçilebilen Veo 3.1 Lite (seri üretimde Fast'in duvar/doku titremesine karşı).
+VIDEO_MODEL_LITE = _env("VIDEO_MODEL_LITE", "google/veo-3.1-lite-generate-001")
 # Yedek video modeli: Veo başlatılamazsa ya da iş hata verirse aynı istem ve açılış karesiyle Kling denenir.
 # Kling yalnızca 5 / 10 sn üretir (4-6 sn → 5, 8 sn → 10). Sesli istekte sesi destekleyen 2.6 kullanılır.
 VIDEO_FALLBACK = _env("VIDEO_FALLBACK", "1") == "1"

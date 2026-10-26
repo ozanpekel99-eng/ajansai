@@ -1158,3 +1158,23 @@ def test_start_video_without_fallback_raises(monkeypatch):
         raise AssertionError("hata yükselmeli")
     except gateway_media.MediaError as e:
         assert "veo yok" in str(e)
+
+
+def test_start_video_lite_tier_uses_lite_model(monkeypatch):
+    from app.services import gateway_media
+    calls = []
+    monkeypatch.setattr(gateway_media, "_post", lambda path, model, kind, body, timeout: calls.append(model) or {"operation": {}})
+    gateway_media.start_video("x", 8, "1080p", tier="lite")
+    gateway_media.start_video("x", 8, "4k", tier="lite")
+    gateway_media.start_video("x", 8, "1080p")
+    assert calls == [config.VIDEO_MODEL_LITE, config.VIDEO_MODELS["4k"][0], config.VIDEO_MODELS["1080p"][0]]
+
+
+def test_video_request_passes_tier(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "pro")
+    seen = {}
+    monkeypatch.setattr(content.gateway_media, "start_video", lambda *a, **k: seen.update(k) or {"model": "veo", "operation": {}})
+    client.post("/api/content/video", json={"concept": "x", "tier": "lite"}, headers=auth(token))
+    assert seen["tier"] == "lite"

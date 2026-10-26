@@ -267,6 +267,7 @@ def start_video(
     audio: bool = False,
     aspect_ratio: str = "9:16",
     allow_fallback: bool = True,
+    tier: str = "fast",
 ) -> dict:
     """Video işini başlatır. Durum sorgusu için {"model", "operation"} döndürür.
 
@@ -274,6 +275,8 @@ def start_video(
     başlatılamazsa yedek modelle (Kling) denenir; dönen işte "fallback": True olur.
     """
     model, size = config.VIDEO_MODELS[resolution]
+    if tier == "lite" and resolution != "4k":  # Lite 4K desteklemiyor
+        model = config.VIDEO_MODEL_LITE
     try:
         return _start(model, _video_body(prompt, duration, size, image_url, end_image_url, audio, aspect_ratio))
     except MediaError as e:
