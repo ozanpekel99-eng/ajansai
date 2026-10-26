@@ -148,15 +148,11 @@ def qa_report():
         try:
             res = gateway_media.video_status(v["job"])
             if res["status"] == "completed":
-                vid = res["video"]
-                if vid.get("type") == "url":
-                    import requests
+                from app.services import video_upscale
 
-                    data = requests.get(vid["url"], timeout=120).content
-                else:
-                    import base64
-
-                    data = base64.b64decode(vid.get("data", ""))
+                data = gateway_media.fetch_video(res["video"])
+                if v["job"].get("upscale_to"):
+                    data = video_upscale.upscale(data, v["job"]["upscale_to"])
                 v.update(status="completed", url=storage.save(data, "video/mp4", "qa"))
             elif res["status"] == "error":
                 v.update(status="error", error=str(res.get("error"))[:300])

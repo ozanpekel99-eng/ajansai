@@ -580,11 +580,13 @@ def test_gateway_media_request_format(monkeypatch):
 
     monkeypatch.setattr(gateway_media.requests, "post", fake_post)
     job = gateway_media.start_video("dalga", 8, "4k", "https://x/a.png")
-    assert job == {"model": config.VIDEO_MODELS["4k"][0], "operation": {"gatewayJobId": "job_1"}}
+    # 4K gateway sınırı yüzünden 1080p üretilir, sunucuda 9:16 4K'ya büyütülür
+    assert job == {"model": config.VIDEO_MODELS["4k"][0], "operation": {"gatewayJobId": "job_1"},
+                   "upscale_to": "2160x3840", "size": "1920x1080"}
     assert sent["url"].endswith("/video-model/start") and sent["headers"]["ai-model-id"] == config.VIDEO_MODELS["4k"][0]
     assert sent["body"]["image"] == {"type": "url", "url": "https://x/a.png"}
     assert sent["body"]["aspectRatio"] == "9:16" and sent["body"]["duration"] == 8
-    assert sent["body"]["resolution"] == "3840x2160"
+    assert sent["body"]["resolution"] == "1920x1080"
 
 
 def test_expired_plan_falls_back_to_trial(client):
@@ -1178,3 +1180,58 @@ def test_video_request_passes_tier(client, monkeypatch):
     monkeypatch.setattr(content.gateway_media, "start_video", lambda *a, **k: seen.update(k) or {"model": "veo", "operation": {}})
     client.post("/api/content/video", json={"concept": "x", "tier": "lite"}, headers=auth(token))
     assert seen["tier"] == "lite"
+
+
+def test_too_large_result_is_detected():
+    from app.services import gateway_media
+    data = {"status": "completed", "videos": [], "providerMetadata": {"gateway": {"asyncJob": {
+        "result": {"expired": True, "inlineTooLarge": True}, "status": "completed"}}}}
+    assert gateway_media.is_too_large(data)
+    assert not gateway_media.is_too_large({"videos": []})
+
+
+def test_too_large_video_retries_small_then_upscales(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "pro")
+    starts = []
+
+    def fake_start(*a, **k):
+        starts.append(k.get("max_size"))
+        return {"model": "veo", "operation": {"n": len(starts)}, "upscale_to": "1080x1920"}
+
+    monkeypatch.setattr(content.gateway_media, "start_video", fake_start)
+    monkeypatch.setattr(content.gateway_media, "start_fallback_video",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("önce küçük boyut denenmeli")))
+    states = iter([{"status": "error", "error": "büyük", "too_large": True},
+                   {"status": "completed", "video": {"type": "base64", "data": "AAAA"}}])
+    monkeypatch.setattr(content.gateway_media, "video_status", lambda op: next(states))
+    monkeypatch.setattr(content.storage, "is_enabled", lambda: True)
+    saved = {}
+    monkeypatch.setattr(content.storage, "save", lambda data, mime, prefix: saved.update(data=data) or "https://cdn/v.mp4")
+    monkeypatch.setattr(content.video_upscale, "upscale", lambda data, size: b"BIG:" + size.encode())
+
+    job = client.post("/api/content/video", json={"concept": "x", "resolution": "1080p"}, headers=auth(token)).json()["job_id"]
+    assert client.get(f"/api/content/video/{job}", headers=auth(token)).json()["status"] == "PENDING"
+    assert starts == [None, "1280x720"]
+    done = client.get(f"/api/content/video/{job}", headers=auth(token)).json()
+    assert done["status"] == "SUCCEEDED" and saved["data"] == b"BIG:1080x1920"
+
+
+def test_upscale_real_ffmpeg_and_failure_returns_original():
+    import subprocess
+    import tempfile
+
+    from app.services import video_upscale
+    exe = video_upscale._ffmpeg()
+    if not exe:
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        src = f"{tmp}/s.mp4"
+        subprocess.run([exe, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=24:duration=1",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", src], check=True)
+        data = open(src, "rb").read()
+        out = video_upscale.upscale(data, "640x360")
+        probe = subprocess.run([exe, "-i", "-"], input=out, capture_output=True)
+        assert b"640x360" in probe.stderr
+    assert video_upscale.upscale(b"bozuk", "640x360") == b"bozuk"

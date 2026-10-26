@@ -12,7 +12,7 @@ from sqlalchemy import and_, select, update
 from app import config
 from app.db import get_engine, utcnow, video_tasks
 from app.security import get_current_user
-from app.services import assistant, chat_files, free_tier, gateway_media, library, media_planner, media_qa, storage
+from app.services import assistant, chat_files, free_tier, gateway_media, library, media_planner, media_qa, storage, video_upscale
 from app.services.claude_service import generate_content_ideas
 from app.services.llm_service import LLMError
 from app.services.plans import CREDIT_COSTS, chat_cost, idea_cost, video_cost
@@ -307,34 +307,48 @@ def _start_video_job(user: dict, concept: str, duration: int, resolution: str, i
     return job_id, None, credits
 
 
-def _store_video(video: dict, user_id: str) -> str:
-    """Bitmiş videoyu kalıcı depoya taşır; depo yoksa sağlayıcının süreli adresini döndürür."""
-    if video.get("type") == "url":
-        if not storage.is_enabled():
+def _store_video(video: dict, user_id: str, operation: dict | None = None) -> str:
+    """Bitmiş videoyu kalıcı depoya taşır; depo yoksa sağlayıcının süreli adresini döndürür.
+
+    İş gateway sınırı yüzünden küçük üretildiyse ("upscale_to") önce hedef çözünürlüğe büyütülür.
+    """
+    upscale_to = (operation or {}).get("upscale_to")
+    if not storage.is_enabled():
+        if video.get("type") == "url":
             return video["url"]
-        data = requests.get(video["url"], timeout=120).content
-    else:
-        data = base64.b64decode(video.get("data", ""))
-        if not storage.is_enabled():
-            raise storage.StorageError("Blob deposu yok; video baytları saklanamıyor.")
+        raise storage.StorageError("Blob deposu yok; video baytları saklanamıyor.")
+    data = gateway_media.fetch_video(video)
+    if upscale_to:
+        data = video_upscale.upscale(data, upscale_to)
     return storage.save(data, "video/mp4", f"video/{user_id}")
 
 
-def _retry_with_fallback(task, error: str) -> bool:
+def _retry_with_fallback(task, error: str, too_large: bool = False) -> bool:
     """Ana model işi hata verdiyse aynı istem ve açılış karesiyle yedek modeli (Kling) başlatır.
 
     Kullanıcı kredisi aynı kalır; iş beklemede tutulur. Yedek de başarısız olursa False döner.
     """
-    if not config.VIDEO_FALLBACK:
-        return False
     operation = json.loads(task.operation or "{}")
     if operation.get("fallback"):
         return False
     plan = json.loads(task.plan or "{}")
-    if plan.get("fallback") is False:
-        return False
     prompt = plan.get("prompt") or task.prompt
     if not prompt:
+        return False
+    if too_large and not operation.get("retried_small"):
+        # Video üretildi ama gateway boyut sınırı yüzünden geri verilmedi: aynı modelle 720p'de bir kez daha
+        # üretilir ve sunucuda büyütülür (Kling'e düşmeden önce).
+        try:
+            job = gateway_media.start_video(
+                prompt, int(plan.get("duration") or 6), plan.get("resolution") or "1080p", plan.get("frame"), None,
+                bool(plan.get("audio")), plan.get("aspect") or "9:16", allow_fallback=False,
+                tier=plan.get("tier") or "fast", max_size="1280x720",
+            )
+            job["retried_small"] = True
+            return _swap_operation(task, job, f"boyut sınırı, 720p'de yeniden: {error[:150]}")
+        except gateway_media.MediaError as e:
+            logger.error("Küçük boyutta yeniden başlatılamadı (%s): %s", task.id, e)
+    if not config.VIDEO_FALLBACK or plan.get("fallback") is False:
         return False
     try:
         job = gateway_media.start_fallback_video(
@@ -344,6 +358,10 @@ def _retry_with_fallback(task, error: str) -> bool:
     except gateway_media.MediaError as e:
         logger.error("Yedek video modeli de başlatılamadı (%s): %s", task.id, e)
         return False
+    return _swap_operation(task, job, f"ana modelde hata ({error[:200]}), yedek modele geçildi")
+
+
+def _swap_operation(task, job: dict, why: str) -> bool:
     with get_engine().begin() as conn:
         changed = conn.execute(
             update(video_tasks)
@@ -351,7 +369,7 @@ def _retry_with_fallback(task, error: str) -> bool:
                         video_tasks.c.operation == task.operation))
             .values(operation=json.dumps(job))
         ).rowcount
-    logger.warning("Video %s ana modelde hata verdi (%s), yedek modele geçildi.", task.id, error[:200])
+    logger.warning("Video %s: %s.", task.id, why)
     return bool(changed)
 
 
@@ -382,7 +400,7 @@ def check_video(job_id: str, user: dict = Depends(get_current_user)):
 
     if result["status"] == "completed":
         try:
-            url = _store_video(result["video"], user["id"])
+            url = _store_video(result["video"], user["id"], json.loads(task.operation or "{}"))
         except (requests.RequestException, storage.StorageError) as e:
             logger.error("Video saklanamadı: %s", e)
             return {"status": "PENDING", "video_url": None, "error": None}
@@ -396,7 +414,7 @@ def check_video(job_id: str, user: dict = Depends(get_current_user)):
         return {"status": "SUCCEEDED", "video_url": url, "error": None}
 
     error = str(result.get("error") or "Video üretilemedi.")[:500]
-    if _retry_with_fallback(task, error):
+    if _retry_with_fallback(task, error, too_large=bool(result.get("too_large"))):
         return {"status": "PENDING", "video_url": None, "error": None}
     with get_engine().begin() as conn:
         changed = conn.execute(
