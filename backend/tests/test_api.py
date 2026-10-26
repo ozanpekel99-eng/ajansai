@@ -580,11 +580,13 @@ def test_gateway_media_request_format(monkeypatch):
 
     monkeypatch.setattr(gateway_media.requests, "post", fake_post)
     job = gateway_media.start_video("dalga", 8, "4k", "https://x/a.png")
-    assert job == {"model": config.VIDEO_MODELS["4k"][0], "operation": {"gatewayJobId": "job_1"}}
+    # 4K gateway sınırı yüzünden 1080p üretilir, sunucuda 9:16 4K'ya büyütülür
+    assert job == {"model": config.VIDEO_MODELS["4k"][0], "operation": {"gatewayJobId": "job_1"},
+                   "upscale_to": "2160x3840", "size": "1920x1080"}
     assert sent["url"].endswith("/video-model/start") and sent["headers"]["ai-model-id"] == config.VIDEO_MODELS["4k"][0]
     assert sent["body"]["image"] == {"type": "url", "url": "https://x/a.png"}
     assert sent["body"]["aspectRatio"] == "9:16" and sent["body"]["duration"] == 8
-    assert sent["body"]["resolution"] == "3840x2160"
+    assert sent["body"]["resolution"] == "1920x1080"
 
 
 def test_expired_plan_falls_back_to_trial(client):
@@ -1178,3 +1180,135 @@ def test_video_request_passes_tier(client, monkeypatch):
     monkeypatch.setattr(content.gateway_media, "start_video", lambda *a, **k: seen.update(k) or {"model": "veo", "operation": {}})
     client.post("/api/content/video", json={"concept": "x", "tier": "lite"}, headers=auth(token))
     assert seen["tier"] == "lite"
+
+
+def test_too_large_result_is_detected():
+    from app.services import gateway_media
+    data = {"status": "completed", "videos": [], "providerMetadata": {"gateway": {"asyncJob": {
+        "result": {"expired": True, "inlineTooLarge": True}, "status": "completed"}}}}
+    assert gateway_media.is_too_large(data)
+    assert not gateway_media.is_too_large({"videos": []})
+
+
+def test_too_large_video_retries_small_then_upscales(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "pro")
+    starts = []
+
+    def fake_start(*a, **k):
+        starts.append(k.get("max_size"))
+        return {"model": "veo", "operation": {"n": len(starts)}, "upscale_to": "1080x1920"}
+
+    monkeypatch.setattr(content.gateway_media, "start_video", fake_start)
+    monkeypatch.setattr(content.gateway_media, "start_fallback_video",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("önce küçük boyut denenmeli")))
+    states = iter([{"status": "error", "error": "büyük", "too_large": True},
+                   {"status": "completed", "video": {"type": "base64", "data": "AAAA"}}])
+    monkeypatch.setattr(content.gateway_media, "video_status", lambda op: next(states))
+    monkeypatch.setattr(content.storage, "is_enabled", lambda: True)
+    saved = {}
+    monkeypatch.setattr(content.storage, "save", lambda data, mime, prefix: saved.update(data=data) or "https://cdn/v.mp4")
+    monkeypatch.setattr(content.video_upscale, "upscale", lambda data, size: b"BIG:" + size.encode())
+
+    job = client.post("/api/content/video", json={"concept": "x", "resolution": "1080p"}, headers=auth(token)).json()["job_id"]
+    assert client.get(f"/api/content/video/{job}", headers=auth(token)).json()["status"] == "PENDING"
+    assert starts == [None, "1280x720"]
+    done = client.get(f"/api/content/video/{job}", headers=auth(token)).json()
+    assert done["status"] == "SUCCEEDED" and saved["data"] == b"BIG:1080x1920"
+
+
+def test_upscale_real_ffmpeg_and_failure_returns_original():
+    import subprocess
+    import tempfile
+
+    from app.services import video_upscale
+    exe = video_upscale._ffmpeg()
+    if not exe:
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        src = f"{tmp}/s.mp4"
+        subprocess.run([exe, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=24:duration=1",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", src], check=True)
+        data = open(src, "rb").read()
+        out = video_upscale.upscale(data, "640x360")
+        probe = subprocess.run([exe, "-i", "-"], input=out, capture_output=True)
+        assert b"640x360" in probe.stderr
+    assert video_upscale.upscale(b"bozuk", "640x360") == b"bozuk"
+
+
+def _vertex_on(monkeypatch):
+    import json as _json
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    from app.services import vertex_video
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048).private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+    monkeypatch.setattr(config, "GOOGLE_VERTEX_CREDENTIALS",
+                        _json.dumps({"client_email": "sa@p.iam.gserviceaccount.com", "private_key": key, "project_id": "proj"}))
+    monkeypatch.setattr(config, "VERTEX_VIDEO", True)
+    monkeypatch.setattr(config, "VERTEX_VIDEO_BUCKET", None)
+    vertex_video._token.clear()
+    return vertex_video
+
+
+class _Resp:
+    def __init__(self, data, status=200, content=b""):
+        self._data, self.status_code, self.content, self.text = data, status, content, str(data)
+
+    def json(self):
+        return self._data
+
+
+def test_vertex_start_and_status(monkeypatch):
+    from app.services import gateway_media
+    vertex_video = _vertex_on(monkeypatch)
+    calls = []
+
+    def fake_post(url, json=None, data=None, headers=None, timeout=None):
+        calls.append((url, json, headers))
+        if url == vertex_video.TOKEN_URL:
+            return _Resp({"access_token": "tok", "expires_in": 3600})
+        if url.endswith(":predictLongRunning"):
+            return _Resp({"name": "projects/proj/locations/us-central1/publishers/google/models/x/operations/op1"})
+        return _Resp({"done": True, "response": {"videos": [{"bytesBase64Encoded": "QUJD", "mimeType": "video/mp4"}]}})
+
+    monkeypatch.setattr(vertex_video.requests, "post", fake_post)
+    monkeypatch.setattr(vertex_video, "_image", lambda url: {"bytesBase64Encoded": "SU1H", "mimeType": "image/jpeg"})
+    job = gateway_media.start_video("tatlı", 8, "1080p", "https://x/a.png", None, True, "16:9")
+    assert job["provider"] == "vertex" and job["model"] == config.VIDEO_MODELS["1080p"][0] and "upscale_to" not in job
+    url, body, headers = calls[1]
+    assert url == ("https://us-central1-aiplatform.googleapis.com/v1/projects/proj/locations/us-central1/"
+                   "publishers/google/models/veo-3.1-fast-generate-001:predictLongRunning")
+    assert headers["Authorization"] == "Bearer tok"
+    assert body["instances"][0]["image"]["bytesBase64Encoded"] == "SU1H"
+    assert body["parameters"] == {"aspectRatio": "16:9", "durationSeconds": 8, "resolution": "1080p",
+                                  "generateAudio": True, "sampleCount": 1}
+    res = gateway_media.video_status(job)
+    assert res["status"] == "completed" and gateway_media.fetch_video(res["video"]) == b"ABC"
+    assert calls[-1][1] == {"operationName": job["operation"]}
+    assert sum(1 for c in calls if c[0] == vertex_video.TOKEN_URL) == 1  # jeton önbellekte
+
+
+def test_vertex_filtered_and_start_failure_falls_back_to_gateway(monkeypatch):
+    from app.services import gateway_media
+    vertex_video = _vertex_on(monkeypatch)
+    monkeypatch.setattr(vertex_video, "_access_token", lambda: "tok")
+    monkeypatch.setattr(vertex_video.requests, "post", lambda url, **k: _Resp(
+        {"done": True, "response": {"raiMediaFilteredCount": 1, "raiMediaFilteredReasons": ["çocuk"]}}))
+    res = gateway_media.video_status({"provider": "vertex", "model": config.VIDEO_MODELS["1080p"][0], "operation": "op"})
+    assert res["status"] == "error" and res["filtered"] and "çocuk" in res["error"]
+
+    monkeypatch.setattr(vertex_video, "start", lambda *a, **k: (_ for _ in ()).throw(vertex_video.VertexError("kota")))
+    monkeypatch.setattr(gateway_media, "_post", lambda *a, **k: {"operation": {"g": 1}})
+    job = gateway_media.start_video("x", 8, "1080p")
+    assert job["operation"] == {"g": 1} and job["upscale_to"] == "1080x1920"
+
+
+def test_vertex_disabled_without_credentials(monkeypatch):
+    from app.services import vertex_video
+    monkeypatch.setattr(config, "GOOGLE_VERTEX_CREDENTIALS", None)
+    assert not vertex_video.is_enabled()
+    assert not vertex_video.handles(config.VIDEO_MODELS["1080p"][0])

@@ -17,6 +17,7 @@ import re
 import requests
 
 from app import config
+from app.services import vertex_video
 from app.services.llm_service import ai_gateway_token
 
 logger = logging.getLogger("ajansai.media")
@@ -233,6 +234,20 @@ def _start(model: str, body: dict) -> dict:
     return {"model": model, "operation": data["operation"]}
 
 
+def _oriented(size: str, aspect_ratio: str) -> str:
+    """"1920x1080" gibi kademe adını videonun yönüne göre gerçek piksel boyutuna çevirir (9:16 → 1080x1920)."""
+    w, h = (int(x) for x in size.split("x"))
+    if aspect_ratio == "9:16" and w > h:
+        w, h = h, w
+    return f"{w}x{h}"
+
+
+def is_too_large(data: dict) -> bool:
+    """Gateway videoyu üretip boyut sınırı yüzünden geri vermediyse True."""
+    job = ((data.get("providerMetadata") or {}).get("gateway") or {}).get("asyncJob") or {}
+    return bool((job.get("result") or {}).get("inlineTooLarge"))
+
+
 def fallback_video_model(has_image: bool, audio: bool) -> str:
     if audio:
         return config.VIDEO_FALLBACK_AUDIO_I2V if has_image else config.VIDEO_FALLBACK_AUDIO_T2V
@@ -268,6 +283,7 @@ def start_video(
     aspect_ratio: str = "9:16",
     allow_fallback: bool = True,
     tier: str = "fast",
+    max_size: str | None = None,
 ) -> dict:
     """Video işini başlatır. Durum sorgusu için {"model", "operation"} döndürür.
 
@@ -277,8 +293,23 @@ def start_video(
     model, size = config.VIDEO_MODELS[resolution]
     if tier == "lite" and resolution != "4k":  # Lite 4K desteklemiyor
         model = config.VIDEO_MODEL_LITE
+    target = _oriented(size, aspect_ratio)
+    if vertex_video.handles(model) and not max_size:
+        # Vertex: istenen çözünürlükte, boyut sınırı yok
+        try:
+            return vertex_video.start(model, prompt, duration, resolution, image_url, end_image_url, audio, aspect_ratio)
+        except vertex_video.VertexError as e:
+            logger.warning("Vertex'te başlatılamadı, AI Gateway'e geçiliyor: %s", e)
+    if max_size:
+        size = max_size
+    elif config.VIDEO_UPSCALE:
+        size = config.VIDEO_GATEWAY_SIZES.get(resolution, size)
     try:
-        return _start(model, _video_body(prompt, duration, size, image_url, end_image_url, audio, aspect_ratio))
+        job = _start(model, _video_body(prompt, duration, size, image_url, end_image_url, audio, aspect_ratio))
+        if size != config.VIDEO_MODELS[resolution][1]:
+            job["upscale_to"] = target
+        job["size"] = size
+        return job
     except MediaError as e:
         if not (config.VIDEO_FALLBACK and allow_fallback):
             raise
@@ -307,8 +338,27 @@ def _filter_reason(data) -> str:
     return "; ".join(found)[:400]
 
 
+def fetch_video(video: dict) -> bytes:
+    """Sağlayıcının döndürdüğü videonun baytları (adres, gcs ya da gömülü veri)."""
+    if video.get("type") == "gcs":
+        try:
+            return vertex_video.download_gcs(video["uri"])
+        except vertex_video.VertexError as e:
+            raise MediaError(str(e)) from e
+    if video.get("type") == "url":
+        response = requests.get(video["url"], timeout=120)
+        response.raise_for_status()
+        return response.content
+    return base64.b64decode(video.get("data", ""))
+
+
 def video_status(job: dict) -> dict:
     """{"status": pending|completed|error, "video": {"url"} veya {"data", "mediaType"}, "error"}."""
+    if job.get("provider") == "vertex":
+        try:
+            return vertex_video.status(job)
+        except vertex_video.VertexError as e:
+            raise MediaError(str(e)) from e
     model = job.get("model") or config.VIDEO_MODELS["720p"][0]
     data = _post("/video-model/status", model, "video", {"operation": job.get("operation")}, timeout=60)
     status = data.get("status")
@@ -317,6 +367,9 @@ def video_status(job: dict) -> dict:
         if not videos:
             # Veo güvenlik filtresine takılan işler "tamamlandı" ama videosuz döner; nedeni kaybolmasın.
             logger.warning("Video boş döndü, sağlayıcı yanıtı: %s", json.dumps(data, ensure_ascii=False)[:1500])
+            if is_too_large(data):
+                return {"status": "error", "too_large": True,
+                        "error": "Video gateway boyut sınırını (~16 MiB) aştığı için geri verilmedi."}
             reason = _filter_reason(data)
             return {"status": "error", "error": "Video boş döndü." + (f" Neden: {reason}" if reason else "")}
         return {"status": "completed", "video": videos[0]}
