@@ -197,6 +197,12 @@ META_CONFIG_ID = _env("META_CONFIG_ID")
 META_ADMIN_CONFIG_ID = _env("META_ADMIN_CONFIG_ID", "975266095640154")
 META_API_VERSION = _env("META_API_VERSION", "v26.0")
 META_REDIRECT_URI = _env("META_REDIRECT_URI", f"{WEB_URL}/ads/callback")
+# Instagram DM webhook'u (/api/meta/webhook): Meta uygulama panelinde "Webhooks" → Instagram aboneliğinde
+# girilen doğrulama metni. İmza META_APP_SECRET ile doğrulanır.
+META_WEBHOOK_VERIFY_TOKEN = _env("META_WEBHOOK_VERIFY_TOKEN")
+# @ajansai.tr'ye gelen DM'lere otomatik yanıt. `instagram_manage_messages` izni (uygulama incelemesi)
+# gelene kadar kapalı: mesajlar yalnızca kaydedilir ve yönetici sayfasında listelenir.
+INSTAGRAM_DM_AUTO_REPLY = _bool("INSTAGRAM_DM_AUTO_REPLY", False)
 
 # --- iyzico ---
 IYZICO_API_KEY = _env("IYZICO_API_KEY")
