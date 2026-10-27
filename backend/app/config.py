@@ -50,6 +50,9 @@ JWT_EXPIRE_DAYS = int(_env("JWT_EXPIRE_DAYS", "30"))
 GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID")
 # Apple: Developer → Identifiers → Services ID (Sign in with Apple açık)
 APPLE_CLIENT_ID = _env("APPLE_CLIENT_ID")
+# Mobil uygulamada (iOS, yerel "Apple ile giriş") token'ın audience'ı uygulamanın
+# paket kimliğidir; web'in Services ID'sinden farklıdır. İkisi de kabul edilir.
+APPLE_BUNDLE_ID = _env("APPLE_BUNDLE_ID", "tr.ajansai.app")
 
 # --- CORS ---
 # Virgülle ayrılmış liste. Örn: https://ajansai.vercel.app,https://www.ajansai.com
