@@ -176,7 +176,9 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
           />
         </div>
         {quality === "high" && (
-          <span className="hint">Yüksek kalitede yazılar, ışık ve ürün detayları daha keskin çıkar; üretim biraz daha uzun sürer.</span>
+          <div className="field">
+            <span className="hint">Yüksek kalitede yazılar, ışık ve ürün detayları daha keskin çıkar; üretim biraz daha uzun sürer.</span>
+          </div>
         )}
         <div className="generate">
           <button className="btn btn-primary btn-block" type="submit" disabled={!!loading || locked}>
@@ -205,7 +207,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
         </h2>
         {error && <div className="notice error">{error}</div>}
         {loading === "new" ? (
-          <EmptyResult loading text={quality === "high" ? "Yüksek kalitede görsel üretiliyor, 1 dakika kadar sürebilir." : "Görsel üretiliyor, genelde 20–40 saniye sürer."} />
+          <EmptyResult loading text={quality === "high" ? "Yüksek kalitede görsel üretiliyor, 1–2 dakika sürebilir." : "Görsel üretiliyor, genelde 20–40 saniye sürer."} />
         ) : result ? (
           <>
             <div className={`media-result ${loading === "revise" ? "is-busy" : ""}`}>
