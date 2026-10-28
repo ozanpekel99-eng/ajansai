@@ -122,7 +122,7 @@ def test_free_images_use_paid_model_then_flux_after_daily_cap(client, monkeypatc
     monkeypatch.setattr(gateway_media, "is_enabled", lambda: True)
     monkeypatch.setattr(media_planner, "plan_image", lambda req, aspect, **k: {"prompt": "planned " + req, "note": None})
 
-    def fake_generate(prompt, aspect, refs=None):
+    def fake_generate(prompt, aspect, refs=None, quality="standard"):
         gemini.append((prompt, aspect))
         return b"\x89PNGgemini", "image/png"
 
@@ -586,7 +586,7 @@ def test_image_qa_regenerates_once_with_fixes(monkeypatch):
     from app.services import gateway_media, media_qa
 
     calls = []
-    monkeypatch.setattr(gateway_media, "generate_image", lambda p, a, r=None: calls.append(p) or (b"img%d" % len(calls), "image/png"))
+    monkeypatch.setattr(gateway_media, "generate_image", lambda p, a, r=None, q="standard": calls.append(p) or (b"img%d" % len(calls), "image/png"))
     verdicts = iter([["price 46.350₺ missing"], []])
     monkeypatch.setattr(media_qa, "check_image", lambda data, req, urls=None: next(verdicts))
     data, _ = media_qa.generate_checked("P", "4:5", None, "istek")

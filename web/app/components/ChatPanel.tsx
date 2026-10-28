@@ -62,6 +62,9 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
   const [limitReason, setLimitReason] = useState<LimitReason | null>(null);
   const [mode, setMode] = useState<Mode>("chat");
   const imageMode = mode === "image";
+  // Yüksek kalite yalnızca ücretli sohbette (ücretsiz sohbet farklı modelle çalışır)
+  const hqAvailable = endpoint === "/api/content/chat";
+  const [highQuality, setHighQuality] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -133,6 +136,7 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
         method: "POST",
         body: JSON.stringify({
           mode,
+          ...(hqAvailable && mode === "image" && highQuality ? { image_quality: "high" } : {}),
           messages: next.map((m) => ({
             role: m.role,
             content: m.role === "assistant" ? m.content + historyNote(m) : m.content,
@@ -434,6 +438,12 @@ export default function ChatPanel({ endpoint, attach, footer, blocker, onSent, v
           <div className="mode-chip">
             <Icon name={mode === "image" ? "image" : mode === "file" ? "file" : "globe"} size={14} />{" "}
             {mode === "image" ? "Görsel oluştur" : mode === "file" ? "Dosya oluştur" : "Web'de ara"}
+            {mode === "image" && hqAvailable && (
+              <label className="mode-toggle" title="ChatGPT ile aynı kalite, görsel başı 15 kredi">
+                <input type="checkbox" checked={highQuality} onChange={(e) => setHighQuality(e.target.checked)} />
+                Yüksek kalite
+              </label>
+            )}
             <button type="button" aria-label="Modu kapat" onClick={() => setMode("chat")}>
               <Icon name="close" size={12} />
             </button>

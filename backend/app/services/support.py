@@ -258,7 +258,7 @@ Paketler (ödeme iyzico ile, ABD doları; otomatik yenilenmez):
 - Yıllık ödemede %20 indirim; yıllık pakette 12 aylık kredi tek seferde hesaba yüklenir.
 - Aylık pakette krediler 30 günde bir yenilenir, kullanılmayan kredi devretmez.
 - Ek kredi paketleri (ücretli paket gerekir, dönem bitince silinmez): {packs} (+KDV).
-Kredi maliyetleri: sohbet mesajı {c['chat_message']}, mesaja eklenen dosya {c['chat_attachment']}, görsel {c['image']},
+Kredi maliyetleri: sohbet mesajı {c['chat_message']}, mesaja eklenen dosya {c['chat_attachment']}, görsel {c['image']} (yüksek kalite {c['image_hq']}),
 dosya (sunum/belge/tablo) {c['file']}, video 1080p 4 sn {c['video']['1080p']['4']} kredi'den başlar; sesli konuşma dakikada 3 kredi.
 Teknik hatayla başarısız olan üretimin kredisi otomatik iade edilir.
 

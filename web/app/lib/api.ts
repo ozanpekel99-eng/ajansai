@@ -97,6 +97,8 @@ export type CreditCosts = {
   file?: number;
   describe: number;
   image: number;
+  /** yüksek kalite görsel (ChatGPT kalitesi) */
+  image_hq?: number;
   ads_draft: number;
   /** çözünürlük → süre ("4" | "6" | "8") → kredi */
   video: Record<VideoResolution, Record<string, number>>;

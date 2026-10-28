@@ -3456,6 +3456,23 @@ table.data td.num {
   font-size: 13px;
 }
 
+.mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px solid var(--indigo-hi);
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mode-toggle input {
+  accent-color: var(--indigo);
+  margin: 0;
+}
+
 .mode-chip button {
   display: grid;
   place-items: center;

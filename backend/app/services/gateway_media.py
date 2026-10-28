@@ -110,15 +110,18 @@ def _crop_to(data: bytes, aspect: str) -> bytes:
     return out.getvalue()
 
 
-def _openai_image(model: str, prompt: str, aspect_ratio: str, reference_urls: list[str] | None) -> bytes:
+def _openai_image(model: str, prompt: str, aspect_ratio: str, reference_urls: list[str] | None,
+                  quality: str = "standard") -> bytes:
     """GPT Image (ChatGPT'nin görsel modeli). Ek görsel varsa ilk görsel düzenlenir / örnek alınır."""
     w, h = OPENAI_SIZES.get(aspect_ratio, (1024, 1024))
     # GPT Image istenmeyen rozet/marka/vaat ("ücretsiz kurulum", "2 yıl garanti", yanlış marka) uydurabiliyor.
     body = {"prompt": prompt, "n": 1, "size": f"{w}x{h}"}
+    openai_opts = {"quality": config.IMAGE_QUALITY.get(quality, config.IMAGE_QUALITY["standard"])}
     if reference_urls:
         body["files"] = [{"type": "url", "url": u} for u in reference_urls]
         # Yüklenen ürün fotoğrafları (logo, yazı, renk, biçim) olabildiğince aynen korunur
-        body["providerOptions"] = {"openai": {"input_fidelity": "high"}}
+        openai_opts["input_fidelity"] = "high"
+    body["providerOptions"] = {"openai": openai_opts}
     data = _post("/image-model", model, "image", body, timeout=180)
     images = data.get("images") or []
     if not images:
@@ -182,7 +185,8 @@ def _image_endpoint(model: str, prompt: str, aspect_ratio: str, reference_urls: 
     return base64.b64decode(raw)
 
 
-def generate_image(prompt: str, aspect_ratio: str, reference_urls: list[str] | None = None) -> tuple[bytes, str]:
+def generate_image(prompt: str, aspect_ratio: str, reference_urls: list[str] | None = None,
+                   quality: str = "standard") -> tuple[bytes, str]:
     """(görsel baytları, mime) döndürür. aspect_ratio örn. "9:16".
 
     reference_urls verilirse model bu görselleri kullanır: düzenlemede ilk görsel düzenlenecek
@@ -197,7 +201,7 @@ def generate_image(prompt: str, aspect_ratio: str, reference_urls: list[str] | N
             if model.startswith("google/gemini"):
                 payload = _gemini_image(model, prompt, aspect_ratio, reference_urls)
             elif model.startswith("openai/gpt-image"):
-                payload = _openai_image(model, prompt, aspect_ratio, reference_urls)
+                payload = _openai_image(model, prompt, aspect_ratio, reference_urls, quality)
             else:
                 payload = _image_endpoint(model, prompt, aspect_ratio, reference_urls)
             return payload, _sniff_mime(payload)

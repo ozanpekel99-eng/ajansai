@@ -227,7 +227,7 @@ def test_paid_plan_makes_images_and_pays_four_credits(client, monkeypatch):
     content = _enable_media(monkeypatch)
     calls = {}
 
-    def fake_image(prompt, aspect, refs=None):
+    def fake_image(prompt, aspect, refs=None, quality="standard"):
         calls["aspect"] = aspect
         return b"\x89PNG\r\n\x1a\nveri", "image/png"
 
@@ -243,7 +243,7 @@ def test_paid_plan_makes_images_and_pays_four_credits(client, monkeypatch):
 
 def test_image_saved_to_blob_when_configured(client, monkeypatch):
     content = _enable_media(monkeypatch)
-    monkeypatch.setattr(content.gateway_media, "generate_image", lambda p, a, r=None: (b"\xff\xd8\xffjpg", "image/jpeg"))
+    monkeypatch.setattr(content.gateway_media, "generate_image", lambda p, a, r=None, q="standard": (b"\xff\xd8\xffjpg", "image/jpeg"))
     sent = {}
 
     def fake_put(url, params=None, data=None, headers=None, timeout=None):
@@ -263,7 +263,7 @@ def test_image_saved_to_blob_when_configured(client, monkeypatch):
 def test_image_failure_refunds_credits(client, monkeypatch):
     content = _enable_media(monkeypatch)
 
-    def broken(prompt, aspect, refs=None):
+    def broken(prompt, aspect, refs=None, quality="standard"):
         raise content.gateway_media.MediaError("kapalı")
 
     monkeypatch.setattr(content.gateway_media, "generate_image", broken)
@@ -429,7 +429,7 @@ def test_video_audio_costs_more_and_foreign_urls_rejected(client, monkeypatch):
 def test_image_with_reference_images(client, monkeypatch):
     content = _enable_media(monkeypatch)
     seen = {}
-    monkeypatch.setattr(content.gateway_media, "generate_image", lambda p, a, r=None: seen.update(refs=r) or (b"\x89PNG\r\n\x1a\n", "image/png"))
+    monkeypatch.setattr(content.gateway_media, "generate_image", lambda p, a, r=None, q="standard": seen.update(refs=r) or (b"\x89PNG\r\n\x1a\n", "image/png"))
     monkeypatch.setattr(content.storage, "save", lambda d, m, f: "https://storeabc123.public.blob.vercel-storage.com/gorsel/x.png")
     token = register_paid(client)
     r = client.post("/api/content/image", json={"concept": "aynı ürün, beyaz fon", "reference_urls": [BLOB_URL + "urun.jpg"]}, headers=auth(token))
@@ -1005,7 +1005,7 @@ def test_image_revision_edits_previous_image(client, monkeypatch):
                         lambda req, aspect, edit=False, ref_count=0, previous_prompt=None:
                         {"prompt": f"{'EDIT' if edit else 'NEW'}:{req}:{previous_prompt}", "note": "düzelttim"})
     monkeypatch.setattr(content.gateway_media, "generate_image",
-                        lambda prompt, aspect, refs=None: calls.append((prompt, aspect, refs)) or (b"\x89PNG\r\n\x1a\nx", "image/png"))
+                        lambda prompt, aspect, refs=None, quality="standard": calls.append((prompt, aspect, refs)) or (b"\x89PNG\r\n\x1a\nx", "image/png"))
     monkeypatch.setattr(content.storage, "save", lambda data, mime, prefix: BLOB_URL + "v.png")
     token = register_paid(client)
     r = client.post("/api/content/image", json={"concept": "kahve", "aspect_ratio": "ASPECT_4_5"}, headers=auth(token)).json()
@@ -1047,7 +1047,7 @@ def test_video_adds_missing_person_to_uploaded_photo(client, monkeypatch):
     monkeypatch.setattr(content.gateway_media, "start_video",
                         lambda p, d, r="720p", i=None, e=None, a=False, ar="9:16", **k: started.append((p, i)) or {"model": "m", "operation": {"id": "op"}})
     monkeypatch.setattr(content.gateway_media, "generate_image",
-                        lambda prompt, aspect, refs=None: frames.append((prompt, refs)) or (b"\x89PNGx", "image/png"))
+                        lambda prompt, aspect, refs=None, quality="standard": frames.append((prompt, refs)) or (b"\x89PNGx", "image/png"))
     monkeypatch.setattr(content.storage, "save", lambda data, mime, folder, filename=None: BLOB_URL + "kare.png")
     seen = {}
     monkeypatch.setattr(content.media_planner, "plan_video",
@@ -1312,3 +1312,29 @@ def test_vertex_disabled_without_credentials(monkeypatch):
     monkeypatch.setattr(config, "GOOGLE_VERTEX_CREDENTIALS", None)
     assert not vertex_video.is_enabled()
     assert not vertex_video.handles(config.VIDEO_MODELS["1080p"][0])
+
+
+def test_high_quality_image_costs_15_and_requests_high(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    seen = []
+    monkeypatch.setattr(content.gateway_media, "generate_image",
+                        lambda p, a, r=None, quality="standard": seen.append(quality) or (b"\x89PNG\r\n\x1a\nx", "image/png"))
+    monkeypatch.setattr(config, "BLOB_READ_WRITE_TOKEN", None)
+    token = register_paid(client)
+    r = client.post("/api/content/image", json={"concept": "kahve", "quality": "high"}, headers=auth(token))
+    assert r.json()["credits_spent"] == 15 and seen == ["high"]
+    r = client.post("/api/content/image", json={"concept": "kahve"}, headers=auth(token))
+    assert r.json()["credits_spent"] == 5 and seen == ["high", "standard"]
+    assert _credits(client, token)["used"] == 20
+    assert client.post("/api/content/image", json={"concept": "x", "quality": "ultra"}, headers=auth(token)).status_code == 422
+
+
+def test_openai_image_sends_quality(monkeypatch):
+    from app.services import gateway_media
+    sent = []
+    monkeypatch.setattr(gateway_media, "_post", lambda path, model, kind, body, timeout: sent.append(body) or {"images": ["QUJD"]})
+    monkeypatch.setattr(gateway_media, "_crop_to", lambda data, aspect: data)
+    gateway_media._openai_image("openai/gpt-image-2", "p", "1:1", None, "high")
+    gateway_media._openai_image("openai/gpt-image-2", "p", "1:1", ["https://x/a.png"])
+    assert sent[0]["providerOptions"] == {"openai": {"quality": "high"}}
+    assert sent[1]["providerOptions"] == {"openai": {"quality": "medium", "input_fidelity": "high"}}

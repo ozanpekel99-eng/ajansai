@@ -20,6 +20,8 @@ const RATIOS = [
   { value: "ASPECT_16_9", label: "Yatay 16:9" },
 ];
 
+type Quality = "standard" | "high";
+
 // Her üretim/revizyon bir sürüm; revize her zaman seçili sürümün üzerine yapılır.
 type Version = { url: string; concept: string; prompt: string; note: string; ratio: string };
 type ImageResponse = { image_url: string | null; error: string | null; prompt?: string; note?: string };
@@ -32,6 +34,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
   const freePlan = usage?.plan === "deneme";
   const [concept, setConcept] = useState(params.get("konsept") || "");
   const [ratio, setRatio] = useState("ASPECT_4_5");
+  const [quality, setQuality] = useState<Quality>("standard");
   const [refs, setRefs] = useState<PendingFile[]>([]);
   const uploader = useUploader(["image"], 4, refs.length, (f) => setRefs((x) => [...x, f]));
   const [versions, setVersions] = useState<Version[]>([]);
@@ -42,7 +45,9 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
   const resultRef = useRevealOnMobile<HTMLElement>(loading === "new");
   const result = versions[current] || null;
 
-  const cost = usage?.costs.image ?? 4;
+  const stdCost = usage?.costs.image ?? 5;
+  const hqCost = usage?.costs.image_hq ?? 15;
+  const cost = quality === "high" ? hqCost : stdCost;
   const locked = !!usage && (freePlan || usage.credits.remaining < cost);
 
   const run = async (body: object, kind: "new" | "revise", concept: string, r: string) => {
@@ -72,7 +77,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    run({ concept, aspect_ratio: ratio, reference_urls: refs.map((f) => f.url) }, "new", concept, ratio);
+    run({ concept, aspect_ratio: ratio, reference_urls: refs.map((f) => f.url), quality }, "new", concept, ratio);
   };
 
   // Seçili sürüm düzenlenir: model görseli bozmadan yalnızca isteneni değiştirir.
@@ -86,6 +91,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
         base_url: result.url,
         previous_prompt: result.prompt,
         reference_urls: refs.map((f) => f.url),
+        quality,
       },
       "revise",
       revision,
@@ -112,7 +118,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
     {freePlan && (
       <div className="notice">
         <span>
-          Görsel aracı ücretli paketlerde (görsel başı {cost} kredi). Ücretsiz pakette{" "}
+          Görsel aracı ücretli paketlerde (görsel başı {stdCost} kredi). Ücretsiz pakette{" "}
           <Link href="/">sohbette</Link> &quot;görsel üret&quot; diyerek ayda 3 görsel üretebilirsin.
         </span>
         <button type="button" className="btn btn-light btn-sm" onClick={() => openCheckout("baslangic")}>
@@ -158,7 +164,20 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
         </div>
         <div className="chip-row">
           <ChipSelect icon="ratio" label="Format" value={ratio} onChange={setRatio} options={RATIOS.map((r) => ({ value: r.value, label: r.label }))} />
+          <ChipSelect<Quality>
+            icon="sparkle"
+            label="Kalite"
+            value={quality}
+            onChange={setQuality}
+            options={[
+              { value: "standard", label: "Standart", note: `${stdCost} kredi` },
+              { value: "high", label: "Yüksek kalite", note: `${hqCost} kredi · ChatGPT kalitesi` },
+            ]}
+          />
         </div>
+        {quality === "high" && (
+          <span className="hint">Yüksek kalitede yazılar, ışık ve ürün detayları daha keskin çıkar; üretim biraz daha uzun sürer.</span>
+        )}
         <div className="generate">
           <button className="btn btn-primary btn-block" type="submit" disabled={!!loading || locked}>
             {loading === "new" ? "Görsel üretiliyor…" : versions.length ? `Yeni görsel üret · ${cost} kredi` : `Görsel üret · ${cost} kredi`}
@@ -186,7 +205,7 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
         </h2>
         {error && <div className="notice error">{error}</div>}
         {loading === "new" ? (
-          <EmptyResult loading text="Görsel üretiliyor, genelde 20–40 saniye sürer." />
+          <EmptyResult loading text={quality === "high" ? "Yüksek kalitede görsel üretiliyor, 1 dakika kadar sürebilir." : "Görsel üretiliyor, genelde 20–40 saniye sürer."} />
         ) : result ? (
           <>
             <div className={`media-result ${loading === "revise" ? "is-busy" : ""}`}>

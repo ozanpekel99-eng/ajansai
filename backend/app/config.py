@@ -87,6 +87,8 @@ ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-5")
 # Görsel: Gemini 3.1 Flash Image (Nano Banana 2) — ~9 sn, Türkçe yazıyı doğru basar, düzenlemede
 # görseli bozmadan yalnızca isteneni değiştirir. Olmazsa Gemini 3 Pro Image, en son Seedream.
 IMAGE_MODEL = _env("IMAGE_MODEL", "openai/gpt-image-2")  # ChatGPT'nin görsel modeli: kampanya yazısı ve düzende en iyi (~$0,063, ~20-35 sn)
+# GPT Image kalite kademeleri: "standard" → medium, "high" → high (ChatGPT'deki kalite)
+IMAGE_QUALITY = {"standard": _env("IMAGE_QUALITY_STANDARD", "medium"), "high": _env("IMAGE_QUALITY_HIGH", "high")}
 IMAGE_MODEL_FALLBACK = _env("IMAGE_MODEL_FALLBACK", "google/gemini-3.1-flash-image")
 IMAGE_MODEL_LAST = _env("IMAGE_MODEL_LAST", "google/gemini-3-pro-image")
 # İstemi (görsel/video) netleştiren hızlı model

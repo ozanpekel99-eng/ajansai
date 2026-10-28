@@ -15,7 +15,7 @@ from app.security import get_current_user
 from app.services import assistant, chat_files, free_tier, gateway_media, library, media_planner, media_qa, storage, video_upscale
 from app.services.claude_service import generate_content_ideas
 from app.services.llm_service import LLMError
-from app.services.plans import CREDIT_COSTS, chat_cost, idea_cost, video_cost
+from app.services.plans import CREDIT_COSTS, chat_cost, idea_cost, image_cost, video_cost
 from app.services.usage_service import QuotaExceededError, consume, get_usage, refund
 
 router = APIRouter()
@@ -72,6 +72,8 @@ class ImageRequest(BaseModel):
     # Revizyon: düzenlenecek önceki görsel ve onu üreten istem (yeniden sıfırdan üretmek yerine düzenlenir)
     base_url: str | None = Field(None, max_length=2000)
     previous_prompt: str | None = Field(None, max_length=4000)
+    # "high": ChatGPT ile aynı yüksek kalite (3 kat kredi)
+    quality: Literal["standard", "high"] = "standard"
 
 
 def _own_urls(urls: list[str]) -> list[str]:
@@ -98,8 +100,9 @@ def create_image(payload: ImageRequest, user: dict = Depends(get_current_user)):
     refs = _own_urls(payload.reference_urls)
     base = _own_urls([payload.base_url])[0] if payload.base_url else None
     aspect = ASPECTS[payload.aspect_ratio]
-    credits = CREDIT_COSTS["image"]
-    event_id = _charge(user["id"], "image", credits, ("Revize: " if base else "") + payload.concept)
+    credits = image_cost(payload.quality)
+    label = ("Revize: " if base else "") + ("Yüksek kalite: " if payload.quality == "high" else "")
+    event_id = _charge(user["id"], "image", credits, label + payload.concept)
 
     if config.IMAGE_PROMPT_MODE == "chatgpt":  # ChatGPT gibi güçlü istem yazımı, yazılar aynen korunur
         plan = {"prompt": media_planner.direct_ad_prompt(payload.concept, aspect, edit=bool(base), ref_count=len(refs),
@@ -112,7 +115,7 @@ def create_image(payload: ImageRequest, user: dict = Depends(get_current_user)):
                                         previous_prompt=payload.previous_prompt)
     try:
         data, mime = media_qa.generate_checked(plan["prompt"], aspect, ([base] if base else []) + refs,
-                                               payload.concept, refs)
+                                               payload.concept, refs, quality=payload.quality)
     except gateway_media.MediaError as e:
         logger.error("Görsel üretilemedi: %s", e)
         refund(event_id)
@@ -447,6 +450,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(..., min_length=1, max_length=40)
     mode: Literal["chat", "image", "search", "file"] = "chat"
+    image_quality: Literal["standard", "high"] = "standard"
 
 
 @router.post("/chat")
@@ -499,7 +503,7 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
             refs = [ref_url] + refs[:3]
         image_prompt = free_tier.direct_image_prompt(image_prompt, last.content, editing=bool(ref_url),
                                                      ref_count=len(refs) - (1 if ref_url else 0), image_urls=refs)
-        url, image_error, image_credits = _chat_image(user, image_prompt, refs, last.content)
+        url, image_error, image_credits = _chat_image(user, image_prompt, refs, last.content, payload.image_quality)
         if url:
             images.append(url)
             if image_credits:  # ücretsiz FLUX yedeği kendi kaydını yapar
@@ -542,21 +546,23 @@ def chat(payload: ChatRequest, user: dict = Depends(get_current_user)):
     }
 
 
-def _chat_image(user: dict, prompt: str, refs: list[str], request_text: str = "") -> tuple[str | None, str | None, int]:
+def _chat_image(user: dict, prompt: str, refs: list[str], request_text: str = "",
+                quality: str = "standard") -> tuple[str | None, str | None, int]:
     """Sohbette istenen görsel: önce GPT Image (5 kredi); olmazsa ücretsiz görsel hakkıyla FLUX.
 
     (adres, hata, harcanan kredi) döndürür.
     """
     if gateway_media.is_enabled():
-        cost = CREDIT_COSTS["image"]
+        cost = image_cost(quality)
         try:
-            event_id = consume(user["id"], "image", cost, f"Sohbetten görsel: {prompt}")
+            event_id = consume(user["id"], "image", cost,
+                               ("Sohbetten görsel (yüksek kalite): " if quality == "high" else "Sohbetten görsel: ") + prompt)
         except QuotaExceededError:
             event_id = None
         if event_id:
             try:
                 aspect, clean = free_tier.image_aspect(prompt)
-                data, mime = media_qa.generate_checked(clean, aspect, refs, request_text or clean, refs)
+                data, mime = media_qa.generate_checked(clean, aspect, refs, request_text or clean, refs, quality=quality)
                 if storage.is_enabled():
                     return storage.save(data, mime, f"gorsel/{user['id']}"), None, cost
                 return f"data:{mime};base64,{base64.b64encode(data).decode()}", None, cost

@@ -67,16 +67,16 @@ def check_image(data: bytes, request: str, product_urls: list[str] | None = None
 
 
 def generate_checked(prompt: str, aspect: str, refs: list[str] | None, request: str,
-                     product_urls: list[str] | None = None) -> tuple[bytes, str]:
+                     product_urls: list[str] | None = None, quality: str = "standard") -> tuple[bytes, str]:
     """Görseli üretir, denetler; kusur varsa kusurları düzelterek bir kez yeniden üretir."""
-    data, mime = gateway_media.generate_image(prompt, aspect, refs or None)
+    data, mime = gateway_media.generate_image(prompt, aspect, refs or None, quality)
     problems = check_image(data, request, product_urls)
     if not problems:
         return data, mime
     logger.info("Görsel kusurlu, yeniden üretiliyor: %s", problems)
     fix = prompt + "\n\nThe previous attempt had these defects; avoid them this time: " + "; ".join(problems)
     try:
-        data2, mime2 = gateway_media.generate_image(fix, aspect, refs or None)
+        data2, mime2 = gateway_media.generate_image(fix, aspect, refs or None, quality)
     except gateway_media.MediaError:
         return data, mime
     return data2, mime2

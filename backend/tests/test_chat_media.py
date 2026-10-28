@@ -65,7 +65,7 @@ def test_video_with_multiple_images_composes_start_frame(client, monkeypatch):
 
     _enable_media(monkeypatch)
     calls = {}
-    monkeypatch.setattr(gateway_media, "generate_image", lambda prompt, aspect, refs: calls.update(refs=refs, aspect=aspect) or (b"\x89PNG\r\n\x1a\nx", "image/png"))
+    monkeypatch.setattr(gateway_media, "generate_image", lambda prompt, aspect, refs, quality="standard": calls.update(refs=refs, aspect=aspect) or (b"\x89PNG\r\n\x1a\nx", "image/png"))
     monkeypatch.setattr(storage, "save", lambda data, mime, folder, filename=None: BLOB_URL + "kare.png")
     monkeypatch.setattr(gateway_media, "start_video", lambda prompt, d, r, image_url, e, a, asp, **k: calls.update(start=image_url) or {"model": "m", "operation": {}})
     token = register_paid(client, plan="pro")
@@ -86,7 +86,7 @@ def test_generated_media_appear_in_library(client, monkeypatch):
     from .test_api import BLOB_URL
 
     _enable_media(monkeypatch)
-    monkeypatch.setattr(gateway_media, "generate_image", lambda prompt, aspect, refs=None: (b"\x89PNG\r\n\x1a\nx", "image/png"))
+    monkeypatch.setattr(gateway_media, "generate_image", lambda prompt, aspect, refs=None, quality="standard": (b"\x89PNG\r\n\x1a\nx", "image/png"))
     monkeypatch.setattr(storage, "save", lambda data, mime, folder, filename=None: BLOB_URL + "g.png")
     token = register_paid(client, plan="pro")
     r = client.post("/api/content/image", json={"concept": "kahve"}, headers=auth(token))

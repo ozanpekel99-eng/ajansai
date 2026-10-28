@@ -206,6 +206,11 @@ export default function Paketler() {
                     <td>Kare, hikâye, gönderi veya yatay formatta bir görsel; 4 adede kadar ürün/stil görseli örnek alabilir</td>
                   </tr>
                   <tr>
+                    <td>Görsel (yüksek kalite)</td>
+                    <td className="num">{costs.image_hq ?? 15}</td>
+                    <td>ChatGPT ile aynı yüksek kalite: daha keskin yazılar, ışık ve ürün detayları</td>
+                  </tr>
+                  <tr>
                     <td>Video</td>
                     <td className="num">{costs.video["720p"]["4"]}–{num(costs.video_audio["4k"]["8"])}</td>
                     <td>Reels ve hikâye için dikey video; süre ve çözünürlüğe göre, aşağıdaki tabloya bak</td>

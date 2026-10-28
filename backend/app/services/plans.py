@@ -29,7 +29,11 @@ CREDIT_COSTS = {
     "chat_attachment": 1,  # mesaja eklenen her dosya
     "chat_pdf_pages": 10,  # PDF ekinde her 10 sayfa 1 kredi (ilk 10 sayfa eke dahil)
     "describe": 1,  # örnek görsel/videodan konsept çıkarma
-    "image": 5,
+    "image": 5,  # standart kalite (GPT Image 2, quality=medium)
+    # Yüksek kalite (quality=high, ChatGPT ile aynı): görsel maliyeti medium'un 4 katı (kare ~$0,053 → ~$0,211).
+    # İstem yazımı + denetim (~$0,04) ve denetimde yeniden üretim payıyla toplam ~$0,32 → standartla aynı
+    # kredi başı maliyet (~$0,022) için 15 kredi (standardın 3 katı).
+    "image_hq": 15,
     "file": 3,  # sohbetten sunum / belge / tablo dosyası (Claude ile tasarımlı içerik)
     "ads_draft": 0,
     # çözünürlük → süre (sn) → kredi. Veo 3.1 maliyeti: 720p (Lite) $0,03/sn, 1080p (Fast) $0,10/sn,
@@ -151,6 +155,10 @@ def is_purchasable(plan_id: str) -> bool:
 
 def idea_cost(count: int) -> int:
     return max(1, math.ceil(count / 2)) * CREDIT_COSTS["idea_per_2"]
+
+
+def image_cost(quality: str = "standard") -> int:
+    return CREDIT_COSTS["image_hq"] if quality == "high" else CREDIT_COSTS["image"]
 
 
 def video_cost(duration: int, resolution: str = "1080p", audio: bool = False) -> int:

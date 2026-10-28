@@ -51,6 +51,7 @@ export const DEFAULT_COSTS: CreditCosts = {
   chat_pdf_pages: 10,
   describe: 1,
   image: 5,
+  image_hq: 15,
   ads_draft: 0,
   video: {
     "720p": { "4": 22, "6": 32, "8": 42 },
