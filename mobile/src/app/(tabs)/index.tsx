@@ -1,18 +1,21 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import AutoImage from "@/components/AutoImage";
 import Markdown from "@/components/Markdown";
 import MediaActions from "@/components/MediaActions";
 import { T } from "@/components/ui";
+import UpgradeCard from "@/components/UpgradeCard";
+import VideoSuggestionCard from "@/components/VideoSuggestionCard";
 import { api, ApiError } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { colors, fonts, radius } from "@/lib/theme";
 import { assetMeta, pickMedia, takePhoto, uploadUri, Uploaded } from "@/lib/upload";
+import { FreeStatus, freeFooter, limitFromError, limitFromReply, LimitReason, VideoSuggestion, visibleLimit } from "@/lib/upgrade";
 
 type Msg = {
   role: "user" | "assistant";
@@ -20,7 +23,7 @@ type Msg = {
   attachments?: Uploaded[];
   images?: string[];
   imageError?: string | null;
-  video?: { concept: string; aspect: string; duration: number; image_url: string | null; enabled: boolean } | null;
+  video?: VideoSuggestion | null;
 };
 type Summary = { id: string; title: string; updated_at: string };
 
@@ -43,7 +46,32 @@ export default function Chat() {
   const [error, setError] = useState("");
   const [menu, setMenu] = useState(false);
   const [history, setHistory] = useState<Summary[] | null>(null);
+  const [limitReason, setLimitReason] = useState<LimitReason | null>(null);
+  const [freeStatus, setFreeStatus] = useState<FreeStatus | null>(null);
   const listRef = useRef<FlatList<Msg>>(null);
+  const limit = visibleLimit(limitReason, free, freeStatus);
+
+  // Ücretsiz kullanıcının kalan mesaj/görsel hakkı (web ile aynı uç)
+  useEffect(() => {
+    if (!free) {
+      setFreeStatus(null);
+      return;
+    }
+    let alive = true;
+    api<FreeStatus>("/api/free/status")
+      .then((s) => alive && setFreeStatus(s))
+      .catch(() => {
+        // durum alınamazsa sohbet yine çalışır; hak dolunca 429 ile kart açılır
+      });
+    return () => {
+      alive = false;
+    };
+  }, [free]);
+
+  // Uygulama içi satın alma (RevenueCat) gelene kadar Hesap ekranındaki bilgiyle aynı mesaj
+  const pickPlan = useCallback(() => {
+    Alert.alert("Paketler", "Uygulama içi satın alma bir sonraki sürümde geliyor.");
+  }, []);
 
   const save = useCallback(async (id: string, msgs: Msg[]) => {
     const title = (msgs.find((m) => m.role === "user")?.content || "Yeni sohbet").slice(0, 60);
@@ -57,7 +85,9 @@ export default function Chat() {
   const send = async (override?: string) => {
     const content = (override ?? text).trim();
     if ((!content && !files.length) || sending || uploading) return;
+    if (limit === "chat") return; // mesaj hakkı doldu: paket kartı gösteriliyor
     setError("");
+    setLimitReason(null);
     const user: Msg = { role: "user", content, attachments: files.length ? files : undefined };
     const next = [...messages, user];
     setMessages(next);
@@ -75,10 +105,18 @@ export default function Chat() {
       const all = [...next, reply];
       setMessages(all);
       setImageMode(false);
+      if (data.free) setFreeStatus(data.free);
+      setLimitReason(limitFromReply(data));
       save(chatId, all);
       refresh();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Yanıt alınamadı, tekrar dene.");
+      const reason = e instanceof ApiError ? limitFromError(e.status, free) : null;
+      if (reason) {
+        setLimitReason(reason);
+        setFreeStatus((s) => (s ? { ...s, chat: { ...s.chat, remaining: 0 } } : s));
+      } else {
+        setError(e instanceof ApiError ? e.message : "Yanıt alınamadı, tekrar dene.");
+      }
       setMessages(messages);
       setText(content);
       setFiles(user.attachments ?? []);
@@ -106,6 +144,7 @@ export default function Chat() {
     setChatId(`${Date.now()}`);
     setMessages([]);
     setError("");
+    setLimitReason(null);
   };
 
   const openHistory = async () => {
@@ -123,6 +162,7 @@ export default function Chat() {
       const c = await api<{ id: string; messages: Msg[] }>(`/api/chats/${encodeURIComponent(id)}`);
       setChatId(c.id);
       setMessages(c.messages || []);
+      setLimitReason(null);
     } catch {
       setError("Sohbet açılamadı.");
     }
@@ -144,6 +184,11 @@ export default function Chat() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={0}>
         {messages.length === 0 ? (
+          limit ? (
+            <ScrollView contentContainerStyle={{ padding: 16 }}>
+              <UpgradeCard reason={limit} onPick={pickPlan} />
+            </ScrollView>
+          ) : (
           <View style={st.empty}>
             <T variant="h2" style={{ textAlign: "center" }}>Bugün ne üretelim?</T>
             <T variant="muted" style={{ textAlign: "center" }}>Fikrini yaz; gönderi, kampanya görseli ya da video kurgusu hazırlayalım.</T>
@@ -155,6 +200,7 @@ export default function Chat() {
               ))}
             </View>
           </View>
+          )
         ) : (
           <FlatList
             ref={listRef}
@@ -162,8 +208,14 @@ export default function Chat() {
             keyExtractor={(_, i) => `${i}`}
             contentContainerStyle={{ padding: 16, gap: 18 }}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-            renderItem={({ item }) => <Bubble m={item} />}
-            ListFooterComponent={sending ? <View style={st.typing}><ActivityIndicator color={colors.indigoSoft} /><T variant="muted">{imageMode ? "Görsel hazırlanıyor…" : "Yazıyor…"}</T></View> : undefined}
+            renderItem={({ item }) => <Bubble m={item} onVideoLocked={() => setLimitReason("video")} />}
+            ListFooterComponent={
+              sending ? (
+                <View style={st.typing}><ActivityIndicator color={colors.indigoSoft} /><T variant="muted">{imageMode ? "Görsel hazırlanıyor…" : "Yazıyor…"}</T></View>
+              ) : limit ? (
+                <UpgradeCard reason={limit} onPick={pickPlan} />
+              ) : undefined
+            }
             keyboardDismissMode="interactive"
           />
         )}
@@ -202,12 +254,12 @@ export default function Chat() {
               placeholderTextColor={colors.faint}
               multiline
             />
-            <Pressable onPress={() => send()} style={[st.send, (!text.trim() && !files.length) && { opacity: 0.4 }]} disabled={sending} accessibilityLabel="Gönder">
+            <Pressable onPress={() => send()} style={[st.send, ((!text.trim() && !files.length) || limit === "chat") && { opacity: 0.4 }]} disabled={sending || limit === "chat"} accessibilityLabel="Gönder">
               <Ionicons name="arrow-up" size={20} color={colors.white} />
             </Pressable>
           </View>
           <T variant="small" style={{ color: colors.faint, textAlign: "center", marginTop: 6 }}>
-            {free ? "Ücretsiz pakettesin" : `${credits} kredin var`}
+            {free ? freeFooter(freeStatus) : `${credits} kredin var`}
           </T>
         </View>
       </KeyboardAvoidingView>
@@ -255,7 +307,7 @@ function MenuRow({ icon, title, onPress }: { icon: keyof typeof Ionicons.glyphMa
   );
 }
 
-function Bubble({ m }: { m: Msg }) {
+function Bubble({ m, onVideoLocked }: { m: Msg; onVideoLocked: () => void }) {
   if (m.role === "user") {
     return (
       <View style={{ alignItems: "flex-end", gap: 6 }}>
@@ -278,15 +330,7 @@ function Bubble({ m }: { m: Msg }) {
         </View>
       ))}
       {m.imageError ? <T variant="small" style={{ color: colors.danger }}>{m.imageError}</T> : null}
-      {m.video?.enabled ? (
-        <Pressable
-          style={st.videoCta}
-          onPress={() => router.push({ pathname: "/uret", params: { tab: "video", konsept: m.video!.concept, gorsel: m.video!.image_url ?? "" } })}
-        >
-          <Ionicons name="videocam" size={18} color={colors.white} />
-          <T style={{ fontFamily: fonts.bodySemi }}>Bu videoyu üret</T>
-        </Pressable>
-      ) : null}
+      {m.video ? <VideoSuggestionCard video={m.video} onLocked={onVideoLocked} /> : null}
     </View>
   );
 }
@@ -310,5 +354,4 @@ const st = StyleSheet.create({
   menuRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 15, paddingHorizontal: 10 },
   histRow: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.line },
   userBubble: { backgroundColor: colors.surface2, borderRadius: 18, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: 10, maxWidth: "85%" },
-  videoCta: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", backgroundColor: colors.indigo, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
 });
