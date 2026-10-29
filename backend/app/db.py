@@ -218,6 +218,23 @@ support_tickets = Table(
     Column("created_at", DateTime, nullable=False, index=True),
 )
 
+# Mobil uygulama içi satın alma (RevenueCat) webhook olayları. event_id birincil anahtar: aynı olay
+# tekrar gelirse ikinci kez işlenmez (paket/kredi bir kez yüklenir).
+store_events = Table(
+    "store_events",
+    metadata,
+    Column("event_id", String(100), primary_key=True),
+    Column("type", String(40), nullable=False),
+    Column("app_user_id", String(200), nullable=False),
+    Column("user_id", String(36), nullable=True, index=True),  # eşleşen ajansAI kullanıcısı
+    Column("product_id", String(200), nullable=True),
+    Column("store", String(30), nullable=True),  # APP_STORE | PLAY_STORE | ...
+    Column("environment", String(20), nullable=True),  # SANDBOX | PRODUCTION
+    Column("status", String(30), nullable=False),  # applied | ignored | unknown_user | unknown_product
+    Column("payment_id", String(36), nullable=True),
+    Column("created_at", DateTime, nullable=False),
+)
+
 # Uygulamanın kendi ürettiği ayarlar (ör. JWT_SECRET tanımlı değilse oluşturulan anahtar).
 app_settings = Table(
     "app_settings",

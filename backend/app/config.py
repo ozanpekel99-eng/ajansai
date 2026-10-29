@@ -232,6 +232,12 @@ IYZICO_SANDBOX_BASE_URL = "https://sandbox-api.iyzipay.com"
 PAYMENT_CURRENCY = _env("PAYMENT_CURRENCY", "TRY")
 USD_TRY_RATE = _env("USD_TRY_RATE", "")  # TCMB'ye ulaşılamazsa kullanılacak yedek kur
 
+# --- Mobil uygulama içi satın alma (RevenueCat) ---
+# RevenueCat panelinde webhook'a girilen "Authorization header" değeri. Boşsa webhook kapalıdır (503).
+REVENUECAT_WEBHOOK_AUTH = _env("REVENUECAT_WEBHOOK_AUTH")
+# Mağaza ürün kimliği → ajansAI paketi. Varsayılan eşleşmeyi değiştirmek/genişletmek için JSON:
+# {"ajansai_pro_aylik": "pro:monthly", "ajansai_kredi_100": "kredi_100"}
+REVENUECAT_PRODUCTS = _env("REVENUECAT_PRODUCTS", "")
 
 # Destek e-postası (support@ajansai.tr): Resend ile alınır, Claude ile otomatik yanıtlanır.
 RESEND_API_KEY = _env("RESEND_API_KEY", "")
