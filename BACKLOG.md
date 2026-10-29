@@ -16,7 +16,7 @@ Kurallar:
 - [ ] Mobil: Google ile giriş ve Apple ile giriş (`expo-apple-authentication`; backend `/api/auth/google`, `/api/auth/apple`; Apple id_token audience'ına `tr.ajansai.app` paket kimliğini ekle — `backend/app/services/social_auth.py`)
 - [ ] Mobil: Sohbette video önerisi ve ücretsiz kullanıcı limit kartı (web `UpgradeCard` karşılığı; limit dolunca paketler gösterilsin)
 - [ ] Mobil: Uygulama içi satın alma altyapısı — RevenueCat (`react-native-purchases`) ekranı ve backend webhook ucu (`/api/payments/revenuecat/webhook`: ürün kimliği → paket/ek kredi; idempotent; testli). Gerçek anahtarlar Ozan girene kadar kapalı kalsın
-  - [x] 1/3 Backend: RevenueCat webhook ucu (ürün kimliği → paket/ek kredi, olay kimliğiyle tekrar korumalı, `REVENUECAT_WEBHOOK_AUTH` yoksa kapalı) — PR: gece/revenuecat-webhook
+  - [x] 1/3 Backend: RevenueCat webhook ucu (ürün kimliği → paket/ek kredi, olay kimliğiyle tekrar korumalı, `REVENUECAT_WEBHOOK_AUTH` yoksa kapalı) — [PR #13](https://github.com/ozanpekel99-eng/ajansai/pull/13)
   - [ ] 2/3 Mobil: Paketler ekranında uygulama içi satın alma (`react-native-purchases`; `Purchases.logIn(<kullanıcı id>)`, teklifler, satın al / geri yükle; RevenueCat anahtarı yoksa ekran web'e yönlendirir). Ek kredi yalnızca ücretli paketi olana gösterilsin
   - [ ] 3/3 Backend: İade ve paket değişikliği — `CANCELLATION` (iade nedeniyle) olayında paketi kapat, `PRODUCT_CHANGE` / yükseltmeyi işle; yönetici sayfasında `store_events` listesi
 - [ ] Mobil: Görsel düzenleme ve video sonuçlarında "Reklam ver" kısayolu
