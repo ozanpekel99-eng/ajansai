@@ -19,6 +19,10 @@ Kurallar:
 - [ ] Mobil: Görsel düzenleme ve video sonuçlarında "Reklam ver" kısayolu
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
+- [ ] Backend (kalite, 29.10 QA raporu): Görsel denetimi Türkçe büyük İ için yanlış alarm veriyor — güzellik görselinde "PÜRÜZSÜZ CİLT" doğru (noktalı İ) yazılı olduğu hâlde denetim "CILT" diye kusur bildirdi; bu yüzden görsel boşuna yeniden üretildi (206 sn, ~2 kat maliyet) ve rapor 3/4 gösterdi. `media_qa._data_url` görseli 1024 px JPEG'e küçültüyor: denetime görseli PNG/≥1536 px gönder, ayrıca yazı bölgelerinin büyütülmüş kırpımlarını ekle; `QA_SYSTEM`'e "İ/ı, Ş, Ğ noktası/çengeli için yalnızca büyütülmüş görüntüde kesinse kusur bildir" kuralı ekle; yalnızca Türkçe karakter şikâyeti varsa yeniden üretmeden önce kırpımla ikinci bir doğrulama yap
+- [ ] Backend (kalite): `media_qa.generate_checked` yeniden üretilen görseli denetlemeden döndürüyor; ikinci görseli de denetle, kusur sayısı daha az olanı seç (eşitse ilkini). Yeniden üretim istemine yalnızca doğrulanmış kusurları ekle (yanlış alarmlar isteme "CILT yazma" gibi gereksiz talimat sokuyor)
+- [ ] Backend (kalite): `/api/health/qa` her görsel için ilk denemenin kusurlarını, yeniden üretim yapılıp yapılmadığını ve son denetimi ayrı alanlarda versin (`first_problems`, `retried`, `problems`); şu an `health._one_image` son görseli bağımsız ikinci kez denetliyor ve sonuçlar arasındaki farklar görünmüyor
+- [ ] Backend (kalite): `media_planner` istem kuralına "başlıkta tek tip büyük/küçük harf kullan (tümü büyük ya da baş harfler büyük); small-caps veya karışık harf boyu yok" ekle — mobilya görselinde başlık "Evinize Yeni bir Hava" karışık harf boyuyla çıktı
 
 ## Ozan'a (insan gerektiren işler)
 
