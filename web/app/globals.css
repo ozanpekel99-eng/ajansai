@@ -3787,6 +3787,7 @@ table.data td.num {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
   margin-top: auto;
   padding: 8px 10px 10px;
 }

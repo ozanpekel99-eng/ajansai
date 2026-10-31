@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+import { adHref } from "../../lib/adShortcut";
 import { api } from "../../lib/api";
 import { onDownload } from "../../lib/download";
 import { readHistory } from "../../lib/history";
@@ -88,6 +89,9 @@ export function LibraryGrid({ kind, onOpen }: { kind: "image" | "video"; onOpen?
                 Videoya çevir
               </Link>
             )}
+            <Link className="btn btn-ghost btn-sm" href={adHref(item.url, item.kind, item.prompt)} title="Bu dosyayla Instagram reklamı oluştur">
+              <Icon name="megaphone" size={14} /> Reklam ver
+            </Link>
             <button type="button" className="icon-btn" aria-label="Kaldır" title="Kaldır" onClick={() => remove(item)}>
               <Icon name="close" size={14} />
             </button>

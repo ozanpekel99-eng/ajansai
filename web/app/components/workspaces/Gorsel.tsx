@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
+import { adHref } from "../../lib/adShortcut";
 import { ApiError, api } from "../../lib/api";
 import { onDownload } from "../../lib/download";
 import { useSession } from "../../lib/session";
@@ -201,6 +202,9 @@ export default function GorselWorkspace({ tab, showCreate }: WorkspaceProps) {
                 href={`/araclar/video?konsept=${encodeURIComponent(result.concept)}&gorsel=${encodeURIComponent(result.url)}`}
               >
                 Videoya çevir
+              </Link>
+              <Link className="btn btn-ghost btn-sm" href={adHref(result.url, "image", result.concept)}>
+                <Icon name="megaphone" size={14} /> Reklam ver
               </Link>
             </span>
           )}
