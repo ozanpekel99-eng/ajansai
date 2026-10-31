@@ -2,8 +2,10 @@
 
 import { downloadHref, onDownload } from "../../lib/download";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
+import { adHref } from "../../lib/adShortcut";
 import { ApiError, VideoDuration, VideoResolution, api } from "../../lib/api";
 import { HistoryEntry, addHistory, readHistory } from "../../lib/history";
 import { DEFAULT_COSTS, VIDEO_DURATIONS, VIDEO_RESOLUTIONS, num, videoCredits } from "../../lib/plans";
@@ -229,9 +231,14 @@ export default function VideoWorkspace({ tab, showCreate }: WorkspaceProps) {
         <h2>
           Sonuç
           {result && (
-            <a className="btn btn-ghost btn-sm" href={downloadHref(result.url)} download onClick={onDownload(result.url)}>
-              İndir
-            </a>
+            <span style={{ display: "flex", gap: 6 }}>
+              <a className="btn btn-ghost btn-sm" href={downloadHref(result.url)} download onClick={onDownload(result.url)}>
+                İndir
+              </a>
+              <Link className="btn btn-ghost btn-sm" href={adHref(result.url, "video", result.concept)}>
+                <Icon name="megaphone" size={14} /> Reklam ver
+              </Link>
+            </span>
           )}
         </h2>
         {error && <div className="notice error">{error}</div>}

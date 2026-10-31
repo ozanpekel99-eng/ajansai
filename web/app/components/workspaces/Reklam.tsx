@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import { AdShortcut, forgetAdShortcut, readAdShortcut, rememberAdShortcut } from "../../lib/adShortcut";
 import { ApiError, api } from "../../lib/api";
 import { readHistory } from "../../lib/history";
 import { money } from "../../lib/plans";
@@ -124,6 +125,20 @@ export default function ReklamWorkspace(_: WorkspaceProps) {
   // Yönetici: ?yayin=1 ile kendi Instagram hesabımız için paylaşım/DM izinleri de istenir
   const publishing = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("yayin") === "1";
 
+  // "Reklam ver" kısayolu: kütüphaneden / görsel-video sonucundan gelen dosya. Meta bağlantısı (OAuth) sırasında
+  // kaybolmasın diye oturumda saklanır; reklam formuna eklenince silinir.
+  const [shortcut, setShortcut] = useState<AdShortcut | null>(null);
+  useEffect(() => {
+    const s = readAdShortcut(window.location.search);
+    if (!s) return;
+    rememberAdShortcut(s);
+    setShortcut(s);
+    setView("new");
+    const q = new URLSearchParams(window.location.search);
+    ["medya", "tur", "konsept"].forEach((k) => q.delete(k));
+    window.history.replaceState(window.history.state, "", window.location.pathname + (q.toString() ? `?${q}` : ""));
+  }, []);
+
   const connect = async () => {
     setError("");
     try {
@@ -159,6 +174,11 @@ export default function ReklamWorkspace(_: WorkspaceProps) {
           </li>
           <li>Eksik bir şey varsa (kart, sayfa, Instagram) burada adım adım gösteririz.</li>
         </ol>
+        {shortcut && (
+          <div className="notice">
+            Seçtiğin {shortcut.kind === "video" ? "video" : "görsel"}, Meta hesabını bağladıktan sonra yeni reklama otomatik eklenir.
+          </div>
+        )}
         {error && <div className="notice error">{error}</div>}
         <button className="btn btn-primary btn-block" onClick={connect}>
           Meta ile bağlan
@@ -183,7 +203,7 @@ export default function ReklamWorkspace(_: WorkspaceProps) {
         </button>
       </div>
       <SetupChecklist onReconnect={connect} />
-      {view === "new" ? <NewAd onCreated={() => setView("list")} onReconnect={connect} /> : <AdList />}
+      {view === "new" ? <NewAd onCreated={() => setView("list")} onReconnect={connect} shortcut={shortcut} /> : <AdList />}
     </>
   );
 }
@@ -265,7 +285,7 @@ function SetupChecklist({ onReconnect }: { onReconnect: () => void }) {
 const IG_LINK_URL = (pageId: string) => `https://business.facebook.com/latest/settings/instagram_account?asset_id=${pageId}`;
 const PAGE_CREATE_URL = "https://www.facebook.com/pages/create";
 
-function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect: () => void }) {
+function NewAd({ onCreated, onReconnect, shortcut }: { onCreated: () => void; onReconnect: () => void; shortcut?: AdShortcut | null }) {
   const { refresh } = useSession();
   const [accounts, setAccounts] = useState<AdAccount[]>([]);
   const [pages, setPages] = useState<Page[]>([]);
@@ -308,6 +328,17 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
   const [watchMiss, setWatchMiss] = useState<null | "page" | "ig">(null);
   const watchTimer = useRef<ReturnType<typeof setInterval>>();
   useEffect(() => () => clearInterval(watchTimer.current), []);
+
+  // "Reklam ver" kısayoluyla gelen dosya tek görsel/video reklamına eklenir; açıklaması metin yazımı için öneri olur
+  const [fromShortcut, setFromShortcut] = useState<"image" | "video" | null>(null);
+  useEffect(() => {
+    if (!shortcut) return;
+    setMode("single");
+    setMedia({ url: shortcut.url, kind: shortcut.kind });
+    if (shortcut.concept) setBrief((b) => b || shortcut.concept);
+    setFromShortcut(shortcut.kind);
+    forgetAdShortcut();
+  }, [shortcut]);
 
   const account = accounts.find((a) => a.account_id === accountId);
   pageRef.current = pageId;
@@ -873,6 +904,11 @@ function NewAd({ onCreated, onReconnect }: { onCreated: () => void; onReconnect:
           </div>
           {mode === "single" && (
             <>
+              {fromShortcut && media && (
+                <div className="notice" style={{ marginBottom: 12 }}>
+                  Seçtiğin {fromShortcut === "video" ? "video" : "görsel"} reklama eklendi. Reklam metnini 6. adımda yapay zekaya yazdırabilirsin.
+                </div>
+              )}
               <MediaPicker
                 title="Gönderi görseli · akış"
                 hint="Kare (1:1) veya dikdörtgen (4:5) en iyisi."
