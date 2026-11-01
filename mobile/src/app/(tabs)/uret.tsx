@@ -174,7 +174,7 @@ function ImageTool() {
       {result && (
         <Card style={{ gap: 12 }}>
           <AutoImage uri={result.url} />
-          <MediaActions url={result.url} />
+          <MediaActions url={result.url} ad={{ kind: "image", concept }} />
           {!free && (
             <View style={{ gap: 8 }}>
               <Input value={revision} onChangeText={setRevision} placeholder="Değiştirmek istediğini yaz (örn: arka planı beyaz yap)" />
@@ -302,7 +302,7 @@ function VideoTool({ initialConcept, initialImage }: { initialConcept?: string; 
           {job.status === "SUCCEEDED" && job.url && (
             <>
               <Player url={job.url} vertical={aspect === "9:16"} />
-              <MediaActions url={job.url} />
+              <MediaActions url={job.url} ad={{ kind: "video", concept }} />
             </>
           )}
           {job.status === "FAILED" && <T style={{ color: colors.danger }}>{job.error || "Video üretilemedi, kredin iade edildi."}</T>}

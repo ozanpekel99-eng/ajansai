@@ -17,6 +17,8 @@ Kurallar:
 - [ ] Mobil: Sohbette video önerisi ve ücretsiz kullanıcı limit kartı (web `UpgradeCard` karşılığı; limit dolunca paketler gösterilsin)
 - [ ] Mobil: Uygulama içi satın alma altyapısı — RevenueCat (`react-native-purchases`) ekranı ve backend webhook ucu (`/api/payments/revenuecat/webhook`: ürün kimliği → paket/ek kredi; idempotent; testli). Gerçek anahtarlar Ozan girene kadar kapalı kalsın
 - [ ] Mobil: Görsel düzenleme ve video sonuçlarında "Reklam ver" kısayolu
+  - [x] 1/2: Görsel (üretim/düzenleme), video ve kütüphane sonuçlarında "Reklam ver" düğmesi — paketi olmayana paket uyarısı, olana ajansai.tr Reklam sayfası web ile aynı biçimde açılır (`/araclar/reklam?medya=…&tur=gorsel|video&konsept=…`, `mobile/src/lib/adShortcut.ts`) — PR bağlantısı aşağıda
+  - [ ] 2/2: Mobil reklam oluşturma akışı (Mobil Reklam 3/3) gelince düğme web yerine uygulamadaki Reklam ekranını açsın ve dosyayı yeni reklama eklesin
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
 
