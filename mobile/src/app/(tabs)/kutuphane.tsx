@@ -111,7 +111,7 @@ export default function Kutuphane() {
               <Pressable onPress={() => setOpen(null)} hitSlop={10}><Ionicons name="close" size={26} color={colors.fg} /></Pressable>
             </View>
             {open.kind === "image" ? <AutoImage uri={open.url} /> : <Player url={open.url} />}
-            <MediaActions url={open.url} />
+            <MediaActions url={open.url} ad={{ kind: open.kind, concept: open.prompt }} />
             {open.prompt ? <T variant="muted" numberOfLines={4}>{open.prompt}</T> : null}
           </View>
         )}
