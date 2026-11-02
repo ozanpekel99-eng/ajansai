@@ -12,7 +12,7 @@ from sqlalchemy import and_, select, update
 from app import config
 from app.db import get_engine, utcnow, video_tasks
 from app.security import get_current_user
-from app.services import assistant, chat_files, free_tier, gateway_media, library, media_planner, media_qa, storage, video_upscale
+from app.services import assistant, chat_files, free_tier, gateway_media, library, media_planner, media_qa, storage, video_frame, video_upscale
 from app.services.claude_service import generate_content_ideas
 from app.services.llm_service import LLMError
 from app.services.plans import CREDIT_COSTS, chat_cost, idea_cost, image_cost, video_cost
@@ -158,35 +158,6 @@ def _video_plan(user_id: str, job_id: str) -> dict:
         return {}
 
 
-def _image_aspect_of(url: str) -> float | None:
-    try:
-        from io import BytesIO
-
-        from PIL import Image
-
-        w, h = Image.open(BytesIO(storage.fetch(url))).size
-        return w / h if h else None
-    except Exception:  # noqa: BLE001
-        return None
-
-
-def _fit_frame(user: dict, url: str, aspect: str) -> str:
-    """Açılış karesi videonun oranında değilse (siyah bant olmasın diye) sahne o orana genişletilir."""
-    target = {"9:16": 9 / 16, "16:9": 16 / 9}.get(aspect, 9 / 16)
-    ratio = _image_aspect_of(url)
-    if not ratio or abs(ratio - target) / target < 0.06:
-        return url
-    prompt = (f"Extend this exact photo to a {aspect} frame by naturally continuing the background and surface "
-              "around it. Keep every product, food, person and object exactly as it is (same shape, colors, "
-              "position relative to each other). No text, no borders, no new objects.")
-    try:
-        data, mime = gateway_media.generate_image(prompt, aspect, [url])
-        return storage.save(data, mime, f"gorsel/{user['id']}")
-    except (gateway_media.MediaError, storage.StorageError) as e:
-        logger.warning("Açılış karesi orana uyarlanamadı: %s", e)
-        return url
-
-
 @router.post("/video")
 def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
     """Video üretimini başlatır. Yanıttaki job_id ile /video/{job_id} sorgulanmalı.
@@ -237,7 +208,7 @@ def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
             logger.warning("Açılış karesi üretilemedi, metinden video: %s", e)
             image_url = None
     elif image_url and not end_image_url:
-        image_url = _fit_frame(user, image_url, payload.aspect_ratio)
+        image_url = video_frame.fit_frame(image_url, payload.aspect_ratio, f"gorsel/{user['id']}")
 
     plan_record = {"prompt": plan["prompt"], "frame": image_url, "request": payload.concept,
                    "aspect": payload.aspect_ratio, "duration": payload.duration,

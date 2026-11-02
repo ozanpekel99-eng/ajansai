@@ -20,7 +20,7 @@ from sqlalchemy import select, text
 
 from app import config
 from app.db import app_settings, get_engine
-from app.services import gateway_media, media_planner, media_qa, storage
+from app.services import gateway_media, media_planner, media_qa, storage, video_frame
 
 router = APIRouter()
 logger = logging.getLogger("ajansai.health")
@@ -126,8 +126,11 @@ def qa_run(video: str = "auto"):
             try:
                 plan = media_planner.plan_video(QA_VIDEO[0], "9:16", QA_VIDEO[1], has_start_frame=True, audio=False,
                                                 start_image_url=src["url"])
-                job = gateway_media.start_video(plan["prompt"], QA_VIDEO[1], "1080p", src["url"], None, False, "9:16")
-                report["video"] = {"status": "pending", "from": src["name"], "job": job, "model": job.get("model"),
+                # Gerçek /video akışıyla aynı: açılış karesi önce 9:16'ya genişletilir (yoksa siyah bant oluşur)
+                frame_url = video_frame.fit_frame(src["url"], "9:16", "qa")
+                job = gateway_media.start_video(plan["prompt"], QA_VIDEO[1], "1080p", frame_url, None, False, "9:16")
+                report["video"] = {"status": "pending", "from": src["name"], "frame_url": frame_url,
+                                   "frame_fitted": frame_url != src["url"], "job": job, "model": job.get("model"),
                                    "fallback": bool(job.get("fallback"))}
             except Exception as e:  # noqa: BLE001
                 report["video"] = {"status": "error", "error": str(e)[:300]}

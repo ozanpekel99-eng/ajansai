@@ -20,6 +20,10 @@ Kurallar:
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
 
+## Kalite denetiminden (PR #7 / #18'de önerilen maddeler)
+
+- [x] Backend (kalite, 02.11): QA videosu gerçek akıştaki açılış karesi genişletmesini atlıyordu (siyah bant). `_fit_frame` `app/services/video_frame.py`'ye taşındı; `/video` ve `qa_run` aynı fonksiyonu kullanıyor, QA raporuna `video.frame_url` / `video.frame_fitted` eklendi — PR #19
+
 ## Ozan'a (insan gerektiren işler)
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight
