@@ -20,6 +20,10 @@ Kurallar:
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
 
+## Kalite denetiminden (PR #7 / #12 / #18'de önerilen maddeler)
+
+- [x] Backend (kalite, 26.10): `media_planner.VIDEO_SYSTEM`'e kampanya görseli kuralı — başlangıç karesindeki yazı/fiyat/rozet/bant video boyunca sabit kalsın, yalnızca arka plan öğeleri hareket etsin; yedek istemde başlangıç karesi varsa "no text" yerine "keep all existing text exactly unchanged" — PR (bu dal: gece/video-yazi-sabit)
+
 ## Ozan'a (insan gerektiren işler)
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight
