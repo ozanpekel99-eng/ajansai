@@ -83,7 +83,13 @@ Realism rules (critical):
 - Products and food must stay identical to the first frame (same shape, colors, label). No morphing.
 - Camera: one move (static, slow push-in, slow orbit, slow pan), steady.
 - Lighting/style: photorealistic commercial look, natural light, shallow depth of field.
-- No on-screen text, captions, logos or watermarks. No faces if the client says not to show people.
+- Never ADD on-screen text, captions, logos or watermarks. No faces if the client says not to show people.
+- Campaign graphic as first frame (critical): if the start image already contains text, prices, badges,
+  banners, ribbons, stickers or icons, they are part of a printed poster: they stay completely fixed, sharp
+  and unchanged for the whole video (same words, letters, position, size and colors). Banners and badges do
+  not slide, open, close, fade, wipe or animate; icons are not animated; no letter morphs or flickers. Only
+  background elements move (light confetti, a soft light sweep or sparkle, gentle fabric or steam) plus at
+  most a very slow camera push-in. Say this explicitly in "prompt" and list the fixed text/badges you see.
 - Audio (only if requested): ambient sounds; Turkish speech only if asked, quoted exactly in Turkish.
 - REVISION: if a previous prompt is given, keep everything from it and change ONLY what the client asks."""
 
@@ -221,4 +227,16 @@ def plan_video(request: str, aspect: str, duration: int, has_start_frame: bool, 
     except Exception as e:  # noqa: BLE001
         logger.warning("Video planlayıcı çalışmadı: %s", e)
     return {"frame_prompt": "" if has_start_frame else f"Photorealistic first frame, aspect ratio {aspect}: {request}",
-            "prompt": f"{request}. Realistic, smooth, slow motion, steady camera, no text.", "note": ""}
+            "prompt": f"{request}. {_fallback_text_rule(has_start_frame)}", "note": ""}
+
+
+def _fallback_text_rule(has_start_frame: bool) -> str:
+    """Planlayıcı çalışmazsa kullanılan yedek istemin son cümlesi.
+
+    Başlangıç karesi bir kampanya görseli olabilir (yazı, fiyat, bant): "no text" demek Veo'yu bu yazıları
+    silmeye itiyor. Bu yüzden başlangıç karesi varsa mevcut yazılar aynen korunsun denir."""
+    base = "Realistic, smooth, slow motion, steady camera."
+    if has_start_frame:
+        return (base + " Keep all existing text, prices, badges and banners exactly unchanged, sharp and fixed "
+                "in place for the whole video; only background elements move. Do not add new text.")
+    return base + " No text."
