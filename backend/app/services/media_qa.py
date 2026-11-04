@@ -9,10 +9,13 @@ import base64
 import io
 import json
 import logging
+import os
 import re
+import subprocess
+import tempfile
 
 from app import config
-from app.services import gateway_media, llm_service
+from app.services import gateway_media, llm_service, video_upscale
 
 logger = logging.getLogger("ajansai.qa")
 
@@ -80,3 +83,67 @@ def generate_checked(prompt: str, aspect: str, refs: list[str] | None, request: 
     except gateway_media.MediaError:
         return data, mime
     return data2, mime2
+
+
+# --- Video denetimi -------------------------------------------------------------------------------
+# 1. adım: siyah bant (letterbox) tespiti. `ffmpeg cropdetect` konfeti/kurdele gibi koyu-açık
+# karışık kenarlarda yanılıyor; bunun yerine ilk karenin üst ve alt şeritlerinin ortalama
+# parlaklığına bakılır (1080x1920'de 200 px). Orta bölge de koyuysa (gece sahnesi) kusur sayılmaz.
+
+LETTERBOX_STRIP = 200 / 1920   # şerit yüksekliği / kare yüksekliği
+LETTERBOX_DARK = 10            # 0–255 gri tonda "siyah" eşiği
+LETTERBOX_CONTENT_MIN = 25     # orta bölge bundan parlaksa şeritler gerçekten bant demektir
+
+
+def video_frame(video: bytes, at: float = 0.0, timeout: float = 30) -> bytes | None:
+    """Videodan `at` saniyedeki kareyi PNG olarak döndürür; ffmpeg yoksa/başarısızsa None."""
+    exe = video_upscale._ffmpeg()
+    if not exe or not video:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        src, dst = os.path.join(tmp, "in.mp4"), os.path.join(tmp, "frame.png")
+        with open(src, "wb") as f:
+            f.write(video)
+        cmd = [exe, "-y", "-loglevel", "error", "-ss", f"{at:.2f}", "-i", src,
+               "-frames:v", "1", dst]
+        try:
+            subprocess.run(cmd, check=True, timeout=timeout, capture_output=True)
+            with open(dst, "rb") as f:
+                return f.read() or None
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.warning("Video karesi çıkarılamadı: %s", e)
+            return None
+
+
+def letterbox_problem(frame_png: bytes) -> str | None:
+    """Karenin üstünde ve altında siyah bant varsa kusur metni, yoksa None."""
+    from PIL import Image, ImageStat
+
+    img = Image.open(io.BytesIO(frame_png)).convert("L")
+    w, h = img.size
+    strip = max(1, round(h * LETTERBOX_STRIP))
+    if h < strip * 3:
+        return None
+    top = ImageStat.Stat(img.crop((0, 0, w, strip))).mean[0]
+    bottom = ImageStat.Stat(img.crop((0, h - strip, w, h))).mean[0]
+    middle = ImageStat.Stat(img.crop((0, strip, w, h - strip))).mean[0]
+    if top < LETTERBOX_DARK and bottom < LETTERBOX_DARK and middle >= LETTERBOX_CONTENT_MIN:
+        return (f"letterbox: black bars at top and bottom of the first frame "
+                f"(top {top:.0f}, bottom {bottom:.0f}, content {middle:.0f} brightness)")
+    return None
+
+
+def check_video(video: bytes) -> list[str]:
+    """Videonun kusur listesi (boş = sorun yok). Denetim çalışmazsa boş liste (üretimi engellemez).
+
+    Şimdilik yalnızca siyah bant; görme modeliyle yazı/ürün denetimi sonraki adımda eklenecek.
+    """
+    try:
+        frame = video_frame(video, 0.0)
+        if not frame:
+            return []
+        problem = letterbox_problem(frame)
+        return [problem] if problem else []
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Video denetimi çalışmadı: %s", e)
+        return []
