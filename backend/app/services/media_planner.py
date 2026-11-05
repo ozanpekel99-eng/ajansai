@@ -48,7 +48,9 @@ Rules:
   nothing may be cut off at the top or bottom.
 - Never add brand names, logos or watermarks the client did not ask for. Do not guess a brand from model codes
   (e.g. "10121 S", "A710 İ"): if the client gives no brand, show no brand. Never invent offers, guarantees,
-  free delivery/installation badges or any claim the client did not write."""
+  free delivery/installation badges or any claim the client did not write.
+- Products without reference photos: clean, unbranded products; control panels and displays with simple icons
+  or a plain knob and a blank dark display only — no small printed labels, model names or logos on them."""
 
 VIDEO_SYSTEM = """You are a commercial film director writing prompts for Google Veo 3.1 (image-to-video).
 Turn the client's Turkish request into a short, single-shot video that looks REAL on the first try.
@@ -140,6 +142,10 @@ with text or badges. Look at the attached photos, identify each product and stat
 sizes explicitly so the scale is correct (e.g. "the refrigerator is about 185 cm tall and the washing machine
 about 85 cm tall, so the washing machine reaches roughly the fridge's lower half; both stand on the same floor
 line"). Never enlarge a small product to match a big one or shrink a big one; keep true proportions.
+No product photos attached (the products are imagined, not the client's real ones): show clean, generic,
+unbranded products. Control panels, displays and screens get only simple icons, a plain knob and a blank dark
+display — no small printed labels, program names, model names, numbers, brand names or logos on the products
+(image models turn tiny product text into gibberish). Say this explicitly in the prompt.
 Edit mode (the FIRST attached image is the current poster): start with "Edit the attached poster.", describe
 only the requested change concretely, then "Keep everything else exactly the same" and list every existing
 on-image text verbatim in quotes.
@@ -147,6 +153,12 @@ Always: keep all text fully inside the frame with safe margins; nothing cut off.
 given aspect ratio. Put the prices and deadline early in the prompt (they matter most). End the prompt with
 exactly: "Render ONLY the quoted texts above, exactly as written. No other text, badges, guarantees, delivery or
 installation claims, logos or prices." Output ONLY the prompt text, no preamble."""
+
+
+# Referans fotoğrafı yoksa istem yazarına açıkça söylenir; böylece "temiz, markasız ürün, panelde yazı yok"
+# kuralı her seferinde uygulanır (05.11 denetimi: beyaz eşya panellerinde okunamaz sahte etiketler, sahte logo).
+NO_PRODUCT_PHOTOS = ("No product photos attached: products must be clean and unbranded, with no small printed "
+                     "labels, model names or logos on their panels or displays.")
 
 
 def _with_images(text: str, urls: list[str] | None):
@@ -165,6 +177,8 @@ def direct_ad_prompt(request: str, aspect: str, edit: bool = False, ref_count: i
         parts.append("EDIT MODE: the first attached image is the current poster to edit.")
     if ref_count:
         parts.append(f"{ref_count} product photo(s) attached" + (" after the poster." if edit else "."))
+    else:
+        parts.append(NO_PRODUCT_PHOTOS)
     parts.append(f"Client request (Turkish): {request}")
     try:
         raw = llm_service.chat_completion(
