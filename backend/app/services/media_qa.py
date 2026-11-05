@@ -28,7 +28,9 @@ if given, the client's product photos (the images before it). Report ONLY clear,
 4. Products deformed, duplicated, missing, the wrong count, or clearly different from the product photos
    (shape, color, door/handle layout, display, logo), or wrong real-world relative size.
 5. Physical/anatomy errors: extra or missing fingers, a utensil with two handles, melted or impossible objects.
-6. Gibberish or garbled letters anywhere.
+6. Gibberish or garbled letters anywhere — including tiny fake labels, program names or pseudo-text on
+   product control panels, displays, screens and packaging, and pseudo-logos or logo-like smudges on products
+   (unless the same label/logo is visible in the client's product photos). Look closely at every panel.
 Ignore style and taste. Output JSON only: {"ok": true|false, "problems": ["short English description", ...]}"""
 
 

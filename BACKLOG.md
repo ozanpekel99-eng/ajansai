@@ -19,6 +19,9 @@ Kurallar:
 - [ ] Mobil: Görsel düzenleme ve video sonuçlarında "Reklam ver" kısayolu
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
+- [ ] Backend (kalite, 05.11 denetimi — 26.10'dan sonra 2. kez; PR #22 ve PR #7'deki küçük madde): Referans fotoğrafı olmayan ürünlerde kontrol panelinde anlamsız sahte yazı ve sahte logo — beyaz eşya görselinde program etiketleri okunamaz harf yığını, kurutma makinesinde logo benzeri leke; otomatik denetim "sorunsuz" dedi. İki adım:
+  - [x] 1/2 İstem ve denetim kuralları: `AD_DIRECTOR_SYSTEM` ve `IMAGE_SYSTEM`'e "fotoğrafsız ürün: temiz, markasız; panel/ekranda yalnızca basit ikon, düğme ve boş koyu ekran — küçük yazı, model adı, logo yok" kuralı; fotoğraf yoksa istem yazarına bu açıkça söyleniyor; `QA_SYSTEM` 6. madde: panel/ekrandaki sahte etiketler ve sahte logolar kusur (gece/sahte-panel-yazisi)
+  - [ ] 2/2 `media_qa._data_url` 1024 px JPEG küçültmesi küçük yazıyı görünmez kılıyor: denetime daha yüksek çözünürlük ve ürün/yazı bölgelerinin büyütülmüş kırpımları gönderilsin (29.10'daki Türkçe İ yanlış alarm maddesiyle birlikte yapılabilir)
 
 ## Ozan'a (insan gerektiren işler)
 
