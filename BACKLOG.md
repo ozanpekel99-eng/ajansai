@@ -20,6 +20,13 @@ Kurallar:
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
 
+## Kalite denetiminden (PR #12'de önerilen madde)
+
+- [ ] Backend (kalite, 29.10 QA raporu): Görsel denetimi Türkçe büyük İ için yanlış alarm veriyor — "PÜRÜZSÜZ CİLT" doğru yazılı olduğu hâlde denetim "CILT" diye kusur bildirdi, görsel boşuna yeniden üretildi (~2 kat maliyet). Alt adımlar:
+  - [x] 1/3: Denetime giden görsel 1024 px JPEG yerine uzun kenarı 1568 px'e kadar kayıpsız PNG (çok büyükse JPEG q95); `QA_SYSTEM` 1. maddeye "İ/ı, Ş, Ğ, Ç, Ö, Ü isteğe uygunsa doğrudur; nokta/çengel kusurunu yalnızca kesinse bildir" kuralı (gece/qa-turkce-harf)
+  - [ ] 2/3: Yazı bölgelerinin büyütülmüş kırpımlarını denetime ekle (PR #23'teki panel yazısı 2/2 adımıyla ortak)
+  - [ ] 3/3: Kusur listesinde yalnızca Türkçe karakter şikâyeti varsa yeniden üretmeden önce kırpımla ikinci doğrulama yap; doğrulanmayan şikâyet yeniden üretim istemine girmesin
+
 ## Ozan'a (insan gerektiren işler)
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight

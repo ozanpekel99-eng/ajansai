@@ -21,6 +21,9 @@ paying small-business customer. Compare the generated image (the LAST image) wit
 if given, the client's product photos (the images before it). Report ONLY clear, objective defects:
 1. A text, price, date, product code or store name the client asked for is missing, misspelled, has wrong
    digits/currency, or is different from the request. Check every number character by character.
+   Turkish letters: the client writes in Turkish, so "İ" (dotted capital I), "I", "ı", "Ş", "Ğ", "Ç", "Ö", "Ü"
+   are correct where the request uses them (e.g. "CİLT", "KAMPANYASI"). Report a missing or wrong dot/cedilla/
+   breve ONLY if you are certain at full resolution; small dots are easy to miss, so when in doubt it is fine.
 2. Any text cut off or touching the image edge.
 3. Invented facts the client did not give: other prices or discounts, phone numbers, addresses, websites,
    guarantees, free delivery/installation, gifts, brand names/logos not in the request. (A short creative
@@ -32,13 +35,26 @@ if given, the client's product photos (the images before it). Report ONLY clear,
 Ignore style and taste. Output JSON only: {"ok": true|false, "problems": ["short English description", ...]}"""
 
 
-def _data_url(data: bytes, max_side: int = 1024) -> str:
+# Denetime giden görselin uzun kenarı. 1024 px JPEG küçültmesi "İ" noktası, "Ş"/"Ğ" işaretleri ve panel
+# yazıları gibi küçük ayrıntıları siliyor ve yanlış alarma yol açıyordu (29.10: doğru "CİLT" → "CILT" kusuru).
+QA_MAX_SIDE = 1568
+# Kayıpsız PNG bu boyutu aşarsa (fotoğraf gibi görsellerde olur) yüksek kaliteli JPEG'e düşülür;
+# görme modelinin görsel başına sınırının (~5 MB base64) altında kalmak için.
+QA_PNG_MAX_BYTES = 3_500_000
+
+
+def _data_url(data: bytes, max_side: int = QA_MAX_SIDE) -> str:
+    """Görseli denetim için hazırlar: uzun kenar en fazla `max_side`, önce kayıpsız PNG, büyükse JPEG q95."""
     from PIL import Image
 
     img = Image.open(io.BytesIO(data)).convert("RGB")
-    img.thumbnail((max_side, max_side))
+    img.thumbnail((max_side, max_side), Image.LANCZOS)
     out = io.BytesIO()
-    img.save(out, "JPEG", quality=88)
+    img.save(out, "PNG", optimize=True)
+    if out.tell() <= QA_PNG_MAX_BYTES:
+        return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode()
+    out = io.BytesIO()
+    img.save(out, "JPEG", quality=95)
     return "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode()
 
 
