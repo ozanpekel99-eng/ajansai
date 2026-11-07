@@ -20,6 +20,12 @@ Kurallar:
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
 
+## Kalite denetiminden (PR #12'de önerilen madde)
+
+- [ ] Backend (kalite, 29.10): `media_qa.generate_checked` yeniden üretilen görseli denetlemeden döndürüyordu. Alt adımlar:
+  - [x] 1/2: İkinci görsel de denetleniyor, kusuru daha az olan seçiliyor (eşitse ilki) — PR #26
+  - [ ] 2/2: Yeniden üretim istemine yalnızca doğrulanmış kusurlar eklensin (PR #24'teki Türkçe İ maddesinin 3/3 adımıyla birlikte; yanlış alarmlar isteme "CILT yazma" gibi gereksiz talimat sokmasın)
+
 ## Ozan'a (insan gerektiren işler)
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight
