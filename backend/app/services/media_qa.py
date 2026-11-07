@@ -68,7 +68,12 @@ def check_image(data: bytes, request: str, product_urls: list[str] | None = None
 
 def generate_checked(prompt: str, aspect: str, refs: list[str] | None, request: str,
                      product_urls: list[str] | None = None, quality: str = "standard") -> tuple[bytes, str]:
-    """Görseli üretir, denetler; kusur varsa kusurları düzelterek bir kez yeniden üretir."""
+    """Görseli üretir, denetler; kusur varsa kusurları düzelterek bir kez yeniden üretir.
+
+    Yeniden üretilen görsel de denetlenir ve iki görselden kusuru daha az olan döndürülür (eşitlikte ilki):
+    yeniden üretim her zaman daha iyi olmuyor, kusursuz yazı/fiyatlı ilk görsel yeni kusurlu görselle
+    değiştirilmesin.
+    """
     data, mime = gateway_media.generate_image(prompt, aspect, refs or None, quality)
     problems = check_image(data, request, product_urls)
     if not problems:
@@ -79,4 +84,9 @@ def generate_checked(prompt: str, aspect: str, refs: list[str] | None, request: 
         data2, mime2 = gateway_media.generate_image(fix, aspect, refs or None, quality)
     except gateway_media.MediaError:
         return data, mime
-    return data2, mime2
+    problems2 = check_image(data2, request, product_urls)
+    if len(problems2) < len(problems):
+        return data2, mime2
+    logger.info("Yeniden üretilen görsel daha iyi değil (%d ≥ %d kusur), ilk görsel kullanılıyor: %s",
+                len(problems2), len(problems), problems2)
+    return data, mime
