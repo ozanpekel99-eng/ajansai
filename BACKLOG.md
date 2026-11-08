@@ -26,3 +26,7 @@ Kurallar:
 - Google Play Console ($25) → Play iç test
 - RevenueCat hesabı ve mağaza ürünleri
 - Meta işletme doğrulaması sonucu → uygulama incelemesi gönderimi (`instagram_content_publish`, `instagram_manage_messages`)
+
+## Kalite denetiminden (PR #12'de önerilen madde)
+
+- [x] Backend (kalite, 29.10): `media_planner` istem kuralına "başlıkta tek tip büyük/küçük harf (tümü büyük ya da her kelimenin baş harfi büyük); small-caps veya karışık harf boyu yok" eklendi — hem `AD_DIRECTOR_SYSTEM` hem `IMAGE_SYSTEM` (mobilya görselinde başlık "Evinize Yeni bir Hava" çıkmıştı) — gece/baslik-harf-tutarliligi
