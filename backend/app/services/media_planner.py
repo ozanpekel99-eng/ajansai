@@ -27,7 +27,10 @@ Rules:
   Turkish characters (İ, ı, ş, ğ, ü, ö, ç). Fix obvious spelling mistakes (e.g. "kampayaları" -> "kampanyaları")
   and mention it in the note. Never translate the text. Specify hierarchy (headline / subline / badge / CTA),
   bold modern sans-serif typography, strong contrast and legibility, placement inside the safe area away from the
-  edges, and an eye-catching but clean ad layout. If the client asks for no specific text, say "no text, no
+  edges, and an eye-catching but clean ad layout. Letter case: write each headline in ONE consistent case,
+  either ALL CAPS or Title Case (every word capitalized), and say so in the prompt; no small caps, no mixed
+  letter sizes inside one line (wrong: "Evinize Yeni bir Hava"; right: "EVİNİZE YENİ BİR HAVA" or
+  "Evinize Yeni Bir Hava"). If the client asks for no specific text, say "no text, no
   letters, no logos, no watermark".
 - If the client asked for text but did not give exact words, write short, punchy Turkish ad copy yourself
   (max 6 words headline) and put it in quotes.
@@ -118,6 +121,9 @@ Keep EXACTLY (never change, round or drop): every product name/model code, price
 store name, slogan and any text the client gives. Put every on-image text in double quotes, in Turkish with
 correct characters (İ, ı, ş, ğ, ü, ö, ç) and proper capitalization; fix obvious typos and apostrophes
 (e.g. "trakyanın" -> "TRAKYA'NIN").
+Letter case: write each headline in ONE consistent case, either ALL CAPS or Title Case (every word
+capitalized), and state the chosen case in the prompt; no small caps, no mixed letter sizes inside one line
+(wrong: "Evinize Yeni bir Hava"; right: "EVİNİZE YENİ BİR HAVA" or "Evinize Yeni Bir Hava").
 
 You SHOULD add design and copywriting craft, like ChatGPT does:
 - a short, punchy Turkish hero headline (2-4 words) that fits the offer (e.g. for a fridge + washer bundle:

@@ -596,3 +596,14 @@ def test_image_qa_regenerates_once_with_fixes(monkeypatch):
     monkeypatch.setattr(media_qa, "check_image", lambda data, req, urls=None: [])
     media_qa.generate_checked("P", "4:5", None, "istek")
     assert len(calls) == 1
+
+
+def test_image_prompts_require_consistent_headline_case():
+    # 29.10 kalite denetimi: mobilya başlığı "Evinize Yeni bir Hava" karışık harf boyuyla çıktı.
+    from app.services import media_planner
+
+    for system in (media_planner.AD_DIRECTOR_SYSTEM, media_planner.IMAGE_SYSTEM):
+        assert "ONE consistent case" in system
+        assert "ALL CAPS or Title Case" in system
+        assert "no small caps" in system
+        assert '"Evinize Yeni bir Hava"' in system  # yanlış örnek açıkça gösteriliyor
