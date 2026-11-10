@@ -29,6 +29,9 @@ if given, the client's product photos (the images before it). Report ONLY clear,
    (shape, color, door/handle layout, display, logo), or wrong real-world relative size.
 5. Physical/anatomy errors: extra or missing fingers, a utensil with two handles, melted or impossible objects.
 6. Gibberish or garbled letters anywhere.
+7. The same phrase rendered twice: a label, word group or price shown in two places (e.g. "YENİ SEZON" as a
+   ribbon and again above the price box, or the headline's words repeated in the line below it), unless the
+   client's request itself repeats it.
 Ignore style and taste. Output JSON only: {"ok": true|false, "problems": ["short English description", ...]}"""
 
 
