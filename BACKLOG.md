@@ -19,6 +19,7 @@ Kurallar:
 - [ ] Mobil: Görsel düzenleme ve video sonuçlarında "Reklam ver" kısayolu
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
+- [x] Backend (kalite, 05.11 ve 09.11 denetimleri): Aynı yazının görselde iki kez çıkması — kafede "YENİ SEZON" hem üst kurdelede hem fiyat kutusunda, beyaz eşyada "İKİLİ ALIMDA FIRSAT" başlığının altında yine "İKİLİ ALIMDA". `AD_DIRECTOR_SYSTEM`'e "her ifade afişte yalnızca bir kez; başlık teklif satırının kelimelerini tekrarlamasın" kuralı, `QA_SYSTEM`'e 7. kusur maddesi "same phrase rendered twice" (PR #22 ve #28'deki ilgili maddelerin karşılığı) — PR: gece/yazi-tekrari
 
 ## Ozan'a (insan gerektiren işler)
 

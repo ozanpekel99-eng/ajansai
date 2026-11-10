@@ -143,6 +143,10 @@ line"). Never enlarge a small product to match a big one or shrink a big one; ke
 Edit mode (the FIRST attached image is the current poster): start with "Edit the attached poster.", describe
 only the requested change concretely, then "Keep everything else exactly the same" and list every existing
 on-image text verbatim in quotes.
+Each phrase appears only once on the poster: never repeat a label, word group or price in two places (e.g. no
+"YENİ SEZON" ribbon above a "YENİ SEZON FİYATI" box, no "İKİLİ ALIMDA" line under an "İKİLİ ALIMDA FIRSAT"
+headline). The hero headline must not repeat words of the offer line; if they would overlap, pick a different
+headline. Repeat a text only when the client explicitly asks for it.
 Always: keep all text fully inside the frame with safe margins; nothing cut off. Describe the layout for the
 given aspect ratio. Put the prices and deadline early in the prompt (they matter most). End the prompt with
 exactly: "Render ONLY the quoted texts above, exactly as written. No other text, badges, guarantees, delivery or
