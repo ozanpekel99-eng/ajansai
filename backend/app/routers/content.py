@@ -12,7 +12,7 @@ from sqlalchemy import and_, select, update
 from app import config
 from app.db import get_engine, utcnow, video_tasks
 from app.security import get_current_user
-from app.services import assistant, chat_files, free_tier, gateway_media, library, media_planner, media_qa, storage, video_upscale
+from app.services import assistant, chat_files, free_tier, gateway_media, library, media_planner, media_qa, storage, video_endguard, video_upscale
 from app.services.claude_service import generate_content_ideas
 from app.services.llm_service import LLMError
 from app.services.plans import CREDIT_COSTS, chat_cost, idea_cost, image_cost, video_cost
@@ -321,6 +321,8 @@ def _store_video(video: dict, user_id: str, operation: dict | None = None) -> st
             return video["url"]
         raise storage.StorageError("Blob deposu yok; video baytları saklanamıyor.")
     data = gateway_media.fetch_video(video)
+    if config.VIDEO_END_GUARD:
+        data, _ = video_endguard.guard(data)
     if upscale_to:
         data = video_upscale.upscale(data, upscale_to)
     return storage.save(data, "video/mp4", f"video/{user_id}")
