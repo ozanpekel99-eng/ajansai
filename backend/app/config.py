@@ -132,6 +132,8 @@ VIDEO_GATEWAY_SIZES = {
     "4k": _env("VIDEO_GATEWAY_SIZE_4K", "1920x1080"),
 }
 VIDEO_UPSCALE = _env("VIDEO_UPSCALE", "1") == "1"
+# Son-kare güvencesi: kapanışta bozulan kareler son sağlam kareyle doldurulur (ek üretim maliyeti yok).
+VIDEO_END_GUARD = _bool("VIDEO_END_GUARD", True)
 # İstek bazında seçilebilen Veo 3.1 Lite (seri üretimde Fast'in duvar/doku titremesine karşı).
 VIDEO_MODEL_LITE = _env("VIDEO_MODEL_LITE", "google/veo-3.1-lite-generate-001")
 # Yedek video modeli: Veo başlatılamazsa ya da iş hata verirse aynı istem ve açılış karesiyle Kling denenir.

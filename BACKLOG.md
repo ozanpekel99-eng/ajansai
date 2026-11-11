@@ -19,6 +19,10 @@ Kurallar:
 - [ ] Mobil: Görsel düzenleme ve video sonuçlarında "Reklam ver" kısayolu
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
+- [ ] Backend (kalite, 09.11 denetimi — PR #28'deki madde): Video son-kare güvencesi — Veo çıktısının kapanışında yazılar bozuluyorsa ek üretim maliyeti olmadan son sağlam kareyi tutarak süreyi koru
+  - [x] 1/3 `video_endguard.guard`: ffmpeg ile kareleri çıkar, son 0,6 sn'yi gövdedeki olağan değişimle karşılaştır; bozulmada son sağlam karede kes, `tpad=stop_mode=clone` ile süreyi koru; kullanıcı videolarında (`_store_video`) ve `/api/health/qa` raporunda (`video.end_guard`) devrede, `VIDEO_END_GUARD=0` ile kapatılabilir (PR: gece/video-son-kare)
+  - [ ] 2/3 Karşılaştırmayı yazı bölgelerine odakla: başlangıç karesindeki yazı kutularını (görme modeli ya da kenar yoğunluğu) bir kez bul, yalnızca o bölgelerde fark ölç (ışık/konfeti kaynaklı yanlış alarmı azaltır)
+  - [ ] 3/3 Gerçek Veo çıktılarıyla eşik ayarı: son 2 haftanın QA videolarında `end_guard` ölçümlerini (normal / end_max) rapora dök, `RATIO`/`MIN_DIFF` değerlerini buna göre güncelle
 
 ## Ozan'a (insan gerektiren işler)
 

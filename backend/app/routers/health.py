@@ -148,9 +148,11 @@ def qa_report():
         try:
             res = gateway_media.video_status(v["job"])
             if res["status"] == "completed":
-                from app.services import video_upscale
+                from app.services import video_endguard, video_upscale
 
                 data = gateway_media.fetch_video(res["video"])
+                if config.VIDEO_END_GUARD:
+                    data, v["end_guard"] = video_endguard.guard(data)
                 if v["job"].get("upscale_to"):
                     data = video_upscale.upscale(data, v["job"]["upscale_to"])
                 v.update(status="completed", url=storage.save(data, "video/mp4", "qa"))
