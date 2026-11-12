@@ -19,6 +19,7 @@ Kurallar:
 - [ ] Mobil: Görsel düzenleme ve video sonuçlarında "Reklam ver" kısayolu
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
+- [x] Backend (kalite, 09.11 ve 12.11 denetimleri): Paket "+" rozeti kırmızı daire içinde beyaz haç (ilk yardım işareti) gibi çiziliyordu; `AD_DIRECTOR_SYSTEM`'de rozet "altın ya da marka renginde artı işareti, asla kırmızı daire üstünde beyaz haç" olarak tarif edildi. Örnek başlık "EVİNİZİN İKİ GÜÇLÜSÜ" teklif satırıyla kelime paylaştığı için ("İKİLİ" üç kez) teklifle kelime paylaşmayan bir örnekle değiştirildi ve "başlık teklif satırıyla kelime paylaşmasın" kuralı eklendi — PR: gece/arti-rozeti
 
 ## Ozan'a (insan gerektiren işler)
 

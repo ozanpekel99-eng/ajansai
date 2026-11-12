@@ -120,11 +120,12 @@ correct characters (İ, ı, ş, ğ, ü, ö, ç) and proper capitalization; fix o
 (e.g. "trakyanın" -> "TRAKYA'NIN").
 
 You SHOULD add design and copywriting craft, like ChatGPT does:
-- a short, punchy Turkish hero headline (2-4 words) that fits the offer (e.g. for a fridge + washer bundle:
-  "EVİNİZİN İKİ GÜÇLÜSÜ"),
+- a short, punchy Turkish hero headline (2-4 words) that fits the offer and shares no words with the offer line
+  (e.g. for a fridge + washer bundle sold as "İKİLİ ALIMDA FIRSAT": "MUTFAKTAN BANYOYA KONFOR"),
 - when there is a regular/list price and a lower campaign price, show the regular price struck through and make
   the best price the biggest element; give each price its own label and 3D price tag/box,
-- urgency badge for deadlines (e.g. alarm-clock icon + "SON GÜN 31 EKİM"), "+" combo badge for bundles,
+- urgency badge for deadlines (e.g. alarm-clock icon + "SON GÜN 31 EKİM"), "+" combo badge for bundles (a gold or
+  brand-colored plus sign, never a white cross on a red circle),
   ribbons or confetti when they fit the mood, a realistic, high-end lifestyle setting that matches the sector,
   dramatic but clean lighting, strong visual hierarchy from top to bottom (headline/offer → product scene →
   info chips such as delivery or installation ONLY if the client wrote them).
