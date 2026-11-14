@@ -14,5 +14,6 @@ görseller ve Reels videoları, tasarım şablonu (`gen.py`, `base.css`) bulunur
 ## Haftalar
 
 - 2026-10-27: Ajans vs ajansAI karşılaştırması, işletme Reels'i, freelance carousel'i, bireysel Reels, fiyatlar, nasıl çalışır.
+- 2026-11-23: Kara Cuma haftası, kontrol sende: tarihli/toplam bütçeli reklam, "Markanı en iyi sen anlatırsın" carousel'i, freelancer'ın Kara Cuma akşamı Reels'i, mevcut gönderiyi reklama çevir carousel'i, reklam sonuçlarını kendin izle, indirim uzadı Reels'i, bireysel yeni yıl kartı.
 
 Sosyal medya ajanı (zamanlanmış görev, cumartesi) planı olmayan ilk haftayı hazırlar ve PR açar.
