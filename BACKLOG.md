@@ -38,6 +38,10 @@ Kurallar:
   - [ ] 2/2: Yeniden üretim istemine yalnızca doğrulanmış kusurlar eklensin (PR #24'teki Türkçe İ maddesinin 3/3 adımıyla birlikte; yanlış alarmlar isteme "CILT yazma" gibi gereksiz talimat sokmasın)
 - [x] Backend (kalite, 09.11 ve 12.11 denetimleri): Paket "+" rozeti kırmızı daire içinde beyaz haç (ilk yardım işareti) gibi çiziliyordu; `AD_DIRECTOR_SYSTEM`'de rozet "altın ya da marka renginde artı işareti, asla kırmızı daire üstünde beyaz haç" olarak tarif edildi. Örnek başlık "EVİNİZİN İKİ GÜÇLÜSÜ" teklif satırıyla kelime paylaştığı için ("İKİLİ" üç kez) teklifle kelime paylaşmayan bir örnekle değiştirildi ve "başlık teklif satırıyla kelime paylaşmasın" kuralı eklendi — PR: gece/arti-rozeti
 
+## Kalite denetiminden (PR #7 / #12 / #18'de önerilen maddeler)
+
+- [x] Backend (kalite, 26.10): `media_planner.VIDEO_SYSTEM`'e kampanya görseli kuralı — başlangıç karesindeki yazı/fiyat/rozet/bant video boyunca sabit kalsın, yalnızca arka plan öğeleri hareket etsin; yedek istemde başlangıç karesi varsa "no text" yerine "keep all existing text exactly unchanged" — PR (bu dal: gece/video-yazi-sabit)
+
 ## Ozan'a (insan gerektiren işler)
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight
