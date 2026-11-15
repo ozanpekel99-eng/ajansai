@@ -4,22 +4,25 @@
 - POST /api/health/qa-run   → sabit Türkçe istek setiyle görsel (haftalık ise bir de video) üretir,
                               her görseli kalite denetiminden geçirir, sonucu saklar ve yöneticiye e-postalar.
                               Kimlik gerektirmez ama maliyeti sınırlamak için 20 saatte bir çalışır.
-- GET  /api/health/qa       → son kalite raporu (video işi bitmediyse durumunu yeniler)
+- GET  /api/health/qa       → son kalite raporu (video işi bitmediyse durumunu yeniler) ve
+                              gerçek kullanıcı üretimlerinde son 24 saatin hata sayıları (`production_errors`)
 
 Rapor gizli bilgi içermez: istekler, üretilen test görsellerinin adresleri, bulunan kusurlar ve süreler.
+Üretim hata özeti yalnızca sayılar ve kısaltılmış hata metinleri içerir (kullanıcı kimliği/e-posta/istem yok).
 """
 
 import json
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from collections import Counter
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select, text
+from sqlalchemy import and_, func, select, text
 
 from app import config
-from app.db import app_settings, get_engine
+from app.db import app_settings, credit_events, get_engine, utcnow, video_tasks
 from app.services import gateway_media, media_planner, media_qa, storage
 
 router = APIRouter()
@@ -27,6 +30,7 @@ logger = logging.getLogger("ajansai.health")
 
 REPORT_KEY = "qa_latest"
 MIN_INTERVAL_S = 20 * 3600
+STUCK_VIDEO_S = 30 * 60  # bu süreden uzun "pending" kalan video işi takılmış sayılır
 
 # Basit Türkçe istekler (gerçek kullanıcıların yazacağı gibi); sektörler dönüşümlü kalır.
 QA_PROMPTS = [
@@ -63,6 +67,84 @@ def health():
             "time": datetime.now(timezone.utc).isoformat()}
 
 
+def _short_error(err: str | None) -> str:
+    """Hata metnini gruplamak için kısaltır (adres ve uzun ayrıntılar atılır)."""
+    msg = " ".join((err or "Bilinmeyen hata").split())
+    for cut in (" http", " {"):
+        i = msg.find(cut)
+        if i > 0:
+            msg = msg[:i]
+    return msg[:120]
+
+
+def production_errors(hours: int = 24) -> dict:
+    """Gerçek kullanıcı üretimlerinde son `hours` saatin hata sayıları.
+
+    - video: `video_tasks` durumlarına göre; 30 dk'dan uzun bekleyen işler "stuck";
+      hiç başlatılamayan videolar (iade edilmiş ama işi olmayan kredi kaydı) "start_failed".
+    - image: kredili görsel üretimleri (`credit_events` action=image); iade edilenler başarısız sayılır
+      (görsel sayfası, sohbet görseli ve video açılış karesi dahil).
+    """
+    now = utcnow()
+    since = now - timedelta(hours=hours)
+    stuck_before = now - timedelta(seconds=STUCK_VIDEO_S)
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            select(video_tasks.c.status, video_tasks.c.error, video_tasks.c.created_at)
+            .where(video_tasks.c.created_at >= since)
+        ).all()
+        img_total, img_failed = conn.execute(
+            select(func.count(), func.coalesce(func.sum(credit_events.c.refunded), 0))
+            .where(and_(credit_events.c.action == "image", credit_events.c.created_at >= since))
+        ).one()
+        start_failed = conn.execute(
+            select(func.count()).select_from(credit_events).where(and_(
+                credit_events.c.action == "video", credit_events.c.refunded == 1,
+                credit_events.c.created_at >= since,
+                credit_events.c.id.not_in(select(video_tasks.c.credit_event_id)),
+            ))
+        ).scalar()
+    by_status = Counter(r.status for r in rows)
+    stuck = sum(1 for r in rows if r.status == "pending" and r.created_at < stuck_before)
+    errors = Counter(_short_error(r.error) for r in rows if r.status == "failed")
+    video_failed = by_status.get("failed", 0) + int(start_failed or 0)
+    return {
+        "hours": hours,
+        "video": {
+            "total": len(rows) + int(start_failed or 0),
+            "completed": by_status.get("completed", 0),
+            "pending": by_status.get("pending", 0) - stuck,
+            "stuck": stuck,
+            "failed": by_status.get("failed", 0),
+            "start_failed": int(start_failed or 0),
+            "top_errors": [{"error": e, "count": n} for e, n in errors.most_common(5)],
+        },
+        "image": {"total": int(img_total or 0), "failed": int(img_failed or 0)},
+        "failed_total": video_failed + int(img_failed or 0),
+    }
+
+
+def _safe_production_errors() -> dict | None:
+    try:
+        return production_errors()
+    except Exception as e:  # noqa: BLE001 — rapor üretim özeti yüzünden düşmesin
+        logger.warning("Üretim hata özeti alınamadı: %s", e)
+        return None
+
+
+def _production_lines(pe: dict | None) -> list[str]:
+    if not pe:
+        return []
+    v, i = pe["video"], pe["image"]
+    lines = ["", f"Gerçek üretimler (son {pe['hours']} saat):",
+             f"• Görsel: {i['total']} üretim, {i['failed']} hata",
+             f"• Video: {v['total']} iş, {v['completed']} tamam, {v['failed']} hata, "
+             f"{v['start_failed']} başlatılamadı, {v['stuck']} takılı (30 dk+), {v['pending']} sürüyor"]
+    for e in v["top_errors"]:
+        lines.append(f"   - {e['count']}× {e['error']}")
+    return lines
+
+
 def _one_image(name: str, request: str, aspect: str) -> dict:
     t = time.time()
     try:
@@ -92,6 +174,7 @@ def _email(report: dict) -> None:
                 lines.append(f"   {r['url']}")
         if report.get("video"):
             lines += ["", f"Video: {report['video'].get('status')} (sonuç: {config.PUBLIC_API_URL}/api/health/qa)"]
+        lines += _production_lines(report.get("production_errors"))
         support.send_email(sorted(config.ADMIN_EMAILS), f"ajansAI kalite: {report['passed']}/{report['total']} sorunsuz", "\n".join(lines))
     except Exception as e:  # noqa: BLE001
         logger.warning("Kalite raporu e-postası gönderilemedi: %s", e)
@@ -116,7 +199,8 @@ def qa_run(video: str = "auto"):
         images = list(pool.map(lambda p: _one_image(*p), QA_PROMPTS))
 
     report = {"started_at": started_at, "finished_at": datetime.now(timezone.utc).isoformat(), "status": "done",
-              "images": images, "passed": sum(1 for r in images if r["ok"]), "total": len(images)}
+              "images": images, "passed": sum(1 for r in images if r["ok"]), "total": len(images),
+              "production_errors": _safe_production_errors()}
 
     # Haftalık: ilk sorunsuz görselden video (ana model; Kling yalnızca Veo başlamazsa)
     want_video = video in ("1", "true") or (video == "auto" and datetime.now(timezone.utc).weekday() == 0)
@@ -141,7 +225,7 @@ def qa_run(video: str = "auto"):
 def qa_report():
     raw = _get(REPORT_KEY)
     if not raw:
-        return {"status": "none"}
+        return {"status": "none", "production_errors": _safe_production_errors()}
     report = json.loads(raw)
     v = report.get("video")
     if v and v.get("status") == "pending" and v.get("job"):
@@ -162,6 +246,8 @@ def qa_report():
     public = dict(report)
     if public.get("video"):
         public["video"] = {k: v for k, v in public["video"].items() if k != "job"}
+    # Rapor anındaki değil, şu anki son 24 saat (rapor 20 saatte bir üretilir)
+    public["production_errors"] = _safe_production_errors()
     return public
 
 
