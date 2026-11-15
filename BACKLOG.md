@@ -54,6 +54,13 @@ Kurallar:
   - [ ] 2/3 Karşılaştırmayı yazı bölgelerine odakla: başlangıç karesindeki yazı kutularını (görme modeli ya da kenar yoğunluğu) bir kez bul, yalnızca o bölgelerde fark ölç (ışık/konfeti kaynaklı yanlış alarmı azaltır)
   - [ ] 3/3 Gerçek Veo çıktılarıyla eşik ayarı: son 2 haftanın QA videolarında `end_guard` ölçümlerini (normal / end_max) rapora dök, `RATIO`/`MIN_DIFF` değerlerini buna göre güncelle
 
+## Kalite denetiminden (PR #7 / #12 / #18'de önerilen maddeler)
+
+- [ ] Backend (kalite, 26.10 + 02.11): Video otomatik denetimi `media_qa.check_video` — alt adımlar:
+  - [x] 1/3: Siyah bant (letterbox) tespiti — ilk karenin üst/alt şeritleri (1080x1920'de 200 px) ortalama parlaklık <10 ise kusur; `cropdetect` kullanılmadı (konfetide yanılıyor). Yalnızca servis fonksiyonu + testler, henüz hiçbir akışa bağlı değil — PR (bu dal: gece/video-denetimi)
+  - [ ] 2/3: ffmpeg ile ~8 kare (ilk 2 sn'den sık) çıkarıp başlangıç karesiyle birlikte görme modeline ver; yazı bozulması/kaybolması, ürün/insan bozulması
+  - [ ] 3/3: `/api/health/qa` raporuna `video.ok` / `video.problems`; üretimde kusurda bir kez yeniden üretim (PR #14 ve #19 birleştikten sonra, health.py çakışmasın diye)
+
 ## Ozan'a (insan gerektiren işler)
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight
