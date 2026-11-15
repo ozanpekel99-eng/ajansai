@@ -17,7 +17,7 @@ Kurallar:
   - [ ] 2/3: Uygulamadan Meta bağlama — backend'de `state`'ten kullanıcıyı bulan oturumsuz callback + `ajansai://` derin bağlantıyla uygulamaya dönüş (`expo-web-browser` `openAuthSessionAsync`)
   - [ ] 3/3: Yeni reklam akışı — kütüphaneden görsel/video seçimi, reklam hesabı/sayfa/Instagram seçimi, `/api/ads/meta/ad-copy` ile metin, hedef, bütçe, konum; yalnızca Instagram yerleşimleri; `/api/ads/meta/ads` POST
 - [ ] Mobil: Google ile giriş ve Apple ile giriş (`expo-apple-authentication`; backend `/api/auth/google`, `/api/auth/apple`; Apple id_token audience'ına `tr.ajansai.app` paket kimliğini ekle — `backend/app/services/social_auth.py`)
-- [ ] Mobil: Sohbette video önerisi ve ücretsiz kullanıcı limit kartı (web `UpgradeCard` karşılığı; limit dolunca paketler gösterilsin)
+- [x] Mobil: Sohbette video önerisi ve ücretsiz kullanıcı limit kartı (web `UpgradeCard` karşılığı; limit dolunca paketler gösterilsin) — [PR #11](https://github.com/ozanpekel99-eng/ajansai/pull/11)
 - [ ] Mobil: Uygulama içi satın alma altyapısı — RevenueCat (`react-native-purchases`) ekranı ve backend webhook ucu (`/api/payments/revenuecat/webhook`: ürün kimliği → paket/ek kredi; idempotent; testli). Gerçek anahtarlar Ozan girene kadar kapalı kalsın
 - [ ] Mobil: Görsel düzenleme ve video sonuçlarında "Reklam ver" kısayolu
 - [x] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin — PR #14 (https://github.com/ozanpekel99-eng/ajansai/pull/14)
