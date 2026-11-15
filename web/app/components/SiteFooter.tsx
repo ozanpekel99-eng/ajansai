@@ -1,9 +1,10 @@
 import Link from "next/link";
 
+import CookieSettingsLink from "./CookieSettingsLink";
 import { COMPANY, PAYMENT_LOGO_BAND } from "../lib/company";
 
 /**
- * Herkese açık sayfaların sade alt bilgisi: Paketler · Yasal · İletişim ve telif satırı.
+ * Herkese açık sayfaların sade alt bilgisi: Paketler · Yasal · İletişim · Çerez tercihleri ve telif satırı.
  * Sözleşmelerin hepsi /yasal sayfasında toplanır. Ödeme logoları yalnızca `payments` verilen
  * sayfalarda (Paketler) gösterilir; iyzico logoları satın alma yapılan yerde görünür kalır.
  */
@@ -15,6 +16,7 @@ export default function SiteFooter({ compact = false, payments = false }: { comp
           <Link href="/kayit">Paketler</Link>
           <Link href="/yasal">Yasal</Link>
           <Link href="/iletisim">İletişim</Link>
+          <CookieSettingsLink />
         </nav>
         <span className="site-footer-copy">
           © {new Date().getFullYear()} {COMPANY.brand}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import SocialLogin from "@/components/SocialLogin";
 import { Button, ErrorText, Input, T } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { useSession, User } from "@/lib/session";
@@ -60,6 +61,8 @@ export default function Login() {
               </Pressable>
             ))}
           </View>
+
+          <SocialLogin />
 
           <View style={{ gap: 14 }}>
             {mode === "register" && <Input label="Ad soyad" value={name} onChangeText={setName} autoComplete="name" textContentType="name" />}

@@ -27,7 +27,10 @@ Rules:
   Turkish characters (İ, ı, ş, ğ, ü, ö, ç). Fix obvious spelling mistakes (e.g. "kampayaları" -> "kampanyaları")
   and mention it in the note. Never translate the text. Specify hierarchy (headline / subline / badge / CTA),
   bold modern sans-serif typography, strong contrast and legibility, placement inside the safe area away from the
-  edges, and an eye-catching but clean ad layout. If the client asks for no specific text, say "no text, no
+  edges, and an eye-catching but clean ad layout. Letter case: write each headline in ONE consistent case,
+  either ALL CAPS or Title Case (every word capitalized), and say so in the prompt; no small caps, no mixed
+  letter sizes inside one line (wrong: "Evinize Yeni bir Hava"; right: "EVİNİZE YENİ BİR HAVA" or
+  "Evinize Yeni Bir Hava"). If the client asks for no specific text, say "no text, no
   letters, no logos, no watermark".
 - If the client asked for text but did not give exact words, write short, punchy Turkish ad copy yourself
   (max 6 words headline) and put it in quotes.
@@ -48,7 +51,9 @@ Rules:
   nothing may be cut off at the top or bottom.
 - Never add brand names, logos or watermarks the client did not ask for. Do not guess a brand from model codes
   (e.g. "10121 S", "A710 İ"): if the client gives no brand, show no brand. Never invent offers, guarantees,
-  free delivery/installation badges or any claim the client did not write."""
+  free delivery/installation badges or any claim the client did not write.
+- Products without reference photos: clean, unbranded products; control panels and displays with simple icons
+  or a plain knob and a blank dark display only — no small printed labels, model names or logos on them."""
 
 VIDEO_SYSTEM = """You are a commercial film director writing prompts for Google Veo 3.1 (image-to-video).
 Turn the client's Turkish request into a short, single-shot video that looks REAL on the first try.
@@ -83,7 +88,13 @@ Realism rules (critical):
 - Products and food must stay identical to the first frame (same shape, colors, label). No morphing.
 - Camera: one move (static, slow push-in, slow orbit, slow pan), steady.
 - Lighting/style: photorealistic commercial look, natural light, shallow depth of field.
-- No on-screen text, captions, logos or watermarks. No faces if the client says not to show people.
+- Never ADD on-screen text, captions, logos or watermarks. No faces if the client says not to show people.
+- Campaign graphic as first frame (critical): if the start image already contains text, prices, badges,
+  banners, ribbons, stickers or icons, they are part of a printed poster: they stay completely fixed, sharp
+  and unchanged for the whole video (same words, letters, position, size and colors). Banners and badges do
+  not slide, open, close, fade, wipe or animate; icons are not animated; no letter morphs or flickers. Only
+  background elements move (light confetti, a soft light sweep or sparkle, gentle fabric or steam) plus at
+  most a very slow camera push-in. Say this explicitly in "prompt" and list the fixed text/badges you see.
 - Audio (only if requested): ambient sounds; Turkish speech only if asked, quoted exactly in Turkish.
 - REVISION: if a previous prompt is given, keep everything from it and change ONLY what the client asks."""
 
@@ -118,13 +129,17 @@ Keep EXACTLY (never change, round or drop): every product name/model code, price
 store name, slogan and any text the client gives. Put every on-image text in double quotes, in Turkish with
 correct characters (İ, ı, ş, ğ, ü, ö, ç) and proper capitalization; fix obvious typos and apostrophes
 (e.g. "trakyanın" -> "TRAKYA'NIN").
+Letter case: write each headline in ONE consistent case, either ALL CAPS or Title Case (every word
+capitalized), and state the chosen case in the prompt; no small caps, no mixed letter sizes inside one line
+(wrong: "Evinize Yeni bir Hava"; right: "EVİNİZE YENİ BİR HAVA" or "Evinize Yeni Bir Hava").
 
 You SHOULD add design and copywriting craft, like ChatGPT does:
-- a short, punchy Turkish hero headline (2-4 words) that fits the offer (e.g. for a fridge + washer bundle:
-  "EVİNİZİN İKİ GÜÇLÜSÜ"),
+- a short, punchy Turkish hero headline (2-4 words) that fits the offer and shares no words with the offer line
+  (e.g. for a fridge + washer bundle sold as "İKİLİ ALIMDA FIRSAT": "MUTFAKTAN BANYOYA KONFOR"),
 - when there is a regular/list price and a lower campaign price, show the regular price struck through and make
   the best price the biggest element; give each price its own label and 3D price tag/box,
-- urgency badge for deadlines (e.g. alarm-clock icon + "SON GÜN 31 EKİM"), "+" combo badge for bundles,
+- urgency badge for deadlines (e.g. alarm-clock icon + "SON GÜN 31 EKİM"), "+" combo badge for bundles (a gold or
+  brand-colored plus sign, never a white cross on a red circle),
   ribbons or confetti when they fit the mood, a realistic, high-end lifestyle setting that matches the sector,
   dramatic but clean lighting, strong visual hierarchy from top to bottom (headline/offer → product scene →
   info chips such as delivery or installation ONLY if the client wrote them).
@@ -140,13 +155,27 @@ with text or badges. Look at the attached photos, identify each product and stat
 sizes explicitly so the scale is correct (e.g. "the refrigerator is about 185 cm tall and the washing machine
 about 85 cm tall, so the washing machine reaches roughly the fridge's lower half; both stand on the same floor
 line"). Never enlarge a small product to match a big one or shrink a big one; keep true proportions.
+No product photos attached (the products are imagined, not the client's real ones): show clean, generic,
+unbranded products. Control panels, displays and screens get only simple icons, a plain knob and a blank dark
+display — no small printed labels, program names, model names, numbers, brand names or logos on the products
+(image models turn tiny product text into gibberish). Say this explicitly in the prompt.
 Edit mode (the FIRST attached image is the current poster): start with "Edit the attached poster.", describe
 only the requested change concretely, then "Keep everything else exactly the same" and list every existing
 on-image text verbatim in quotes.
+Each phrase appears only once on the poster: never repeat a label, word group or price in two places (e.g. no
+"YENİ SEZON" ribbon above a "YENİ SEZON FİYATI" box, no "İKİLİ ALIMDA" line under an "İKİLİ ALIMDA FIRSAT"
+headline). The hero headline must not repeat words of the offer line; if they would overlap, pick a different
+headline. Repeat a text only when the client explicitly asks for it.
 Always: keep all text fully inside the frame with safe margins; nothing cut off. Describe the layout for the
 given aspect ratio. Put the prices and deadline early in the prompt (they matter most). End the prompt with
 exactly: "Render ONLY the quoted texts above, exactly as written. No other text, badges, guarantees, delivery or
 installation claims, logos or prices." Output ONLY the prompt text, no preamble."""
+
+
+# Referans fotoğrafı yoksa istem yazarına açıkça söylenir; böylece "temiz, markasız ürün, panelde yazı yok"
+# kuralı her seferinde uygulanır (05.11 denetimi: beyaz eşya panellerinde okunamaz sahte etiketler, sahte logo).
+NO_PRODUCT_PHOTOS = ("No product photos attached: products must be clean and unbranded, with no small printed "
+                     "labels, model names or logos on their panels or displays.")
 
 
 def _with_images(text: str, urls: list[str] | None):
@@ -165,6 +194,8 @@ def direct_ad_prompt(request: str, aspect: str, edit: bool = False, ref_count: i
         parts.append("EDIT MODE: the first attached image is the current poster to edit.")
     if ref_count:
         parts.append(f"{ref_count} product photo(s) attached" + (" after the poster." if edit else "."))
+    else:
+        parts.append(NO_PRODUCT_PHOTOS)
     parts.append(f"Client request (Turkish): {request}")
     try:
         raw = llm_service.chat_completion(
@@ -221,4 +252,16 @@ def plan_video(request: str, aspect: str, duration: int, has_start_frame: bool, 
     except Exception as e:  # noqa: BLE001
         logger.warning("Video planlayıcı çalışmadı: %s", e)
     return {"frame_prompt": "" if has_start_frame else f"Photorealistic first frame, aspect ratio {aspect}: {request}",
-            "prompt": f"{request}. Realistic, smooth, slow motion, steady camera, no text.", "note": ""}
+            "prompt": f"{request}. {_fallback_text_rule(has_start_frame)}", "note": ""}
+
+
+def _fallback_text_rule(has_start_frame: bool) -> str:
+    """Planlayıcı çalışmazsa kullanılan yedek istemin son cümlesi.
+
+    Başlangıç karesi bir kampanya görseli olabilir (yazı, fiyat, bant): "no text" demek Veo'yu bu yazıları
+    silmeye itiyor. Bu yüzden başlangıç karesi varsa mevcut yazılar aynen korunsun denir."""
+    base = "Realistic, smooth, slow motion, steady camera."
+    if has_start_frame:
+        return (base + " Keep all existing text, prices, badges and banners exactly unchanged, sharp and fixed "
+                "in place for the whole video; only background elements move. Do not add new text.")
+    return base + " No text."

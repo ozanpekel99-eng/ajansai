@@ -218,12 +218,68 @@ support_tickets = Table(
     Column("created_at", DateTime, nullable=False, index=True),
 )
 
+# Mobil uygulama içi satın alma (RevenueCat) webhook olayları. event_id birincil anahtar: aynı olay
+# tekrar gelirse ikinci kez işlenmez (paket/kredi bir kez yüklenir).
+store_events = Table(
+    "store_events",
+    metadata,
+    Column("event_id", String(100), primary_key=True),
+    Column("type", String(40), nullable=False),
+    Column("app_user_id", String(200), nullable=False),
+    Column("user_id", String(36), nullable=True, index=True),  # eşleşen ajansAI kullanıcısı
+    Column("product_id", String(200), nullable=True),
+    Column("store", String(30), nullable=True),  # APP_STORE | PLAY_STORE | ...
+    Column("environment", String(20), nullable=True),  # SANDBOX | PRODUCTION
+    Column("status", String(30), nullable=False),  # applied | ignored | unknown_user | unknown_product
+    Column("payment_id", String(36), nullable=True),
+    Column("created_at", DateTime, nullable=False),
+)
+
+# ajansAI'ın kendi Instagram hesabı (@ajansai.tr) için yayın kuyruğu: marketing/<hafta>/plan.json'dan
+# içe aktarılır, yönetici her gönderiyi onaylar / düzenler / atlar. Paylaşım ayrı adımda (cron) yapılır.
+social_posts = Table(
+    "social_posts",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("week", String(10), nullable=False, index=True),  # haftanın pazartesisi, YYYY-AA-GG
+    Column("idx", Integer, nullable=False),  # plan.json içindeki sıra (hafta + sıra tekildir)
+    Column("kind", String(10), nullable=False),  # image | carousel | reels
+    Column("title", String(300), nullable=False, default=""),
+    Column("target", String(120), nullable=False, default=""),
+    Column("caption", Text, nullable=False),
+    Column("media", Text, nullable=False),  # JSON: herkese açık https adresleri
+    Column("scheduled_at", DateTime, nullable=False, index=True),  # naive UTC
+    Column("status", String(12), nullable=False),  # pending | approved | skipped | published | failed
+    Column("ig_media_id", String(64), nullable=True),
+    Column("error", Text, nullable=True),
+    Column("approved_by", String(320), nullable=True),
+    Column("created_at", DateTime, nullable=False),
+    Column("updated_at", DateTime, nullable=False),
+)
+
 # Uygulamanın kendi ürettiği ayarlar (ör. JWT_SECRET tanımlı değilse oluşturulan anahtar).
 app_settings = Table(
     "app_settings",
     metadata,
     Column("key", String(100), primary_key=True),
     Column("value", Text, nullable=False),
+)
+
+# @ajansai.tr Instagram hesabına gelen (in) ve hesaptan gönderilen (out) DM'ler. Meta webhook'u ile gelir;
+# aynı mesaj (mid) iki kez kaydedilmez. `thread` müşterinin Instagram kimliğidir (IGSID).
+instagram_messages = Table(
+    "instagram_messages",
+    metadata,
+    Column("id", String(200), primary_key=True),  # Meta mesaj kimliği (mid)
+    Column("thread", String(64), nullable=False, index=True),
+    Column("ig_account", String(64), nullable=False, default=""),
+    Column("direction", String(3), nullable=False),  # in | out
+    Column("text", Text, nullable=False, default=""),
+    Column("attachments", Text, nullable=True),  # JSON: [{"type": "image", "url": "..."}]
+    Column("status", String(12), nullable=False),  # received | replied | escalated | skipped | error | sent
+    Column("note", String(300), nullable=True),
+    Column("sent_at", DateTime, nullable=False, index=True),  # Meta'daki mesaj zamanı (naive UTC)
+    Column("created_at", DateTime, nullable=False),
 )
 
 

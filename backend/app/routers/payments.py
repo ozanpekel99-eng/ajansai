@@ -4,6 +4,7 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select, update
@@ -11,7 +12,7 @@ from sqlalchemy import and_, select, update
 from app import config
 from app.db import get_engine, payments, utcnow
 from app.security import get_current_user
-from app.services import fx, iyzico_service
+from app.services import fx, iyzico_service, revenuecat
 from typing import Literal
 
 from app.services.plans import (
@@ -207,6 +208,26 @@ def _finalize(payment, result: dict) -> RedirectResponse:
             logger.info("Paket açıldı: kullanıcı=%s paket=%s ödeme=%s", payment.user_id, payment.plan_id, payment.id)
 
     return _result_redirect(new_status, payment.id)
+
+
+@router.post("/revenuecat/webhook", include_in_schema=False)
+async def revenuecat_webhook(request: Request):
+    """Mobil uygulama içi satın alma olayları (RevenueCat → App Store / Google Play).
+
+    `REVENUECAT_WEBHOOK_AUTH` tanımlı değilse kapalıdır. Authorization başlığı panelde girilen
+    değerle eşleşmezse reddedilir. Aynı olay tekrar gelirse paket/kredi ikinci kez yüklenmez.
+    """
+    if not revenuecat.is_configured():
+        raise HTTPException(status_code=503, detail="Uygulama içi satın alma henüz yapılandırılmadı.")
+    try:
+        revenuecat.check_auth(request.headers.get("authorization"))
+    except revenuecat.WebhookAuthError:
+        raise HTTPException(status_code=401, detail="Yetkisiz.")
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Geçersiz istek.")
+    return await run_in_threadpool(revenuecat.handle_event, body)
 
 
 @router.get("/")

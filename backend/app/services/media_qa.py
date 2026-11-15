@@ -9,10 +9,13 @@ import base64
 import io
 import json
 import logging
+import os
 import re
+import subprocess
+import tempfile
 
 from app import config
-from app.services import gateway_media, llm_service
+from app.services import gateway_media, llm_service, video_upscale
 
 logger = logging.getLogger("ajansai.qa")
 
@@ -21,6 +24,9 @@ paying small-business customer. Compare the generated image (the LAST image) wit
 if given, the client's product photos (the images before it). Report ONLY clear, objective defects:
 1. A text, price, date, product code or store name the client asked for is missing, misspelled, has wrong
    digits/currency, or is different from the request. Check every number character by character.
+   Turkish letters: the client writes in Turkish, so "İ" (dotted capital I), "I", "ı", "Ş", "Ğ", "Ç", "Ö", "Ü"
+   are correct where the request uses them (e.g. "CİLT", "KAMPANYASI"). Report a missing or wrong dot/cedilla/
+   breve ONLY if you are certain at full resolution; small dots are easy to miss, so when in doubt it is fine.
 2. Any text cut off or touching the image edge.
 3. Invented facts the client did not give: other prices or discounts, phone numbers, addresses, websites,
    guarantees, free delivery/installation, gifts, brand names/logos not in the request. (A short creative
@@ -28,17 +34,35 @@ if given, the client's product photos (the images before it). Report ONLY clear,
 4. Products deformed, duplicated, missing, the wrong count, or clearly different from the product photos
    (shape, color, door/handle layout, display, logo), or wrong real-world relative size.
 5. Physical/anatomy errors: extra or missing fingers, a utensil with two handles, melted or impossible objects.
-6. Gibberish or garbled letters anywhere.
+6. Gibberish or garbled letters anywhere — including tiny fake labels, program names or pseudo-text on
+   product control panels, displays, screens and packaging, and pseudo-logos or logo-like smudges on products
+   (unless the same label/logo is visible in the client's product photos). Look closely at every panel.
+7. The same phrase rendered twice: a label, word group or price shown in two places (e.g. "YENİ SEZON" as a
+   ribbon and again above the price box, or the headline's words repeated in the line below it), unless the
+   client's request itself repeats it.
 Ignore style and taste. Output JSON only: {"ok": true|false, "problems": ["short English description", ...]}"""
 
 
-def _data_url(data: bytes, max_side: int = 1024) -> str:
+# Denetime giden görselin uzun kenarı. 1024 px JPEG küçültmesi "İ" noktası, "Ş"/"Ğ" işaretleri ve panel
+# yazıları gibi küçük ayrıntıları siliyor ve yanlış alarma yol açıyordu (29.10: doğru "CİLT" → "CILT" kusuru).
+QA_MAX_SIDE = 1568
+# Kayıpsız PNG bu boyutu aşarsa (fotoğraf gibi görsellerde olur) yüksek kaliteli JPEG'e düşülür;
+# görme modelinin görsel başına sınırının (~5 MB base64) altında kalmak için.
+QA_PNG_MAX_BYTES = 3_500_000
+
+
+def _data_url(data: bytes, max_side: int = QA_MAX_SIDE) -> str:
+    """Görseli denetim için hazırlar: uzun kenar en fazla `max_side`, önce kayıpsız PNG, büyükse JPEG q95."""
     from PIL import Image
 
     img = Image.open(io.BytesIO(data)).convert("RGB")
-    img.thumbnail((max_side, max_side))
+    img.thumbnail((max_side, max_side), Image.LANCZOS)
     out = io.BytesIO()
-    img.save(out, "JPEG", quality=88)
+    img.save(out, "PNG", optimize=True)
+    if out.tell() <= QA_PNG_MAX_BYTES:
+        return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode()
+    out = io.BytesIO()
+    img.save(out, "JPEG", quality=95)
     return "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode()
 
 
@@ -67,16 +91,105 @@ def check_image(data: bytes, request: str, product_urls: list[str] | None = None
 
 
 def generate_checked(prompt: str, aspect: str, refs: list[str] | None, request: str,
-                     product_urls: list[str] | None = None, quality: str = "standard") -> tuple[bytes, str]:
-    """Görseli üretir, denetler; kusur varsa kusurları düzelterek bir kez yeniden üretir."""
+                     product_urls: list[str] | None = None, quality: str = "standard",
+                     trace: dict | None = None) -> tuple[bytes, str]:
+    """Görseli üretir, denetler; kusur varsa kusurları düzelterek bir kez yeniden üretir.
+
+    Yeniden üretilen görsel de denetlenir ve iki görselden kusuru daha az olan döndürülür (eşitlikte ilki):
+    yeniden üretim her zaman daha iyi olmuyor, kusursuz yazı/fiyatlı ilk görsel yeni kusurlu görselle
+    değiştirilmesin.
+
+    `trace` verilirse ilk denemenin kusurları (`first_problems`) ve yeniden üretim yapılıp
+    yapılmadığı (`retried`, başarısızsa `retry_error`; yeniden üretilen görsel seçildiyse `retry_used`)
+    içine yazılır — /api/health/qa raporu için.
+    """
     data, mime = gateway_media.generate_image(prompt, aspect, refs or None, quality)
     problems = check_image(data, request, product_urls)
+    if trace is not None:
+        trace.update(first_problems=list(problems), retried=False)
     if not problems:
         return data, mime
     logger.info("Görsel kusurlu, yeniden üretiliyor: %s", problems)
     fix = prompt + "\n\nThe previous attempt had these defects; avoid them this time: " + "; ".join(problems)
     try:
         data2, mime2 = gateway_media.generate_image(fix, aspect, refs or None, quality)
-    except gateway_media.MediaError:
+    except gateway_media.MediaError as e:
+        if trace is not None:
+            trace["retry_error"] = str(e)[:300]
         return data, mime
-    return data2, mime2
+    if trace is not None:
+        trace["retried"] = True
+    problems2 = check_image(data2, request, product_urls)
+    if len(problems2) < len(problems):
+        if trace is not None:
+            trace["retry_used"] = True
+        return data2, mime2
+    logger.info("Yeniden üretilen görsel daha iyi değil (%d ≥ %d kusur), ilk görsel kullanılıyor: %s",
+                len(problems2), len(problems), problems2)
+    if trace is not None:
+        trace["retry_used"] = False
+    return data, mime
+
+
+# --- Video denetimi -------------------------------------------------------------------------------
+# 1. adım: siyah bant (letterbox) tespiti. `ffmpeg cropdetect` konfeti/kurdele gibi koyu-açık
+# karışık kenarlarda yanılıyor; bunun yerine ilk karenin üst ve alt şeritlerinin ortalama
+# parlaklığına bakılır (1080x1920'de 200 px). Orta bölge de koyuysa (gece sahnesi) kusur sayılmaz.
+
+LETTERBOX_STRIP = 200 / 1920   # şerit yüksekliği / kare yüksekliği
+LETTERBOX_DARK = 10            # 0–255 gri tonda "siyah" eşiği
+LETTERBOX_CONTENT_MIN = 25     # orta bölge bundan parlaksa şeritler gerçekten bant demektir
+
+
+def video_frame(video: bytes, at: float = 0.0, timeout: float = 30) -> bytes | None:
+    """Videodan `at` saniyedeki kareyi PNG olarak döndürür; ffmpeg yoksa/başarısızsa None."""
+    exe = video_upscale._ffmpeg()
+    if not exe or not video:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        src, dst = os.path.join(tmp, "in.mp4"), os.path.join(tmp, "frame.png")
+        with open(src, "wb") as f:
+            f.write(video)
+        cmd = [exe, "-y", "-loglevel", "error", "-ss", f"{at:.2f}", "-i", src,
+               "-frames:v", "1", dst]
+        try:
+            subprocess.run(cmd, check=True, timeout=timeout, capture_output=True)
+            with open(dst, "rb") as f:
+                return f.read() or None
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.warning("Video karesi çıkarılamadı: %s", e)
+            return None
+
+
+def letterbox_problem(frame_png: bytes) -> str | None:
+    """Karenin üstünde ve altında siyah bant varsa kusur metni, yoksa None."""
+    from PIL import Image, ImageStat
+
+    img = Image.open(io.BytesIO(frame_png)).convert("L")
+    w, h = img.size
+    strip = max(1, round(h * LETTERBOX_STRIP))
+    if h < strip * 3:
+        return None
+    top = ImageStat.Stat(img.crop((0, 0, w, strip))).mean[0]
+    bottom = ImageStat.Stat(img.crop((0, h - strip, w, h))).mean[0]
+    middle = ImageStat.Stat(img.crop((0, strip, w, h - strip))).mean[0]
+    if top < LETTERBOX_DARK and bottom < LETTERBOX_DARK and middle >= LETTERBOX_CONTENT_MIN:
+        return (f"letterbox: black bars at top and bottom of the first frame "
+                f"(top {top:.0f}, bottom {bottom:.0f}, content {middle:.0f} brightness)")
+    return None
+
+
+def check_video(video: bytes) -> list[str]:
+    """Videonun kusur listesi (boş = sorun yok). Denetim çalışmazsa boş liste (üretimi engellemez).
+
+    Şimdilik yalnızca siyah bant; görme modeliyle yazı/ürün denetimi sonraki adımda eklenecek.
+    """
+    try:
+        frame = video_frame(video, 0.0)
+        if not frame:
+            return []
+        problem = letterbox_problem(frame)
+        return [problem] if problem else []
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Video denetimi çalışmadı: %s", e)
+        return []

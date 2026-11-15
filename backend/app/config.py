@@ -50,6 +50,9 @@ JWT_EXPIRE_DAYS = int(_env("JWT_EXPIRE_DAYS", "30"))
 GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID")
 # Apple: Developer → Identifiers → Services ID (Sign in with Apple açık)
 APPLE_CLIENT_ID = _env("APPLE_CLIENT_ID")
+# Mobil uygulamada (iOS, yerel "Apple ile giriş") token'ın audience'ı uygulamanın
+# paket kimliğidir; web'in Services ID'sinden farklıdır. İkisi de kabul edilir.
+APPLE_BUNDLE_ID = _env("APPLE_BUNDLE_ID", "tr.ajansai.app")
 
 # --- CORS ---
 # Virgülle ayrılmış liste. Örn: https://ajansai.vercel.app,https://www.ajansai.com
@@ -132,6 +135,8 @@ VIDEO_GATEWAY_SIZES = {
     "4k": _env("VIDEO_GATEWAY_SIZE_4K", "1920x1080"),
 }
 VIDEO_UPSCALE = _env("VIDEO_UPSCALE", "1") == "1"
+# Son-kare güvencesi: kapanışta bozulan kareler son sağlam kareyle doldurulur (ek üretim maliyeti yok).
+VIDEO_END_GUARD = _bool("VIDEO_END_GUARD", True)
 # İstek bazında seçilebilen Veo 3.1 Lite (seri üretimde Fast'in duvar/doku titremesine karşı).
 VIDEO_MODEL_LITE = _env("VIDEO_MODEL_LITE", "google/veo-3.1-lite-generate-001")
 # Yedek video modeli: Veo başlatılamazsa ya da iş hata verirse aynı istem ve açılış karesiyle Kling denenir.
@@ -217,6 +222,12 @@ META_CONFIG_ID = _env("META_CONFIG_ID")
 META_ADMIN_CONFIG_ID = _env("META_ADMIN_CONFIG_ID", "975266095640154")
 META_API_VERSION = _env("META_API_VERSION", "v26.0")
 META_REDIRECT_URI = _env("META_REDIRECT_URI", f"{WEB_URL}/ads/callback")
+# Instagram DM webhook'u (/api/meta/webhook): Meta uygulama panelinde "Webhooks" → Instagram aboneliğinde
+# girilen doğrulama metni. İmza META_APP_SECRET ile doğrulanır.
+META_WEBHOOK_VERIFY_TOKEN = _env("META_WEBHOOK_VERIFY_TOKEN")
+# @ajansai.tr'ye gelen DM'lere otomatik yanıt. `instagram_manage_messages` izni (uygulama incelemesi)
+# gelene kadar kapalı: mesajlar yalnızca kaydedilir ve yönetici sayfasında listelenir.
+INSTAGRAM_DM_AUTO_REPLY = _bool("INSTAGRAM_DM_AUTO_REPLY", False)
 
 # --- iyzico ---
 IYZICO_API_KEY = _env("IYZICO_API_KEY")
@@ -232,6 +243,12 @@ IYZICO_SANDBOX_BASE_URL = "https://sandbox-api.iyzipay.com"
 PAYMENT_CURRENCY = _env("PAYMENT_CURRENCY", "TRY")
 USD_TRY_RATE = _env("USD_TRY_RATE", "")  # TCMB'ye ulaşılamazsa kullanılacak yedek kur
 
+# --- Mobil uygulama içi satın alma (RevenueCat) ---
+# RevenueCat panelinde webhook'a girilen "Authorization header" değeri. Boşsa webhook kapalıdır (503).
+REVENUECAT_WEBHOOK_AUTH = _env("REVENUECAT_WEBHOOK_AUTH")
+# Mağaza ürün kimliği → ajansAI paketi. Varsayılan eşleşmeyi değiştirmek/genişletmek için JSON:
+# {"ajansai_pro_aylik": "pro:monthly", "ajansai_kredi_100": "kredi_100"}
+REVENUECAT_PRODUCTS = _env("REVENUECAT_PRODUCTS", "")
 
 # Destek e-postası (support@ajansai.tr): Resend ile alınır, Claude ile otomatik yanıtlanır.
 RESEND_API_KEY = _env("RESEND_API_KEY", "")
