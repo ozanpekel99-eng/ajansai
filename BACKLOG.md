@@ -60,6 +60,9 @@ Kurallar:
   - [x] 1/3: Siyah bant (letterbox) tespiti — ilk karenin üst/alt şeritleri (1080x1920'de 200 px) ortalama parlaklık <10 ise kusur; `cropdetect` kullanılmadı (konfetide yanılıyor). Yalnızca servis fonksiyonu + testler, henüz hiçbir akışa bağlı değil — PR (bu dal: gece/video-denetimi)
   - [ ] 2/3: ffmpeg ile ~8 kare (ilk 2 sn'den sık) çıkarıp başlangıç karesiyle birlikte görme modeline ver; yazı bozulması/kaybolması, ürün/insan bozulması
   - [ ] 3/3: `/api/health/qa` raporuna `video.ok` / `video.problems`; üretimde kusurda bir kez yeniden üretim (PR #14 ve #19 birleştikten sonra, health.py çakışmasın diye)
+  - Not: mobil reklam oluşturma akışına bağlı (PR #9, Mobil Reklam 1/3 — oluşturma 2/3 adımında). O birleşince web ile aynı biçimi kullan: `/araclar/reklam?medya=<https url>&tur=gorsel|video&konsept=<açıklama>` (`web/app/lib/adShortcut.ts`)
+- [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
+- [x] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı) — PR #16
 
 ## Ozan'a (insan gerektiren işler)
 
