@@ -46,6 +46,10 @@ Kurallar:
 
 - [x] Backend (kalite, 02.11): QA videosu gerçek akıştaki açılış karesi genişletmesini atlıyordu (siyah bant). `_fit_frame` `app/services/video_frame.py`'ye taşındı; `/video` ve `qa_run` aynı fonksiyonu kullanıyor, QA raporuna `video.frame_url` / `video.frame_fitted` eklendi — PR #19
 
+## Kalite denetiminden (PR #12'de önerilen madde)
+
+- [x] Backend (kalite, 29.10): `/api/health/qa` her görsel için ilk denemenin kusurlarını (`first_problems`), yeniden üretim yapılıp yapılmadığını (`retried`, başarısızsa `retry_error`) ve son görselin denetimini (`problems`) ayrı alanlarda veriyor; kalite e-postasında "İlk denemede N kusur (yeniden üretildi)" satırı — PR #34 (https://github.com/ozanpekel99-eng/ajansai/pull/34)
+
 ## Ozan'a (insan gerektiren işler)
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight

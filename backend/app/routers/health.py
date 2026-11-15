@@ -150,11 +150,16 @@ def _one_image(name: str, request: str, aspect: str) -> dict:
     try:
         # Üretimdeki akışın aynısı: istem yazımı → üretim → denetim (kusurluysa bir kez yeniden üretim).
         prompt = media_planner.direct_ad_prompt(request, aspect, False, 0, None)
-        data, mime = media_qa.generate_checked(prompt, aspect, None, request)
+        trace: dict = {}
+        data, mime = media_qa.generate_checked(prompt, aspect, None, request, trace=trace)
         problems = media_qa.check_image(data, request, None)  # kullanıcının göreceği son görselin denetimi
         url = storage.save(data, mime, "qa")
-        return {"name": name, "request": request, "aspect": aspect, "url": url, "problems": problems,
-                "ok": not problems, "seconds": round(time.time() - t, 1)}
+        out = {"name": name, "request": request, "aspect": aspect, "url": url,
+               "first_problems": trace.get("first_problems", []), "retried": bool(trace.get("retried")),
+               "problems": problems, "ok": not problems, "seconds": round(time.time() - t, 1)}
+        if trace.get("retry_error"):
+            out["retry_error"] = trace["retry_error"]
+        return out
     except Exception as e:  # noqa: BLE001
         return {"name": name, "request": request, "aspect": aspect, "url": None, "problems": [f"Üretim hatası: {str(e)[:300]}"],
                 "ok": False, "seconds": round(time.time() - t, 1)}
@@ -168,6 +173,13 @@ def _email(report: dict) -> None:
                  f"Görsel: {report['passed']}/{report['total']} sorunsuz", ""]
         for r in report["images"]:
             lines.append(f"• {r['name']}: {'TAMAM' if r['ok'] else 'SORUN'} ({r['seconds']} sn)")
+            first = r.get("first_problems") or []
+            if first:
+                note = "yeniden üretildi" if r.get("retried") else "yeniden üretilemedi"
+                lines.append(f"   İlk denemede {len(first)} kusur ({note}):")
+                lines += [f"     · {p}" for p in first]
+                if r["problems"]:
+                    lines.append("   Son görselin denetimi:")
             for p in r["problems"]:
                 lines.append(f"   - {p}")
             if r["url"]:

@@ -88,26 +88,41 @@ def check_image(data: bytes, request: str, product_urls: list[str] | None = None
 
 
 def generate_checked(prompt: str, aspect: str, refs: list[str] | None, request: str,
-                     product_urls: list[str] | None = None, quality: str = "standard") -> tuple[bytes, str]:
+                     product_urls: list[str] | None = None, quality: str = "standard",
+                     trace: dict | None = None) -> tuple[bytes, str]:
     """Görseli üretir, denetler; kusur varsa kusurları düzelterek bir kez yeniden üretir.
 
     Yeniden üretilen görsel de denetlenir ve iki görselden kusuru daha az olan döndürülür (eşitlikte ilki):
     yeniden üretim her zaman daha iyi olmuyor, kusursuz yazı/fiyatlı ilk görsel yeni kusurlu görselle
     değiştirilmesin.
+
+    `trace` verilirse ilk denemenin kusurları (`first_problems`) ve yeniden üretim yapılıp
+    yapılmadığı (`retried`, başarısızsa `retry_error`; yeniden üretilen görsel seçildiyse `retry_used`)
+    içine yazılır — /api/health/qa raporu için.
     """
     data, mime = gateway_media.generate_image(prompt, aspect, refs or None, quality)
     problems = check_image(data, request, product_urls)
+    if trace is not None:
+        trace.update(first_problems=list(problems), retried=False)
     if not problems:
         return data, mime
     logger.info("Görsel kusurlu, yeniden üretiliyor: %s", problems)
     fix = prompt + "\n\nThe previous attempt had these defects; avoid them this time: " + "; ".join(problems)
     try:
         data2, mime2 = gateway_media.generate_image(fix, aspect, refs or None, quality)
-    except gateway_media.MediaError:
+    except gateway_media.MediaError as e:
+        if trace is not None:
+            trace["retry_error"] = str(e)[:300]
         return data, mime
+    if trace is not None:
+        trace["retried"] = True
     problems2 = check_image(data2, request, product_urls)
     if len(problems2) < len(problems):
+        if trace is not None:
+            trace["retry_used"] = True
         return data2, mime2
     logger.info("Yeniden üretilen görsel daha iyi değil (%d ≥ %d kusur), ilk görsel kullanılıyor: %s",
                 len(problems2), len(problems), problems2)
+    if trace is not None:
+        trace["retry_used"] = False
     return data, mime
