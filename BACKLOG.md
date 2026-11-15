@@ -36,6 +36,7 @@ Kurallar:
 - [ ] Backend (kalite, 29.10): `media_qa.generate_checked` yeniden üretilen görseli denetlemeden döndürüyordu. Alt adımlar:
   - [x] 1/2: İkinci görsel de denetleniyor, kusuru daha az olan seçiliyor (eşitse ilki) — PR #26
   - [ ] 2/2: Yeniden üretim istemine yalnızca doğrulanmış kusurlar eklensin (PR #24'teki Türkçe İ maddesinin 3/3 adımıyla birlikte; yanlış alarmlar isteme "CILT yazma" gibi gereksiz talimat sokmasın)
+- [x] Backend (kalite, 09.11 ve 12.11 denetimleri): Paket "+" rozeti kırmızı daire içinde beyaz haç (ilk yardım işareti) gibi çiziliyordu; `AD_DIRECTOR_SYSTEM`'de rozet "altın ya da marka renginde artı işareti, asla kırmızı daire üstünde beyaz haç" olarak tarif edildi. Örnek başlık "EVİNİZİN İKİ GÜÇLÜSÜ" teklif satırıyla kelime paylaştığı için ("İKİLİ" üç kez) teklifle kelime paylaşmayan bir örnekle değiştirildi ve "başlık teklif satırıyla kelime paylaşmasın" kuralı eklendi — PR: gece/arti-rozeti
 
 ## Ozan'a (insan gerektiren işler)
 
