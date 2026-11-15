@@ -31,6 +31,12 @@ Kurallar:
   - [ ] 3/3: Kusur listesinde yalnızca Türkçe karakter şikâyeti varsa yeniden üretmeden önce kırpımla ikinci doğrulama yap; doğrulanmayan şikâyet yeniden üretim istemine girmesin
 - [x] Backend (kalite, 05.11 ve 09.11 denetimleri): Aynı yazının görselde iki kez çıkması — kafede "YENİ SEZON" hem üst kurdelede hem fiyat kutusunda, beyaz eşyada "İKİLİ ALIMDA FIRSAT" başlığının altında yine "İKİLİ ALIMDA". `AD_DIRECTOR_SYSTEM`'e "her ifade afişte yalnızca bir kez; başlık teklif satırının kelimelerini tekrarlamasın" kuralı, `QA_SYSTEM`'e 7. kusur maddesi "same phrase rendered twice" (PR #22 ve #28'deki ilgili maddelerin karşılığı) — PR: gece/yazi-tekrari
 
+## Kalite denetiminden (PR #12'de önerilen madde)
+
+- [ ] Backend (kalite, 29.10): `media_qa.generate_checked` yeniden üretilen görseli denetlemeden döndürüyordu. Alt adımlar:
+  - [x] 1/2: İkinci görsel de denetleniyor, kusuru daha az olan seçiliyor (eşitse ilki) — PR #26
+  - [ ] 2/2: Yeniden üretim istemine yalnızca doğrulanmış kusurlar eklensin (PR #24'teki Türkçe İ maddesinin 3/3 adımıyla birlikte; yanlış alarmlar isteme "CILT yazma" gibi gereksiz talimat sokmasın)
+
 ## Ozan'a (insan gerektiren işler)
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight
