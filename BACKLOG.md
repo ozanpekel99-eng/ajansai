@@ -42,6 +42,10 @@ Kurallar:
 
 - [x] Backend (kalite, 26.10): `media_planner.VIDEO_SYSTEM`'e kampanya görseli kuralı — başlangıç karesindeki yazı/fiyat/rozet/bant video boyunca sabit kalsın, yalnızca arka plan öğeleri hareket etsin; yedek istemde başlangıç karesi varsa "no text" yerine "keep all existing text exactly unchanged" — PR (bu dal: gece/video-yazi-sabit)
 
+## Kalite denetiminden (PR #7 / #18'de önerilen maddeler)
+
+- [x] Backend (kalite, 02.11): QA videosu gerçek akıştaki açılış karesi genişletmesini atlıyordu (siyah bant). `_fit_frame` `app/services/video_frame.py`'ye taşındı; `/video` ve `qa_run` aynı fonksiyonu kullanıyor, QA raporuna `video.frame_url` / `video.frame_fitted` eklendi — PR #19
+
 ## Ozan'a (insan gerektiren işler)
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight

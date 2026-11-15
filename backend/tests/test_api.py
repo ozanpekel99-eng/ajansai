@@ -219,7 +219,7 @@ def _enable_media(monkeypatch):
         raise content.gateway_media.MediaError("testte görsel yok")
 
     monkeypatch.setattr(content.gateway_media, "generate_image", no_frame)
-    monkeypatch.setattr(content, "_image_aspect_of", lambda url: None)
+    monkeypatch.setattr(content.video_frame, "image_aspect", lambda url: None)
     return content
 
 
