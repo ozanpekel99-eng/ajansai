@@ -491,6 +491,7 @@ def test_social_verify_checks_audience(monkeypatch):
     from app.services import social_auth
 
     monkeypatch.setattr(config, "APPLE_CLIENT_ID", None)
+    monkeypatch.setattr(config, "APPLE_BUNDLE_ID", None)
     import pytest
 
     with pytest.raises(social_auth.SocialAuthError):
@@ -520,6 +521,38 @@ def test_social_verify_real_signature(monkeypatch):
     for bad in ({**good, "aud": "baska"}, {**good, "iss": "https://evil.com"}, {**good, "exp": now - 10}, {**good, "email_verified": False}):
         with pytest.raises(social_auth.SocialAuthError):
             social_auth.verify("google", pyjwt.encode(bad, key, algorithm="RS256"))
+
+
+def test_apple_accepts_web_service_id_and_ios_bundle_id(monkeypatch):
+    """Web (Services ID) ve iOS uygulaması (paket kimliği) token'ları kabul edilir, başkası edilmez."""
+    import time
+
+    import jwt as pyjwt
+    import pytest
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    from app.services import social_auth
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    class FakeJwks:
+        def get_signing_key_from_jwt(self, token):
+            return type("K", (), {"key": key.public_key()})()
+
+    monkeypatch.setattr(social_auth, "_jwks", lambda provider: FakeJwks())
+    monkeypatch.setattr(config, "APPLE_CLIENT_ID", "tr.ajansai.web")
+    monkeypatch.setattr(config, "APPLE_BUNDLE_ID", "tr.ajansai.app")
+    now = int(time.time())
+    base = {"iss": "https://appleid.apple.com", "sub": "001", "email": "x@privaterelay.appleid.com", "email_verified": "true", "iat": now, "exp": now + 600}
+    for aud in ("tr.ajansai.web", "tr.ajansai.app"):
+        assert social_auth.verify("apple", pyjwt.encode({**base, "aud": aud}, key, algorithm="RS256"))["email"] == base["email"]
+    with pytest.raises(social_auth.SocialAuthError):
+        social_auth.verify("apple", pyjwt.encode({**base, "aud": "com.baska.app"}, key, algorithm="RS256"))
+    # Web Services ID girilmemiş olsa da iOS uygulaması giriş yapabilir
+    monkeypatch.setattr(config, "APPLE_CLIENT_ID", None)
+    assert social_auth.enabled("apple")
+    assert social_auth.verify("apple", pyjwt.encode({**base, "aud": "tr.ajansai.app"}, key, algorithm="RS256"))
+    # Web için Apple butonu yalnızca Services ID varsa gösterilir (davranış değişmedi)
 
 
 def test_free_chat_reads_documents_and_forces_image_mode(client, monkeypatch):

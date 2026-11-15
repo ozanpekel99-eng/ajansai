@@ -16,12 +16,13 @@ PROVIDERS = {
     "google": {
         "jwks": "https://www.googleapis.com/oauth2/v3/certs",
         "issuers": ["https://accounts.google.com", "accounts.google.com"],
-        "audience": lambda: config.GOOGLE_CLIENT_ID,
+        "audience": lambda: [a for a in [config.GOOGLE_CLIENT_ID] if a],
     },
     "apple": {
         "jwks": "https://appleid.apple.com/auth/keys",
         "issuers": ["https://appleid.apple.com"],
-        "audience": lambda: config.APPLE_CLIENT_ID,
+        # web: Services ID; iOS uygulaması: paket kimliği (tr.ajansai.app)
+        "audience": lambda: [a for a in [config.APPLE_CLIENT_ID, config.APPLE_BUNDLE_ID] if a],
     },
 }
 

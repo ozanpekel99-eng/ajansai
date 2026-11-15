@@ -18,6 +18,9 @@ Kurallar:
   - [ ] 3/3: Yeni reklam akışı — kütüphaneden görsel/video seçimi, reklam hesabı/sayfa/Instagram seçimi, `/api/ads/meta/ad-copy` ile metin, hedef, bütçe, konum; yalnızca Instagram yerleşimleri; `/api/ads/meta/ads` POST
 - [ ] Mobil: Google ile giriş ve Apple ile giriş (`expo-apple-authentication`; backend `/api/auth/google`, `/api/auth/apple`; Apple id_token audience'ına `tr.ajansai.app` paket kimliğini ekle — `backend/app/services/social_auth.py`)
 - [x] Mobil: Sohbette video önerisi ve ücretsiz kullanıcı limit kartı (web `UpgradeCard` karşılığı; limit dolunca paketler gösterilsin) — [PR #11](https://github.com/ozanpekel99-eng/ajansai/pull/11)
+  - [x] 1/2: iOS'ta Apple ile giriş — backend Apple audience'ı web Services ID + `tr.ajansai.app` (`APPLE_BUNDLE_ID`); giriş ekranında yerel "Apple ile devam et" butonu ([#10](https://github.com/ozanpekel99-eng/ajansai/pull/10))
+  - [ ] 2/2: Google ile giriş (iOS + Android) — Google Cloud'da iOS/Android OAuth istemci kimlikleri (Ozan'a), backend Google audience listesine mobil istemci kimlikleri, giriş ekranına Google butonu
+- [ ] Mobil: Sohbette video önerisi ve ücretsiz kullanıcı limit kartı (web `UpgradeCard` karşılığı; limit dolunca paketler gösterilsin)
 - [ ] Mobil: Uygulama içi satın alma altyapısı — RevenueCat (`react-native-purchases`) ekranı ve backend webhook ucu (`/api/payments/revenuecat/webhook`: ürün kimliği → paket/ek kredi; idempotent; testli). Gerçek anahtarlar Ozan girene kadar kapalı kalsın
 - [ ] Mobil: Görsel düzenleme ve video sonuçlarında "Reklam ver" kısayolu
 - [x] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin — PR #14 (https://github.com/ozanpekel99-eng/ajansai/pull/14)
