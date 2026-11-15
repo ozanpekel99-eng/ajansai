@@ -22,6 +22,9 @@ Kurallar:
   - [ ] 2/2: Google ile giriş (iOS + Android) — Google Cloud'da iOS/Android OAuth istemci kimlikleri (Ozan'a), backend Google audience listesine mobil istemci kimlikleri, giriş ekranına Google butonu
 - [ ] Mobil: Sohbette video önerisi ve ücretsiz kullanıcı limit kartı (web `UpgradeCard` karşılığı; limit dolunca paketler gösterilsin)
 - [ ] Mobil: Uygulama içi satın alma altyapısı — RevenueCat (`react-native-purchases`) ekranı ve backend webhook ucu (`/api/payments/revenuecat/webhook`: ürün kimliği → paket/ek kredi; idempotent; testli). Gerçek anahtarlar Ozan girene kadar kapalı kalsın
+  - [x] 1/3 Backend: RevenueCat webhook ucu (ürün kimliği → paket/ek kredi, olay kimliğiyle tekrar korumalı, `REVENUECAT_WEBHOOK_AUTH` yoksa kapalı) — [PR #13](https://github.com/ozanpekel99-eng/ajansai/pull/13)
+  - [ ] 2/3 Mobil: Paketler ekranında uygulama içi satın alma (`react-native-purchases`; `Purchases.logIn(<kullanıcı id>)`, teklifler, satın al / geri yükle; RevenueCat anahtarı yoksa ekran web'e yönlendirir). Ek kredi yalnızca ücretli paketi olana gösterilsin
+  - [ ] 3/3 Backend: İade ve paket değişikliği — `CANCELLATION` (iade nedeniyle) olayında paketi kapat, `PRODUCT_CHANGE` / yükseltmeyi işle; yönetici sayfasında `store_events` listesi
 - [ ] Mobil: Görsel düzenleme ve video sonuçlarında "Reklam ver" kısayolu
 - [x] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin — PR #14 (https://github.com/ozanpekel99-eng/ajansai/pull/14)
   - [x] 1/2: Görsel (üretim/düzenleme), video ve kütüphane sonuçlarında "Reklam ver" düğmesi — paketi olmayana paket uyarısı, olana ajansai.tr Reklam sayfası web ile aynı biçimde açılır (`/araclar/reklam?medya=…&tur=gorsel|video&konsept=…`, `mobile/src/lib/adShortcut.ts`) — PR #17 (https://github.com/ozanpekel99-eng/ajansai/pull/17)
@@ -77,7 +80,7 @@ Kurallar:
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight
 - Google Play Console ($25) → Play iç test
-- RevenueCat hesabı ve mağaza ürünleri
+- RevenueCat hesabı ve mağaza ürünleri (ürün kimlikleri: `ajansai_baslangic_aylik`, `ajansai_pro_yillik`, `ajansai_kredi_100` … — tam liste `backend/app/services/revenuecat.py`; webhook: `https://<backend>/api/payments/revenuecat/webhook`, Authorization değeri Vercel'de `REVENUECAT_WEBHOOK_AUTH`)
 - Meta işletme doğrulaması sonucu → uygulama incelemesi gönderimi (`instagram_content_publish`, `instagram_manage_messages`)
 
 ## Kalite denetiminden (PR #12'de önerilen madde)
