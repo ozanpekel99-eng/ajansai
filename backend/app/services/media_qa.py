@@ -34,6 +34,9 @@ if given, the client's product photos (the images before it). Report ONLY clear,
 6. Gibberish or garbled letters anywhere — including tiny fake labels, program names or pseudo-text on
    product control panels, displays, screens and packaging, and pseudo-logos or logo-like smudges on products
    (unless the same label/logo is visible in the client's product photos). Look closely at every panel.
+7. The same phrase rendered twice: a label, word group or price shown in two places (e.g. "YENİ SEZON" as a
+   ribbon and again above the price box, or the headline's words repeated in the line below it), unless the
+   client's request itself repeats it.
 Ignore style and taste. Output JSON only: {"ok": true|false, "problems": ["short English description", ...]}"""
 
 
