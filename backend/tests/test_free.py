@@ -582,6 +582,34 @@ def test_chatgpt_mode_writes_ad_prompt_from_user_words(monkeypatch):
     assert media_planner.direct_ad_prompt.__doc__
 
 
+def test_image_qa_mockup_defect_triggers_regeneration(monkeypatch):
+    """Afiş mockup olarak (zemin üstünde gölgeli poster) çizilirse denetim yakalar ve bir kez yeniden üretilir."""
+    import io
+    from PIL import Image
+    from app import config
+    from app.services import gateway_media, llm_service, media_planner, media_qa
+
+    assert "Never render it as a mockup" in media_planner.AD_DIRECTOR_SYSTEM
+    assert "7. The design is shown as a mockup" in media_qa.QA_SYSTEM
+    assert media_qa.QA_SYSTEM.index("mockup") < media_qa.QA_SYSTEM.index("Ignore style")
+
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 10), "pink").save(buf, "PNG")
+    png = buf.getvalue()
+    monkeypatch.setattr(config, "IMAGE_QA", True)
+    calls = []
+    monkeypatch.setattr(gateway_media, "generate_image",
+                        lambda p, a, r=None, q="standard": calls.append(p) or (png, "image/png"))
+    mockup = "The design is shown as a mockup: poster on a pink background with margins and a drop shadow"
+    answers = iter(['{"ok": false, "problems": ["%s"]}' % mockup, '{"ok": true, "problems": []}'])
+    seen = []
+    monkeypatch.setattr(llm_service, "chat_completion",
+                        lambda model, msgs, **k: seen.append(msgs[0]["content"]) or next(answers))
+    data, _ = media_qa.generate_checked("P", "4:5", None, "güzellik merkezi kampanya afişi")
+    assert len(calls) == 2 and mockup in calls[1]
+    assert "mockup" in seen[0]
+
+
 def test_image_qa_regenerates_once_with_fixes(monkeypatch):
     from app.services import gateway_media, media_qa
 

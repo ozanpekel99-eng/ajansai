@@ -20,6 +20,10 @@ Kurallar:
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
 
+## Kalite denetiminden
+
+- [x] Backend (kalite 16.11, PR #36 önerisi): Görsel istem yazarı ve denetimde "mockup çerçeve" kusuru — güzellik merkezi QA görseli afişin kendisi değil, pembe zemin üstünde gölgeli bir poster mockup'ı olarak çıktı. `AD_DIRECTOR_SYSTEM` "Always:" satırına "afiş görselin tamamıdır, kenardan kenara; mockup yok" kuralı, `QA_SYSTEM`'e 7. madde (müşteri mockup istemediyse kusur; 'Ignore style'dan önce), mockup kusurunda yeniden üretimi doğrulayan birim testi — PR: gece/mockup-cerceve
+
 ## Ozan'a (insan gerektiren işler)
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight
