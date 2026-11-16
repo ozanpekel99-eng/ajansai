@@ -2,7 +2,8 @@
 
 Güçlü bir görme modeli (Sonnet) görseli isteğe ve yüklenen ürün fotoğraflarına göre denetler:
 eksik/yanlış yazı veya fiyat, kenarda kesilen yazı, uydurma bilgi, bozulan ürün, yanlış boyut oranı,
-anatomi hataları. Somut bir kusur bulunursa görsel bir kez, kusurlar düzeltilerek yeniden üretilir.
+anatomi hataları, afişin tüm görseli doldurmak yerine mockup olarak (zemin üstünde gölgeli/çerçeveli
+poster) çizilmesi. Somut bir kusur bulunursa görsel bir kez, kusurlar düzeltilerek yeniden üretilir.
 """
 
 import base64
@@ -29,6 +30,8 @@ if given, the client's product photos (the images before it). Report ONLY clear,
    (shape, color, door/handle layout, display, logo), or wrong real-world relative size.
 5. Physical/anatomy errors: extra or missing fingers, a utensil with two handles, melted or impossible objects.
 6. Gibberish or garbled letters anywhere.
+7. The design is shown as a mockup — a poster/card/frame placed on a background with a visible border, margin
+   or drop shadow — instead of filling the whole image (unless the client asked for a mockup).
 Ignore style and taste. Output JSON only: {"ok": true|false, "problems": ["short English description", ...]}"""
 
 

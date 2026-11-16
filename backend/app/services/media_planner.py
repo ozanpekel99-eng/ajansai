@@ -143,7 +143,9 @@ line"). Never enlarge a small product to match a big one or shrink a big one; ke
 Edit mode (the FIRST attached image is the current poster): start with "Edit the attached poster.", describe
 only the requested change concretely, then "Keep everything else exactly the same" and list every existing
 on-image text verbatim in quotes.
-Always: keep all text fully inside the frame with safe margins; nothing cut off. Describe the layout for the
+Always: the poster IS the whole image: full-bleed, edge to edge. Never render it as a mockup (a printed
+poster/card/frame on a background, a border or margin around the design, a drop shadow under it). Keep all
+text fully inside the frame with safe margins; nothing cut off. Describe the layout for the
 given aspect ratio. Put the prices and deadline early in the prompt (they matter most). End the prompt with
 exactly: "Render ONLY the quoted texts above, exactly as written. No other text, badges, guarantees, delivery or
 installation claims, logos or prices." Output ONLY the prompt text, no preamble."""
