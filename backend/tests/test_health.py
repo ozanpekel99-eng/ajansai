@@ -30,3 +30,28 @@ def test_daily_report_sends_once(client, monkeypatch):
     assert client.post("/api/health/daily-report").json() == {"sent": True}
     assert client.post("/api/health/daily-report").json()["sent"] is False
     assert "günlük kullanım raporu" in sent[0]
+
+
+def test_qa_video_error_fields_and_email(client, monkeypatch):
+    monkeypatch.setattr(health.gateway_media, "is_enabled", lambda: True)
+    monkeypatch.setattr(health.media_planner, "direct_ad_prompt", lambda *a, **k: "prompt")
+    monkeypatch.setattr(health.media_planner, "plan_video", lambda *a, **k: {"prompt": "video"})
+    monkeypatch.setattr(health.media_qa, "generate_checked", lambda *a, **k: (b"png", "image/png"))
+    monkeypatch.setattr(health.media_qa, "check_image", lambda *a, **k: [])
+    monkeypatch.setattr(health.storage, "save", lambda *a, **k: "https://x.public.blob.vercel-storage.com/qa/a.png")
+
+    def broke(*a, **k):
+        raise health.gateway_media.MediaError("google/veo-3.1: AI Gateway 503: " + "y" * 400,
+                                              fallback_error='klingai/kling: AI Gateway 402: {"type":"insufficient_funds"}')
+
+    monkeypatch.setattr(health.gateway_media, "start_video", broke)
+    sent = []
+    from app.services import support
+    monkeypatch.setattr(support, "send_email", lambda to, subject, text, **k: sent.append(text) or {})
+    monkeypatch.setattr(health.config, "ADMIN_EMAILS", {"admin@example.com"})
+    r = client.post("/api/health/qa-run?video=1").json()
+    v = r["video"]
+    assert v["status"] == "error" and len(v["error"]) == 300
+    assert "insufficient_funds" in v["fallback_error"] and v["insufficient_funds"] is True
+    assert "AI Gateway bakiyesi yetersiz — video üretimi durdu" in sent[0]
+    assert "Yedek model: klingai/kling" in sent[0]
