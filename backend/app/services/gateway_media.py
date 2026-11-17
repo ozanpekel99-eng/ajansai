@@ -26,7 +26,34 @@ BASE_URL = "https://ai-gateway.vercel.sh/v4/ai"
 
 
 class MediaError(Exception):
-    pass
+    """Üretim hatası. Ana model ve yedek modelin hataları ayrı tutulur (`fallback_error`)."""
+
+    def __init__(self, message: str = "", fallback_error: str | None = None):
+        super().__init__(message)
+        self.fallback_error = fallback_error
+
+
+_FUNDS_RE = re.compile(r"AI Gateway 402\b|insufficient[_ ]funds", re.I)
+
+VIDEO_PAUSED_MESSAGE = "Video üretimi geçici olarak kapalı, kredin iade edildi. Lütfen daha sonra tekrar dene."
+
+
+def is_insufficient_funds(error) -> bool:
+    """AI Gateway bakiyesi bittiği için (402 / insufficient_funds) düşen hata mı? Ana ya da yedek hatada aranır."""
+    texts = [str(error or "")]
+    if isinstance(error, MediaError) and error.fallback_error:
+        texts.append(error.fallback_error)
+    return any(_FUNDS_RE.search(t) for t in texts)
+
+
+def error_fields(error, limit: int = 300) -> dict:
+    """Raporlar için hata alanları: ana hata ve yedek hatası ayrı ayrı kısaltılır, böylece biri ötekini kesmez."""
+    out = {"error": str(error)[:limit]}
+    if isinstance(error, MediaError) and error.fallback_error:
+        out["fallback_error"] = error.fallback_error[:limit]
+    if is_insufficient_funds(error):
+        out["insufficient_funds"] = True
+    return out
 
 
 def is_enabled() -> bool:
@@ -321,7 +348,8 @@ def start_video(
         try:
             return start_fallback_video(prompt, duration, resolution, image_url, audio, aspect_ratio)
         except MediaError as e2:
-            raise MediaError(f"{model}: {e} | yedek: {e2}") from e2
+            fallback = fallback_video_model(bool(image_url), audio)
+            raise MediaError(f"{model}: {e}", fallback_error=f"{fallback}: {e2}") from e2
 
 
 def _filter_reason(data) -> str:

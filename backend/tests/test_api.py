@@ -1338,3 +1338,58 @@ def test_openai_image_sends_quality(monkeypatch):
     gateway_media._openai_image("openai/gpt-image-2", "p", "1:1", ["https://x/a.png"])
     assert sent[0]["providerOptions"] == {"openai": {"quality": "high"}}
     assert sent[1]["providerOptions"] == {"openai": {"quality": "medium", "input_fidelity": "high"}}
+
+
+def test_start_video_keeps_main_and_fallback_errors_apart(monkeypatch):
+    from app.services import gateway_media
+    monkeypatch.setattr(config, "VIDEO_FALLBACK", True)
+    long_main = "AI Gateway 500: " + "x" * 500
+
+    def fake_post(path, model, kind, body, timeout):
+        if model.startswith("google/"):
+            raise gateway_media.MediaError(long_main)
+        raise gateway_media.MediaError('AI Gateway 402: {"error":{"type":"insufficient_funds"}}')
+
+    monkeypatch.setattr(gateway_media, "_post", fake_post)
+    monkeypatch.setattr(gateway_media.vertex_video, "handles", lambda m: False)
+    try:
+        gateway_media.start_video("x", 8, "1080p", "https://x/a.png")
+        raise AssertionError("hata yükselmeli")
+    except gateway_media.MediaError as e:
+        assert "yedek" not in str(e)
+        assert e.fallback_error.startswith(config.VIDEO_FALLBACK_I2V + ": AI Gateway 402")
+        fields = gateway_media.error_fields(e)
+    # Ana hata 300 karakterle kesilse de yedeğin hatası ayrı alanda eksiksiz görünür
+    assert len(fields["error"]) == 300 and "insufficient_funds" in fields["fallback_error"]
+    assert fields["insufficient_funds"] is True
+
+
+def test_insufficient_funds_detection():
+    from app.services import gateway_media
+    assert gateway_media.is_insufficient_funds("AI Gateway 402: payment required")
+    assert gateway_media.is_insufficient_funds(gateway_media.MediaError("veo: kapalı", fallback_error="kling: insufficient funds"))
+    assert not gateway_media.is_insufficient_funds("AI Gateway 500: iç hata")
+    assert not gateway_media.is_insufficient_funds(None)
+    assert gateway_media.error_fields(gateway_media.MediaError("veo yok")) == {"error": "veo yok"}
+
+
+def test_video_start_without_gateway_balance_shows_clear_message(client, monkeypatch):
+    content = _enable_media(monkeypatch)
+    token = register(client)
+    _set_plan(_user_id(client, token), "pro")
+
+    def broke(*a, **k):
+        raise content.gateway_media.MediaError("google/veo: AI Gateway 402: insufficient_funds",
+                                               fallback_error="klingai: AI Gateway 402: insufficient_funds")
+
+    monkeypatch.setattr(content.gateway_media, "start_video", broke)
+    r = client.post("/api/content/video", json={"concept": "x"}, headers=auth(token)).json()
+    assert r["job_id"] is None and r["error"] == content.gateway_media.VIDEO_PAUSED_MESSAGE
+    assert "402" not in r["error"]
+    assert _credits(client, token)["used"] == 0
+
+    # Başka bir hata eski genel mesajı korur
+    monkeypatch.setattr(content.gateway_media, "start_video",
+                        lambda *a, **k: (_ for _ in ()).throw(content.gateway_media.MediaError("AI Gateway 500: hata")))
+    r = client.post("/api/content/video", json={"concept": "x"}, headers=auth(token)).json()
+    assert r["error"] == "Video üretimi başlatılamadı, kredin iade edildi. Tekrar dene."

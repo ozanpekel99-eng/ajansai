@@ -289,8 +289,10 @@ def _start_video_job(user: dict, concept: str, duration: int, resolution: str, i
                                               allow_fallback=(plan or {}).get("fallback", True) is not False,
                                               tier=(plan or {}).get("tier") or "fast")
     except gateway_media.MediaError as e:
-        logger.error("Video başlatılamadı: %s", e)
+        logger.error("Video başlatılamadı: %s | yedek: %s", e, e.fallback_error or "-")
         refund(event_id)
+        if gateway_media.is_insufficient_funds(e):
+            return None, gateway_media.VIDEO_PAUSED_MESSAGE, 0
         return None, "Video üretimi başlatılamadı, kredin iade edildi. Tekrar dene.", 0
 
     job_id = str(uuid.uuid4())
@@ -359,7 +361,7 @@ def _retry_with_fallback(task, error: str, too_large: bool = False) -> bool:
             bool(plan.get("audio")), plan.get("aspect") or "9:16",
         )
     except gateway_media.MediaError as e:
-        logger.error("Yedek video modeli de başlatılamadı (%s): %s", task.id, e)
+        logger.error("Yedek video modeli de başlatılamadı (%s): %s | ana model: %s", task.id, e, error[:300])
         return False
     return _swap_operation(task, job, f"ana modelde hata ({error[:200]}), yedek modele geçildi")
 
@@ -428,6 +430,8 @@ def check_video(job_id: str, user: dict = Depends(get_current_user)):
     if changed:
         refund(task.credit_event_id)
     logger.error("Video başarısız (%s): %s", job_id, error)
+    if gateway_media.is_insufficient_funds(error):
+        return {"status": "FAILED", "video_url": None, "error": gateway_media.VIDEO_PAUSED_MESSAGE}
     return {"status": "FAILED", "video_url": None, "error": "Video üretilemedi, kredin iade edildi."}
 
 

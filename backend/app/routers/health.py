@@ -90,8 +90,15 @@ def _email(report: dict) -> None:
                 lines.append(f"   - {p}")
             if r["url"]:
                 lines.append(f"   {r['url']}")
-        if report.get("video"):
-            lines += ["", f"Video: {report['video'].get('status')} (sonuç: {config.PUBLIC_API_URL}/api/health/qa)"]
+        v = report.get("video")
+        if v:
+            lines += ["", f"Video: {v.get('status')} (sonuç: {config.PUBLIC_API_URL}/api/health/qa)"]
+            if v.get("insufficient_funds"):
+                lines.append("   ! AI Gateway bakiyesi yetersiz — video üretimi durdu")
+            if v.get("error"):
+                lines.append(f"   - Ana model: {v['error']}")
+            if v.get("fallback_error"):
+                lines.append(f"   - Yedek model: {v['fallback_error']}")
         support.send_email(sorted(config.ADMIN_EMAILS), f"ajansAI kalite: {report['passed']}/{report['total']} sorunsuz", "\n".join(lines))
     except Exception as e:  # noqa: BLE001
         logger.warning("Kalite raporu e-postası gönderilemedi: %s", e)
@@ -130,7 +137,7 @@ def qa_run(video: str = "auto"):
                 report["video"] = {"status": "pending", "from": src["name"], "job": job, "model": job.get("model"),
                                    "fallback": bool(job.get("fallback"))}
             except Exception as e:  # noqa: BLE001
-                report["video"] = {"status": "error", "error": str(e)[:300]}
+                report["video"] = {"status": "error", **gateway_media.error_fields(e)}
 
     _set(REPORT_KEY, json.dumps(report))
     _email(report)
@@ -155,7 +162,7 @@ def qa_report():
                     data = video_upscale.upscale(data, v["job"]["upscale_to"])
                 v.update(status="completed", url=storage.save(data, "video/mp4", "qa"))
             elif res["status"] == "error":
-                v.update(status="error", error=str(res.get("error"))[:300])
+                v.update(status="error", **gateway_media.error_fields(res.get("error")))
             _set(REPORT_KEY, json.dumps(report))
         except Exception as e:  # noqa: BLE001
             logger.warning("QA video durumu alınamadı: %s", e)
