@@ -582,6 +582,35 @@ def test_chatgpt_mode_writes_ad_prompt_from_user_words(monkeypatch):
     assert media_planner.direct_ad_prompt.__doc__
 
 
+def test_image_qa_red_cross_badge_triggers_regeneration(monkeypatch):
+    """"+" paket rozeti kırmızı zemin üstünde beyaz haç çizilirse denetim kusur sayar ve bir kez yeniden üretilir."""
+    import io
+    from PIL import Image
+    from app import config
+    from app.services import gateway_media, llm_service, media_qa
+
+    assert "7. A \"+\" bundle badge drawn as a white cross on a red circle or square" in media_qa.QA_SYSTEM
+    assert media_qa.QA_SYSTEM.index("white cross on a red") < media_qa.QA_SYSTEM.index("Ignore style")
+    # 3. madde düz "+" işaretine izin vermeye devam eder ama rozet biçimi için 7'ye yönlendirir
+    assert 'a plain "+"' in media_qa.QA_SYSTEM and "see 7" in media_qa.QA_SYSTEM
+
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 10), "white").save(buf, "PNG")
+    png = buf.getvalue()
+    monkeypatch.setattr(config, "IMAGE_QA", True)
+    calls = []
+    monkeypatch.setattr(gateway_media, "generate_image",
+                        lambda p, a, r=None, q="standard": calls.append(p) or (png, "image/png"))
+    cross = "The + bundle badge is a white cross on a red circle (looks like a first-aid sign)"
+    answers = iter(['{"ok": false, "problems": ["%s"]}' % cross, '{"ok": true, "problems": []}'])
+    seen = []
+    monkeypatch.setattr(llm_service, "chat_completion",
+                        lambda model, msgs, **k: seen.append(msgs[0]["content"]) or next(answers))
+    media_qa.generate_checked("P", "4:5", None, "beyaz eşya ikili alım kampanyası")
+    assert len(calls) == 2 and cross in calls[1]
+    assert "first-aid" in seen[0]
+
+
 def test_image_qa_regenerates_once_with_fixes(monkeypatch):
     from app.services import gateway_media, media_qa
 
