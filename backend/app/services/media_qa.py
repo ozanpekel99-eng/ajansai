@@ -2,7 +2,8 @@
 
 Güçlü bir görme modeli (Sonnet) görseli isteğe ve yüklenen ürün fotoğraflarına göre denetler:
 eksik/yanlış yazı veya fiyat, kenarda kesilen yazı, uydurma bilgi, bozulan ürün, yanlış boyut oranı,
-anatomi hataları. Somut bir kusur bulunursa görsel bir kez, kusurlar düzeltilerek yeniden üretilir.
+anatomi hataları, "+" paket rozetinin kırmızı zemin üstünde beyaz haç (ilk yardım/eczane işareti) gibi
+çizilmesi. Somut bir kusur bulunursa görsel bir kez, kusurlar düzeltilerek yeniden üretilir.
 """
 
 import base64
@@ -24,11 +25,13 @@ if given, the client's product photos (the images before it). Report ONLY clear,
 2. Any text cut off or touching the image edge.
 3. Invented facts the client did not give: other prices or discounts, phone numbers, addresses, websites,
    guarantees, free delivery/installation, gifts, brand names/logos not in the request. (A short creative
-   headline and generic labels such as "NAKİT", "TAKSİTLİ", "SATIŞ FİYATI", "SON GÜN", "+" are allowed.)
+   headline and generic labels such as "NAKİT", "TAKSİTLİ", "SATIŞ FİYATI", "SON GÜN" and a plain "+"
+   sign are allowed; see 7 for the badge style.)
 4. Products deformed, duplicated, missing, the wrong count, or clearly different from the product photos
    (shape, color, door/handle layout, display, logo), or wrong real-world relative size.
 5. Physical/anatomy errors: extra or missing fingers, a utensil with two handles, melted or impossible objects.
 6. Gibberish or garbled letters anywhere.
+7. A "+" bundle badge drawn as a white cross on a red circle or square (it reads as a first-aid/pharmacy sign).
 Ignore style and taste. Output JSON only: {"ok": true|false, "problems": ["short English description", ...]}"""
 
 
