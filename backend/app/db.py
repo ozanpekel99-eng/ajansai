@@ -5,6 +5,9 @@ kullanılır. Sorgular SQLAlchemy Core ile yazıldığı için ikisinde de aynı
 çalışır.
 """
 
+import logging
+import threading
+import time
 from datetime import datetime, timezone
 
 from sqlalchemy import (
@@ -25,6 +28,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
 
 from app import config
+
+logger = logging.getLogger("ajansai.db")
 
 metadata = MetaData()
 
@@ -260,40 +265,87 @@ def get_engine() -> Engine:
 
 def reset_engine(url: str | None = None) -> None:
     """Testler için: motoru farklı bir veritabanıyla yeniden kurar."""
-    global _engine
+    global _engine, _initialized
     if _engine is not None:
         _engine.dispose()
     _engine = None
+    _initialized = False
     if url is not None:
         config.DATABASE_URL = url
 
 
+_MIGRATIONS = {
+    "users": {
+        "credits_used": "INTEGER NOT NULL DEFAULT 0",
+        "period_credits": "INTEGER",
+        "cycle": "VARCHAR(10) NOT NULL DEFAULT 'monthly'",
+        "extra_credits": "INTEGER NOT NULL DEFAULT 0",
+    },
+    "credit_events": {"extra": "INTEGER NOT NULL DEFAULT 0"},
+    "meta_ads": {"budget_type": "VARCHAR(10)"},
+    "video_tasks": {"prompt": "VARCHAR(500)", "plan": "TEXT"},
+    "payments": {
+        "currency": "VARCHAR(3) NOT NULL DEFAULT 'TRY'",
+        "billing": "VARCHAR(10) NOT NULL DEFAULT 'monthly'",
+        "sandbox": "BOOLEAN NOT NULL DEFAULT FALSE",
+    },
+}
+
+_initialized = False
+_init_lock = threading.Lock()
+
+
 def init_db() -> None:
+    """Eksik tabloları ve sonradan eklenen sütunları oluşturur (idempotent).
+
+    Sunucusuz ortamda (NullPool) her yeni bağlantı Neon'a ayrı TLS el sıkışması demek;
+    soğuk başlangıcı kısaltmak için tüm denetim tek bağlantı üzerinde yapılır ve
+    tablo listesi tek sorguyla alınır (create_all'un tablo başına sorgusu yerine).
+    """
+    global _initialized
     engine = get_engine()
-    metadata.create_all(engine)
-    # Eski kurulumlara sonradan eklenen sütunlar (create_all mevcut tabloya sütun eklemez).
-    migrations = {
-        "users": {
-            "credits_used": "INTEGER NOT NULL DEFAULT 0",
-            "period_credits": "INTEGER",
-            "cycle": "VARCHAR(10) NOT NULL DEFAULT 'monthly'",
-            "extra_credits": "INTEGER NOT NULL DEFAULT 0",
-        },
-        "credit_events": {"extra": "INTEGER NOT NULL DEFAULT 0"},
-        "meta_ads": {"budget_type": "VARCHAR(10)"},
-        "video_tasks": {"prompt": "VARCHAR(500)", "plan": "TEXT"},
-        "payments": {
-            "currency": "VARCHAR(3) NOT NULL DEFAULT 'TRY'",
-            "billing": "VARCHAR(10) NOT NULL DEFAULT 'monthly'",
-            "sandbox": "BOOLEAN NOT NULL DEFAULT FALSE",
-        },
-    }
-    for table, cols in migrations.items():
-        existing = {c["name"] for c in inspect(engine).get_columns(table)}
-        for name, ddl in cols.items():
-            if name not in existing:
-                with engine.begin() as conn:
+    with engine.begin() as conn:
+        insp = inspect(conn)
+        existing_tables = set(insp.get_table_names())
+        missing = [t for t in metadata.sorted_tables if t.name not in existing_tables]
+        if missing:
+            metadata.create_all(conn, tables=missing)
+        # Eski kurulumlara sonradan eklenen sütunlar (create_all mevcut tabloya sütun eklemez).
+        for table, cols in _MIGRATIONS.items():
+            if table not in existing_tables:
+                continue  # yeni oluşturuldu, sütunlar zaten tam
+            have = {c["name"] for c in insp.get_columns(table)}
+            for name, ddl in cols.items():
+                if name not in have:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+    _initialized = True
+
+
+def ensure_db(attempts: int = 2, delay: float = 1.0) -> bool:
+    """Veritabanı hazırlığını bir kez yapar; hata fırlatmaz.
+
+    Vercel'de modül yüklenirken (soğuk başlangıç) init_db hata verirse fonksiyon
+    tümüyle çöker (FUNCTION_INVOCATION_FAILED, 500). Bunun yerine kısa bir
+    beklemeyle yeniden denenir; yine olmazsa False döner ve ilk istekte tekrar denenir.
+    """
+    if _initialized:
+        return True
+    with _init_lock:
+        if _initialized:
+            return True
+        for i in range(max(1, attempts)):
+            try:
+                init_db()
+                return True
+            except Exception:  # noqa: BLE001
+                logger.exception("Veritabanı hazırlığı başarısız (deneme %d/%d)", i + 1, attempts)
+                if i + 1 < attempts and delay:
+                    time.sleep(delay)
+        return False
+
+
+def is_initialized() -> bool:
+    return _initialized
 
 
 def utcnow() -> datetime:

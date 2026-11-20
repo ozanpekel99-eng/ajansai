@@ -20,6 +20,10 @@ Kurallar:
 - [ ] Backend: `/api/health/qa` raporuna son 24 saatteki üretim hata sayıları (video_tasks failed, görsel hataları) eklensin
 - [ ] Web: Kütüphane ve görsel/video sonuçlarında "Reklam ver" kısayolu (mobil ile tutarlı)
 
+- [ ] Backend (kalite 19.11, PR #39 önerisi): `GET /api/health/qa` ilk çağrıda Vercel `FUNCTION_INVOCATION_FAILED` (500) döndü, 10 sn sonraki çağrılar 200 (soğuk başlangıç). Alt adımlar:
+  - [x] 1/2: Soğuk başlangıç dayanıklılığı — `index.py`'deki veritabanı hazırlığı artık hata fırlatmıyor (1 sn arayla 2 deneme; olmazsa ilk istekte `DbReadyMiddleware` yeniden dener, hâlâ olmazsa çökme yerine `503 Retry-After: 5`); `init_db` tüm denetimi tek bağlantıda ve tek tablo listesi sorgusuyla yapıyor (NullPool'da tablo başına yeni Neon bağlantısı açılmıyor) — PR: gece/soguk-baslangic
+  - [ ] 2/2: Vercel loglarında 19.11 hatasının gerçek sebebi (zaman aşımı / içe aktarma / bellek) Ozan'la doğrulansın; 1/2 birleştikten sonra da ilk çağrı hatası sürerse `/api/health` ve `/api/health/qa`'yı çağıran hafif ısınma (warm-up) cron'u eklensin
+
 ## Ozan'a (insan gerektiren işler)
 
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight
