@@ -1,11 +1,14 @@
 import logging
 from contextlib import asynccontextmanager
 
+import anyio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app import config
-from app.db import init_db
+from app.db import ensure_db, init_db, is_initialized
 from app.routers import admin, ads, auth, chats, content, free, health, payments, plans, support, uploads, voice
 from app.services import iyzico_service, llm_service
 
@@ -41,7 +44,28 @@ class OidcTokenMiddleware:
         await self.app(scope, receive, send)
 
 
+class DbReadyMiddleware:
+    """Soğuk başlangıçta veritabanı hazırlığı başarısız olduysa ilk istekte yeniden dener.
+
+    Hazırlık hâlâ olmuyorsa fonksiyon çökmez; anlaşılır bir 503 döner (istemci yeniden dener).
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and not is_initialized():
+            ok = await anyio.to_thread.run_sync(lambda: ensure_db(attempts=1))
+            if not ok:
+                response = JSONResponse({"detail": "Sunucu hazırlanıyor, lütfen birkaç saniye sonra tekrar deneyin."},
+                                        status_code=503, headers={"Retry-After": "5"})
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
 app.add_middleware(OidcTokenMiddleware)
+app.add_middleware(DbReadyMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.ALLOWED_ORIGINS,
