@@ -14,5 +14,6 @@ görseller ve Reels videoları, tasarım şablonu (`gen.py`, `base.css`) bulunur
 ## Haftalar
 
 - 2026-10-27: Ajans vs ajansAI karşılaştırması, işletme Reels'i, freelance carousel'i, bireysel Reels, fiyatlar, nasıl çalışır.
+- 2026-11-30: Aralık başı, zaman ve kontrol: brief/revize zinciri yerine 5 dakika, "öğrenmen gerekmeyen 4 şey" carousel'i, Aralık vitrini/yılbaşı Reels'i, freelancer'a seçenekli sunum carousel'i, "kimseye sormana gerek yok", 5 Aralık kadın girişimciler Reels'i (bireysel), önce ücretsiz dene.
 
 Sosyal medya ajanı (zamanlanmış görev, cumartesi) planı olmayan ilk haftayı hazırlar ve PR açar.
