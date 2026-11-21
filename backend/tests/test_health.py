@@ -88,3 +88,21 @@ def test_fit_frame_falls_back_to_original_on_error(monkeypatch):
     assert video_frame.fit_frame("https://x/a.png", "9:16", "qa") == "https://x/a.png"
     assert video_frame.needs_fit(4 / 5, "9:16") and not video_frame.needs_fit(0.57, "9:16")
     assert not video_frame.needs_fit(None, "9:16")
+
+
+def test_qa_video_reports_defective_frame_extension(client, monkeypatch):
+    """Genişletilen kare iki kez kusurluysa QA videosu orijinal kareyle başlar ve rapor/e-posta bunu söyler."""
+    started = _qa_video_setup(monkeypatch)
+    from app.services import video_frame
+
+    monkeypatch.setattr(video_frame, "image_aspect", lambda url: 4 / 5)
+    monkeypatch.setattr(video_frame.gateway_media, "generate_image", lambda *a, **k: (b"png", "image/png"))
+    verdicts = iter([[], [], [], [], ["Price garbled"], ["Price garbled"]])  # 4 QA görseli + 2 genişletme
+    monkeypatch.setattr(health.media_qa, "check_image", lambda *a, **k: next(verdicts))
+    mails = []
+    monkeypatch.setattr(health, "_email", lambda r: mails.append(r))
+    r = client.post("/api/health/qa-run?video=1").json()
+    assert started["image"].endswith("qa/a.png")
+    v = r["video"]
+    assert v["frame_fitted"] is False and v["frame_attempts"] == 2 and v["frame_problems"] == ["Price garbled"]
+    assert "yazılar bozuldu" in v["frame_note"]

@@ -191,6 +191,7 @@ def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
             refund(extra_event)
         raise HTTPException(status_code=402, detail=str(e))
 
+    frame_note = ""
     plan = media_planner.plan_video(payload.concept, payload.aspect_ratio, payload.duration,
                                     has_start_frame=bool(image_url), audio=payload.audio,
                                     previous_prompt=previous.get("prompt"), start_image_url=image_url)
@@ -208,7 +209,8 @@ def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
             logger.warning("Açılış karesi üretilemedi, metinden video: %s", e)
             image_url = None
     elif image_url and not end_image_url:
-        image_url = video_frame.fit_frame(image_url, payload.aspect_ratio, f"gorsel/{user['id']}")
+        fit = video_frame.fit_frame_checked(image_url, payload.aspect_ratio, f"gorsel/{user['id']}", payload.concept)
+        image_url, frame_note = fit.url, fit.note
 
     plan_record = {"prompt": plan["prompt"], "frame": image_url, "request": payload.concept,
                    "aspect": payload.aspect_ratio, "duration": payload.duration,
@@ -221,8 +223,9 @@ def create_video(payload: VideoRequest, user: dict = Depends(get_current_user)):
     if not job_id and extra_event:
         refund(extra_event)  # video başlamadıysa açılış karesinin kredisi de iade edilir
         extra = 0
+    note = " ".join(n for n in (plan.get("note") or "", frame_note) if n)
     return {"job_id": job_id, "error": error, "credits_spent": credits + extra, "start_frame": image_url,
-            "note": plan.get("note") or ""}
+            "note": note}
 
 
 def _compose_frame(user: dict, concept: str, aspect: str, refs: list[str]) -> tuple[str | None, int, str | None]:

@@ -23,6 +23,9 @@ Kurallar:
 ## Kalite denetiminden (PR #7 / #18'de önerilen maddeler)
 
 - [x] Backend (kalite, 02.11): QA videosu gerçek akıştaki açılış karesi genişletmesini atlıyordu (siyah bant). `_fit_frame` `app/services/video_frame.py`'ye taşındı; `/video` ve `qa_run` aynı fonksiyonu kullanıyor, QA raporuna `video.frame_url` / `video.frame_fitted` eklendi — PR #19
+- [ ] Backend+Mobil (kalite 02.11, PR #18 önerisi): `_fit_frame` genişletmesi tüm afişi yeniden çizdiriyor ama sonucu denetlemiyordu; genişletme başarısız olunca da sessizce orijinal kare (siyah bant) kullanılıyordu. Alt adımlar:
+  - [x] 1/2: `video_frame.fit_frame_checked` — genişletilen kare orijinal kareyle karşılaştırılarak `media_qa.check_image` ile denetlenir; kusurda kusurlar belirtilerek bir kez yeniden denenir; yine kusurluysa ya da genişletme/kayıt başarısızsa orijinal kare kullanılır, loglanır ve `/api/content/video` yanıtının `note` alanında kullanıcıya Türkçe açıklama döner (web Video sayfası `note`'u zaten gösteriyor). QA raporuna `video.frame_attempts`, `frame_problems`, `frame_note`; e-postaya kusur satırı — PR: gece/kare-denetimi
+  - [ ] 2/2: Mobil Üret ekranında video yanıtındaki `note` gösterilsin (şu an mobil `note`'u okumuyor). Veo yalnızca 9:16 / 16:9 desteklediği için "en yakın orana çek" seçeneği 4:5 kaynakta işe yaramıyor; gerekirse kullanıcıya üretimden önce oran uyarısı değerlendirilsin
 
 ## Ozan'a (insan gerektiren işler)
 
