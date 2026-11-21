@@ -20,7 +20,7 @@ from sqlalchemy import select, text
 
 from app import config
 from app.db import app_settings, get_engine
-from app.services import gateway_media, media_planner, media_qa, storage
+from app.services import gateway_media, media_planner, media_qa, storage, video_frame
 
 router = APIRouter()
 logger = logging.getLogger("ajansai.health")
@@ -92,6 +92,9 @@ def _email(report: dict) -> None:
                 lines.append(f"   {r['url']}")
         if report.get("video"):
             lines += ["", f"Video: {report['video'].get('status')} (sonuç: {config.PUBLIC_API_URL}/api/health/qa)"]
+            if report["video"].get("frame_problems"):
+                lines.append("! Açılış karesi genişletmesi kusurlu, orijinal kare kullanıldı: "
+                             + "; ".join(report["video"]["frame_problems"]))
         support.send_email(sorted(config.ADMIN_EMAILS), f"ajansAI kalite: {report['passed']}/{report['total']} sorunsuz", "\n".join(lines))
     except Exception as e:  # noqa: BLE001
         logger.warning("Kalite raporu e-postası gönderilemedi: %s", e)
@@ -126,8 +129,14 @@ def qa_run(video: str = "auto"):
             try:
                 plan = media_planner.plan_video(QA_VIDEO[0], "9:16", QA_VIDEO[1], has_start_frame=True, audio=False,
                                                 start_image_url=src["url"])
-                job = gateway_media.start_video(plan["prompt"], QA_VIDEO[1], "1080p", src["url"], None, False, "9:16")
-                report["video"] = {"status": "pending", "from": src["name"], "job": job, "model": job.get("model"),
+                # Gerçek /video akışıyla aynı: açılış karesi önce 9:16'ya genişletilir (yoksa siyah bant oluşur)
+                fit = video_frame.fit_frame_checked(src["url"], "9:16", "qa", QA_VIDEO[0])
+                frame_url = fit.url
+                job = gateway_media.start_video(plan["prompt"], QA_VIDEO[1], "1080p", frame_url, None, False, "9:16")
+                report["video"] = {"status": "pending", "from": src["name"], "frame_url": frame_url,
+                                   "frame_fitted": fit.fitted, "frame_attempts": fit.attempts,
+                                   "frame_problems": fit.problems, "frame_note": fit.note,
+                                   "job": job, "model": job.get("model"),
                                    "fallback": bool(job.get("fallback"))}
             except Exception as e:  # noqa: BLE001
                 report["video"] = {"status": "error", "error": str(e)[:300]}
