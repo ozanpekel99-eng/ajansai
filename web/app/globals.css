@@ -4112,3 +4112,26 @@ table.data td.num {
   .md th, .md td { padding: 7px 8px; min-width: 130px; }
   .md th:first-child, .md td:first-child { min-width: 110px; }
 }
+
+/* ---------- Yönetim: paylaşım kuyruğu ---------- */
+.social-toggle { display: inline-flex; align-items: center; gap: 8px; margin-top: 20px; font-size: 14px; color: var(--text-2); cursor: pointer; }
+.social-list { display: grid; gap: 14px; }
+.social-card { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 18px; padding: 16px; }
+.social-card.status-approved { border-color: var(--indigo); }
+.social-card.status-skipped { opacity: 0.6; }
+.social-media { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; border-radius: 12px; }
+.social-media img, .social-media video { flex: 0 0 100%; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 12px; background: var(--surface-2); scroll-snap-align: start; }
+.social-media video { aspect-ratio: 9 / 16; max-height: 420px; }
+.social-body { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.social-body h3 { margin: 0; font-size: 17px; }
+.social-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.social-when { font-size: 13.5px; margin-left: auto; }
+.social-caption { margin: 0; white-space: pre-wrap; font-size: 14px; line-height: 1.5; max-height: 7.5em; overflow: hidden; cursor: pointer; overflow-wrap: anywhere; }
+.social-caption.open { max-height: none; }
+.social-problems { margin: 0; padding-left: 18px; }
+.social-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 6px; }
+.social-body textarea { width: 100%; }
+@media (max-width: 720px) {
+  .social-card { grid-template-columns: minmax(0, 1fr); }
+  .social-when { margin-left: 0; width: 100%; }
+}
