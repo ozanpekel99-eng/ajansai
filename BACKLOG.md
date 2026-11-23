@@ -9,6 +9,9 @@ Kurallar:
 
 ## Sıradaki işler (öncelik sırasıyla)
 
+- [ ] Backend (kalite, 2026-11-23): 9:16 görsellerde altta boş beyaz şerit — `media_planner.AD_DIRECTOR_SYSTEM`'e dikey format kuralı ekle: "Fill the entire frame edge to edge with the scene/background; no blank, white or empty bands at the top or bottom; the lowest element (e.g. a banner) sits above a continuation of the floor/scene, not empty space". QA beyaz eşya görselinde (1008×1792) alttaki ~210 px düz beyazdı, otomatik denetim kaçırdı
+- [ ] Backend (kalite): `media_qa.py` — boş alan denetimi: (a) `QA_SYSTEM`'e 7. madde "large empty/blank or unfinished areas (e.g. a plain white band at the bottom)"; (b) LLM'siz ucuz piksel kontrolü: üst/alt kenarda yüksekliğin %6'sından fazla neredeyse tek renk satır bandı varsa (satır min/max kanal farkı < 8) kusur say ve `generate_checked` yeniden üretsin; testli
+- [ ] Backend (video): `gateway_media.start_video` — Vertex başlatılamazsa/kullanılamıyorsa nedeni (`vertex_video.handles()` false mu, `VertexError` mesajı) hataya ve QA raporuna eklensin; `health.py`'de video hata metni 300 karakterde kesildiği için Kling yedeğinin hatası görünmüyor (`yedek: AI ` ile bitiyor) — sınırı 1000'e çıkar ya da her sağlayıcı denemesini ayrı alan olarak yaz. 2026-11-23 QA videosu Vertex yerine AI Gateway'e düştü ve 402 (bakiye < $10) aldı
 - [ ] Backend+Web (yönetici): Sosyal medya yayın kuyruğu — `marketing/<hafta>/plan.json`'daki onaylı paylaşımları yöneticinin kayıtlı Meta bağlantısıyla Instagram @ajansai.tr hesabına planlı saatinde paylaşan Vercel Cron (Instagram Graph API: görsel, carousel, Reels; `instagram_content_publish` izni gerekir), web'de yöneticiye özel onay sayfası (her gönderi: onayla / düzenle / atla) ve paylaşım sonrası etkileşim özetinin günlük rapora eklenmesi. Meta reklamları (Ajans AI reklam hesabı act_1823149412206641, yalnızca Instagram yerleşimi, günlük 1.000 TL, hedef satın alma, piksel 1084755444379431) için günlük performans özeti ve öneri; bütçe/kampanya değişikliği yalnızca Ozan onayıyla
 - [ ] Backend: Instagram DM otomatik yanıt — Meta webhook (`/api/meta/webhook`, mesaj olayları) ile @ajansai.tr'ye gelen DM'leri al, Claude ile ajansAI bilgileri (paketler, ücretsiz paket, nasıl kullanılır) üzerinden Türkçe cevap ver; emin olmadığı sorularda support@ajansai.tr'ye yönlendir; konuşmaları yönetici sayfasında listele. `instagram_manage_messages` izni (uygulama incelemesi) gelene kadar kapalı kalsın
 - [ ] Web: KVKK uyumlu çerez onay bandı — Meta Pikseli (`web/app/components/MetaPixel.tsx`) yalnızca kullanıcı 'Kabul et' derse yüklensin (`fbq('consent','revoke'/'grant')`); seçim localStorage'da saklansın; bant sade, mobilde ekranı kapatmasın; gizlilik sayfasına bağlantı
@@ -22,6 +25,7 @@ Kurallar:
 
 ## Ozan'a (insan gerektiren işler)
 
+- Vercel AI Gateway kredisi $10 altında → Veo/Kling video üretimi 402 veriyor (2026-11-23 QA). Kredi yükle ve/veya Vercel'de `GOOGLE_VERTEX_CREDENTIALS` / `VERTEX_PROJECT` değerlerinin geçerli olduğunu kontrol et
 - Apple Developer hesabı (yıllık $99) → iOS TestFlight
 - Google Play Console ($25) → Play iç test
 - RevenueCat hesabı ve mağaza ürünleri
